@@ -1,0 +1,17 @@
+@import url('https://fonts.googleapis.com/css2?family=Armata&display=swap');
+body {
+    font-family: 'Armata', var(--md-text-font-family);
+}
+.md-header {
+    background-color: #f0f0f0;
+	box-shadow: none;
+}
+.md-typeset h3 code, .md-typeset h4 code {
+    font-size: 1.05em;
+}
+.md-typeset h3 {
+    margin-top: 2.0em;
+}
+.md-typeset h4 {
+    margin-top: 1.6em;
+}
