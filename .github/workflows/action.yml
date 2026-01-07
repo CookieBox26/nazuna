@@ -1,0 +1,16 @@
+name: action
+on:
+  push: {}
+  pull_request: {}
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          git init .
+          git remote add origin "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
+          git fetch --no-tags origin ${{ github.sha }}
+          git checkout --detach ${{ github.sha }}
+      - run: pipx install uv
+      - run: uv sync --extra torch-cpu --extra test
+      - run: uv run pytest
