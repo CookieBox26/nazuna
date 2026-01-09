@@ -8,6 +8,7 @@ from torch.utils.data import Dataset, DataLoader
 class TimeSeriesDataset(Dataset):
     TimeSeriesBatch = collections.namedtuple('TimeSeriesBatch', [
         'tsta', 'tste', 'data', 'tsta_future', 'tste_future', 'data_future',
+        'quantiles_full', 'quantiles_cum', 'quantiles_rolling',
     ])
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -15,28 +16,31 @@ class TimeSeriesDataset(Dataset):
     def to_tensor(cls, x):
         return torch.tensor(x, dtype=torch.float32, device=cls.device)
 
-    def __init__(self, df, seq_len, pred_len, cols_org):
-        self.df = df
-        self.tsta = list(self.df['timestamp'].values)
-        self.tste = list(self.df['timestep'].values)
-        del self.df['timestamp'], self.df['timestep']
+    def get_quantiles(self, df_):
+        quantiles = [[], [], []]
+        for col in self.df_org.columns:
+            qtiles = list(df_[col].quantile([0.25, 0.5, 0.75]))
+            for i_q in range(3):
+                quantiles[i_q].append(qtiles[i_q])
+        return quantiles
+
+    def __init__(self, df, seq_len, pred_len, offset, rolling_window):
+        self.df_org = df
+        self.tsta_org = list(df['timestamp'].values)
+        self.tste_org = list(df['timestep'].values)
+        del self.df_org['timestamp'], self.df_org['timestep']
+
+        self.offset = offset
+        self.rolling_window = rolling_window
+        self.df = self.df_org.iloc[self.offset:, :]
+        self.tsta = self.tsta_org[self.offset:]
+        self.tste = self.tste_org[self.offset:]
+
         self.seq_len = seq_len
         self.pred_len = pred_len
-        self.cols_org = cols_org
-        self.n_sample = len(df) - (seq_len - 1) - pred_len
-        self.n_feats = len(self.df.columns)
-        self.means = []
-        self.stds = []
-        self.q1s = []
-        self.q2s = []
-        self.q3s = []
-        for col in self.df.columns:
-            self.means.append(self.df[col].mean())
-            self.stds.append(self.df[col].std())
-            qtiles = list(self.df[col].quantile([0.25, 0.5, 0.7]))
-            self.q1s.append(qtiles[0])
-            self.q2s.append(qtiles[1])
-            self.q3s.append(qtiles[2])
+        self.n_sample = len(self.df) - (seq_len - 1) - pred_len
+        # self.n_feats = len(self.df.columns)
+        self.quantiles_full = self.get_quantiles(self.df_org)
 
     def __len__(self):
         return self.n_sample
@@ -48,21 +52,31 @@ class TimeSeriesDataset(Dataset):
         # idx_0 + seq_len - 1 + pred_len :  End of the prediction window (= idx_2 - 1)
         idx_1 = idx_0 + self.seq_len
         idx_2 = idx_0 + self.seq_len + self.pred_len
+
+        quantiles_cum = self.get_quantiles(self.df_org[:(self.offset + idx_1)])
+        quantiles_rolling = self.get_quantiles(
+            self.df_org[(self.offset + idx_1 - self.rolling_window):(self.offset + idx_1)]
+        )
+
         return TimeSeriesDataset.TimeSeriesBatch(
             self.tsta[idx_0:idx_1], self.tste[idx_0:idx_1], self.df.iloc[idx_0:idx_1, :].values,
             self.tsta[idx_1:idx_2], self.tste[idx_1:idx_2], self.df.iloc[idx_1:idx_2, :].values,
+            self.quantiles_full, quantiles_cum, quantiles_rolling,
         )
 
     @staticmethod
     def collate_fn(batch):
         to_tensor = TimeSeriesDataset.to_tensor
         return TimeSeriesDataset.TimeSeriesBatch(
-            np.array([v[0] for v in batch]),  # batch_size, seq_len
-            to_tensor(np.array([v[1] for v in batch])),  # batch_size, seq_len
-            to_tensor(np.array([v[2] for v in batch])),  # batch_size, seq_len, n_channel
-            np.array([v[3] for v in batch]),  # batch_size, pred_len
-            to_tensor(np.array([v[4] for v in batch])),  # batch_size, pred_len
-            to_tensor(np.array([v[5] for v in batch])),  # batch_size, pred_len, n_channel
+            np.array([b[0] for b in batch]),  # batch_size, seq_len
+            to_tensor(np.array([b[1] for b in batch])),  # batch_size, seq_len
+            to_tensor(np.array([b[2] for b in batch])),  # batch_size, seq_len, n_channel
+            np.array([b[3] for b in batch]),  # batch_size, pred_len
+            to_tensor(np.array([b[4] for b in batch])),  # batch_size, pred_len
+            to_tensor(np.array([b[5] for b in batch])),  # batch_size, pred_len, n_channel
+            to_tensor(np.array([b[6] for b in batch])),
+            to_tensor(np.array([b[7] for b in batch])),
+            to_tensor(np.array([b[8] for b in batch])),
         )
 
     def get_data_loader(self, batch_sampler_cls, batch_sampler_kwargs):
@@ -118,7 +132,7 @@ class TimeSeriesDataManager:
         i_end = int(n_front * data_range[1]) + (self.seq_len - 1) + self.pred_len
         return self.df.iloc[i_start:i_end, :]
 
-    def get_data_loader(self, data_range, batch_sampler_cls, batch_sampler_kwargs):
+    def get_data_loader(self, data_range, batch_sampler_cls, batch_sampler_kwargs, offset, rolling_window):
         df_target = self.extract_data(data_range)
-        dataset = TimeSeriesDataset(df_target, self.seq_len, self.pred_len, self.cols_org)
+        dataset = TimeSeriesDataset(df_target, self.seq_len, self.pred_len, offset, rolling_window)
         return dataset.get_data_loader(batch_sampler_cls, batch_sampler_kwargs)
