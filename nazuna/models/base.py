@@ -3,21 +3,27 @@ from abc import ABC, abstractmethod
 
 
 class BaseModel(torch.nn.Module, ABC):
-    def __init__(self):
+    """
+    Base class for time-series forecasting models.
+    Subclasses must implement _init_layers() to define their layers.
+    The device is handled by this base class, so subclasses don't need to manage it.
+    """
+    def __init__(self, device, **kwargs):
         super().__init__()
+        self.device = device
+        self._init_layers(**kwargs)
+        self.to(device)
 
-    def setup(self):
+    @abstractmethod
+    def _init_layers(self, **kwargs):
         pass
 
     @classmethod
     def create(cls, device, state_path=None, **kwargs):
-        model = cls(**kwargs)
-        model.device = device
-        model.setup()
-        if (state_path is not None) and (state_path != ''):
-            model.load_state_dict(torch.load(state_path))
+        model = cls(device=device, **kwargs)
+        if state_path:
+            model.load_state_dict(torch.load(state_path, map_location=device))
             model.eval()
-        model.to(model.device)
         return model
 
     @abstractmethod

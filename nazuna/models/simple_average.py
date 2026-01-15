@@ -3,8 +3,7 @@ import torch
 
 
 class BaseSimpleAverage(BaseModel):
-    def __init__(self, seq_len, pred_len, period_len):
-        super().__init__()
+    def _init_layers(self, seq_len, pred_len, period_len, **kwargs):
         self.seq_len = seq_len
         self.pred_len = pred_len
         self.period_len = period_len
@@ -30,12 +29,10 @@ class BaseSimpleAverage(BaseModel):
 
 
 class SimpleAverage(BaseSimpleAverage):
-    def __init__(self, seq_len, pred_len, period_len, decay_rate=1.0, max_n_period=10):
-        super().__init__(seq_len, pred_len, period_len)
+    def _init_layers(self, seq_len, pred_len, period_len, decay_rate=1.0, max_n_period=10):
+        super()._init_layers(seq_len, pred_len, period_len)
         self.decay_rate = decay_rate
         self.max_n_period = max_n_period
-
-    def setup(self):
         self.w_base = torch.tensor(
             [self.decay_rate**j for j in reversed(range(self.max_n_period))],
             dtype=torch.float, device=self.device,
