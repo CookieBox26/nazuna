@@ -3,7 +3,9 @@ import torch
 
 
 def test_simple_average():
-    model = SimpleAverage(
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model = SimpleAverage.create(
+        device=device,
         seq_len=4,
         pred_len=2,
         period_len=2,

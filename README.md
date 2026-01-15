@@ -7,8 +7,37 @@ Nazuna provides utility functions for time-series data analysis.
 
 
 > [!NOTE]
-> The test dataset `tests/data/jma-daily_2025.csv` was retrieved and processed by the author from the Japan Meteorological Agency (JMA) website:  
-> ["気象庁ホーム > 各種データ・資料 > 過去の気象データ検索 > 日ごとの値"](https://www.data.jma.go.jp/stats/etrn/view/daily_s1.php?prec_no=51&block_no=47636&year=2025&month=12&day=&view=).
+> The dataset under `nazuna/datasets/jma/` was obtained from the following Japan Meteorological Agency (JMA) pages and formatted by the author.  
+> ["気象庁ホーム > 各種データ・資料 > 過去の気象データ検索 > 日ごとの値"](https://www.data.jma.go.jp/stats/etrn/view/daily_s1.php?prec_no=51&block_no=47636&year=2025&month=12&day=&view=)  
+> ["気象庁ホーム > 各種データ・資料 > 過去の気象データ検索 > １時間ごとの値"](https://www.data.jma.go.jp/stats/etrn/view/hourly_s1.php?prec_no=51&block_no=47636&year=2025&month=12&day=1&view=)
+
+### Repository Structure
+
+This repository can be installed as a Python package.
+
+```sh
+./
+├─ pyproject.toml
+│
+├─ nazuna/
+│  ├─ data_manager.py  # Time-series data management class
+│  ├─ criteria.py  # Loss functions for training and evaluation
+│  ├─ batch_sampler.py  # Batch sampler
+│  ├─ scaler.py  # Scaler (used by models)
+│  ├─ models/  # Time-series forecasting models
+│  │  ├─ base.py
+│  │  ├─ dlinear.py
+│  │  └─ patchtst.py
+│  │
+│  ├─ task_runner.py  # Task runner that orchestrates the above modules
+│  │
+│  ├─ datasets/  # Sample datasets
+│  │  └─ jma/
+│  └─ examples/  # Usage examples
+│
+├─ tests/
+└─ docs/
+```
 
 ### Development Guide (for Developers)
 
@@ -21,19 +50,4 @@ pytest  # run tests locally
 mkdocs serve  # preview documentation locally
 # update the version in ./pyproject.toml
 # commit changes
-```
-
-### Package Structure
-
-```
-./
-├─ nazuna/
-│  ├─ data_manager.py  # TBD
-│  ├─ batch_sampler.py
-│  └─ models/  # TBD
-│      ├─ base.py
-│      └─ patchtst.py
-├─ tests/
-├─ docs/  # TBD
-└─ pyproject.toml
 ```
