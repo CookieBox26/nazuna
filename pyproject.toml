@@ -37,6 +37,10 @@ docs = [
 
 [project.urls]
 GitHub = "https://github.com/CookieBox26/nazuna"
+Documentation = "https://nazuna.readthedocs.io/en/latest/"
+
+[tool.hatch.build.targets.wheel]
+artifacts = ["nazuna/datasets/**/*.csv"]
 
 [tool.ruff]
 select = ["F401"]

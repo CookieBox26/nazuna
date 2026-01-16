@@ -1,6 +1,7 @@
 # Nazuna
 
-Nazuna provides utility functions for time-series data analysis.
+Nazuna provides utilities for analyzing time-series forecasting models.  
+https://nazuna.readthedocs.io/en/latest/  
 
 > [!IMPORTANT]
 >  Nazuna requires `torch`, but it does **not** install it automatically. Please install either the CPU or CUDA version of PyTorch by yourself before using Nazuna.

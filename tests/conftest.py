@@ -1,4 +1,5 @@
 from nazuna.data_manager import TimeSeriesDataManager
+from nazuna.datasets import get_path
 import pytest
 import torch
 
@@ -12,10 +13,7 @@ def device():
 def get_data_manager():
     def _get_data_manager(conf_=None):
         conf_data = {
-            'path': (
-                'nazuna/datasets/jma/weather_japan_daily'
-                '_2025-01-01_2025-12-31_2_blocks.csv'
-            ),
+            'path': get_path('jma', 'weather_japan_daily_2025-01-01_2025-12-31_2_blocks.csv'),
             'colname_timestamp': 'date',
             'seq_len': 7 * 4,
             'pred_len': 7,

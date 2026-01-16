@@ -1,9 +1,10 @@
 from nazuna.data_manager import TimeSeriesDataManager
+from nazuna.datasets import get_path
 from nazuna.task_runner import EvalTaskRunner
 
 
 def main():
-    path = 'nazuna/datasets/jma/weather_japan_hourly_2025-09-01_2025-12-31_27_blocks.csv'
+    path = get_path('jma', 'weather_japan_hourly_2025-09-01_2025-12-31_27_blocks.csv')
     conf_data = {
         'path': path, 'colname_timestamp': 'timestamp', 'seq_len': 24 * 4, 'pred_len': 24,
     }

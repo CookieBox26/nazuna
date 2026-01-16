@@ -1,27 +1,33 @@
-@import url('https://fonts.googleapis.com/css2?family=Armata&family=JetBrains+Mono&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Armata&display=swap');
 :root, [data-md-color-scheme=default] {
-    --md-default-bg-color: transparent;
-    --md-code-bg-color: #e5e6ea;
+    --md-default-bg-color: #f7fbfa;
+    --md-code-bg-color: #e4e7e8;
+}
+[data-md-color-primary=white] {
+    --md-typeset-a-color: #10a674;
+}
+[data-md-color-accent=indigo] {
+    --md-accent-fg-color: #8ecab8;
 }
 body {
     font-family: 'Armata', var(--md-text-font-family);
-    background: #f7fbfa;
 }
 .md-typeset {
     font-size: 0.7rem;
     line-height: 1.4;
 }
 .md-nav {
-    font-size: 0.6rem;
-}
-code, pre, .md-typeset code {
-    font-family: 'JetBrains Mono', var(--md-code-font-family);
+    font-size: 0.65rem;
 }
 code {
     font-weight: normal;
 }
+.md-typeset code {
+    font-size: .9em;
+    padding: .05em .4em;
+}
 .md-header {
-    background-color: #dbede8;
+    background-color: #daece7;
 	box-shadow: none;
 }
 .md-typeset h3 code, .md-typeset h4 code {
