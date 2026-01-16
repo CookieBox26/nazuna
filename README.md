@@ -45,6 +45,7 @@ This repository can be installed as a Python package.
 pip install -e '.[test,docs]'  #  install the package in editable mode
 # make some changes to the code in ./nazuna/
 # implement tests in ./tests/
+ruff check  # lint check
 pytest  # run tests locally
 # update documentation in ./docs/
 mkdocs serve  # preview documentation locally

@@ -27,6 +27,7 @@ torch-cpu = [
 ]
 test = [
   "pytest",
+  "ruff",
 ]
 docs = [
   "mkdocs",
@@ -36,3 +37,6 @@ docs = [
 
 [project.urls]
 GitHub = "https://github.com/CookieBox26/nazuna"
+
+[tool.ruff]
+select = ["F401"]

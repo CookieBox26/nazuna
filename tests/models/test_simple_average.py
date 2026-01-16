@@ -2,8 +2,7 @@ from nazuna.models.simple_average import SimpleAverage
 import torch
 
 
-def test_simple_average():
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+def test_simple_average(device):
     model = SimpleAverage.create(
         device=device,
         seq_len=4,

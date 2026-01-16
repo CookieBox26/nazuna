@@ -2,8 +2,7 @@ from nazuna import load_class
 import torch
 
 
-def test_mse_loss():
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+def test_mse_loss(device):
     batch_0 = torch.tensor([[  # A batch with 3 roads and 4 steps
         [10., 10., 10.],
         [20., 20., 20.],

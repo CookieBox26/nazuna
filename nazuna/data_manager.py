@@ -83,16 +83,35 @@ class TimeSeriesDataset(Dataset):
 
 
 class TimeSeriesDataManager:
+    """
+    Manager for time-series data that handles loading and splitting.
+
+    Note on seq_len and pred_len:
+        These parameters affect data splitting. When you specify a data range
+        (e.g., 0.0-0.5 for training), the actual row indices depend on seq_len
+        and pred_len. The actual sequence lengths used during evaluation or
+        training can be shorter (specified in the criterion and model).
+        E.g., for fair comparison across experiments with varying input lengths,
+        set seq_len to the maximum value you plan to use.
+    """
     def __init__(
         self,
-        path,
-        colname_timestamp,
-        seq_len,
-        pred_len,
-        white_list=None,
-        step_start=0,
-        step_width=1,
+        path: str,
+        colname_timestamp: str,
+        seq_len: int,
+        pred_len: int,
+        white_list: str | list[str] | None = None,
+        step_start: int = 0,
+        step_width: int = 1,
     ):
+        """
+        Args:
+            path: Path to the CSV file.
+            colname_timestamp: Column name for timestamps.
+            seq_len: Input sequence length (affects data splitting).
+            pred_len: Prediction sequence length (affects data splitting).
+            white_list: Column names to use. If None, all columns are used.
+        """
         self.path = path
         self.colname_timestamp = colname_timestamp
         if isinstance(white_list, str) and (white_list != ''):

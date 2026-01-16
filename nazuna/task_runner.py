@@ -23,18 +23,19 @@ class BaseTaskRunner(ABC):
 
 class EvalTaskRunner(BaseTaskRunner):
     """
-    データの指定期間でモデルを評価する
+    Evaluate a model on a specified data range.
     """
-    def configure(self, n_channel: int, seq_len: int, pred_len: int):
+    def configure(self, n_channel: int, seq_len: int, pred_len: int, period_len: int = 24):
         assert self.dm.n_channel == n_channel, f'{self.dm.n_channel=}, {n_channel=}'
         assert self.dm.seq_len >= seq_len
         assert self.dm.pred_len >= pred_len
         self.n_channel = n_channel
         self.seq_len = seq_len
         self.pred_len = pred_len
+        self.period_len = period_len
 
     def set_data_loader_eval(self):
-        self.data_loader_eval = self.dm.get_data_loader(  # TODO: conf からパラメータを指定
+        self.data_loader_eval = self.dm.get_data_loader(  # TODO: Specify parameters from conf
             data_range=(0.8, 1.0),
             batch_sampler_cls=load_class('nazuna.batch_sampler.BatchSampler'),
             batch_sampler_kwargs={'batch_size': 16},
@@ -52,7 +53,7 @@ class EvalTaskRunner(BaseTaskRunner):
 
     def run(self):
         self.set_data_loader_eval()
-        self.criterion = load_class('nazuna.criteria.MAELoss').create(  # TODO: conf から指定
+        self.criterion = load_class('nazuna.criteria.MAELoss').create(  # TODO: Specify from conf
             self.device,
             n_channel=self.n_channel,
             pred_len=self.pred_len,
@@ -62,7 +63,7 @@ class EvalTaskRunner(BaseTaskRunner):
             self.device,
             seq_len=self.seq_len,
             pred_len=self.pred_len,
-            period_len=24,
+            period_len=self.period_len,
         )
         loss = self.eval()
         return loss
@@ -70,10 +71,10 @@ class EvalTaskRunner(BaseTaskRunner):
 
 class TrainTaskRunner(EvalTaskRunner):
     """
-    データの指定期間でモデルを訓練する
+    Train a model on a specified data range.
     """
     def set_data_loader_train(self):
-        self.data_loader_train = self.dm.get_data_loader(  # TODO: conf からパラメータを指定
+        self.data_loader_train = self.dm.get_data_loader(  # TODO: Specify parameters from conf
             data_range=(0.0, 0.8),
             batch_sampler_cls=load_class('nazuna.batch_sampler.BatchSampler'),
             batch_sampler_kwargs={'batch_size': 16},
@@ -84,7 +85,7 @@ class TrainTaskRunner(EvalTaskRunner):
         super().__init__(dm, conf)
         self.set_data_loader_train()
         self.data_loader_eval = None
-        if True:  # 評価期間をとって Early Stopping する場合 (TODO: conf で制御)
+        if True:  # If using early stopping with validation data (TODO: Control from conf)
             self.set_data_loader_eval()
 
     def run(self):
@@ -93,7 +94,7 @@ class TrainTaskRunner(EvalTaskRunner):
 
 class OptunaTaskRunner(BaseTaskRunner):
     """
-    ハイパーパラメータ探索する
+    Search for optimal hyperparameters.
     """
     def run(self):
         pass
@@ -101,7 +102,7 @@ class OptunaTaskRunner(BaseTaskRunner):
 
 class DiagnosticsTaskRunner(BaseTaskRunner):
     """
-    データを診断する (内容未定)
+    Diagnose data (details TBD).
     """
     def run(self):
         pass

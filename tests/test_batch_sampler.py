@@ -3,7 +3,6 @@ from nazuna.batch_sampler import (
     BatchSampler, BatchSamplerShuffle, BatchSamplerBatchShuffle, BatchSamplerPeriodic,
 )
 from torch.utils.data import DataLoader
-import numpy as np
 import pandas as pd
 import torch
 
@@ -40,8 +39,11 @@ def batch_expected():
 def test_batch_sampler(dataset, batch_expected):
     batch_sampler = BatchSampler.create(dataset.n_sample, batch_size=4)
     dataloader = DataLoader(dataset=dataset, batch_sampler=batch_sampler)
+    assert dataloader.batch_sampler.n_batch == 3
+
     for i_batch, batch in enumerate(dataloader):  # 1st epoch
         assert torch.equal(batch, batch_expected[i_batch])
+
     for i_batch, batch in enumerate(dataloader):  # 2nd epoch
         assert torch.equal(batch, batch_expected[i_batch])
 
@@ -49,6 +51,7 @@ def test_batch_sampler(dataset, batch_expected):
 def test_batch_sampler_shuffle(dataset):
     batch_sampler = BatchSamplerShuffle.create(dataset.n_sample, batch_size=4)
     dataloader = DataLoader(dataset=dataset, batch_sampler=batch_sampler)
+    assert dataloader.batch_sampler.n_batch == 3
 
     data_1 = None
     for i_batch, batch in enumerate(dataloader):  # 1st epoch
@@ -72,6 +75,7 @@ def test_batch_sampler_shuffle(dataset):
 def test_batch_sampler_batch_shuffle(dataset, batch_expected):
     batch_sampler = BatchSamplerBatchShuffle.create(dataset.n_sample, batch_size=4, seed=1)
     dataloader = DataLoader(dataset=dataset, batch_sampler=batch_sampler)
+    assert dataloader.batch_sampler.n_batch == 3
 
     for i_batch, batch in enumerate(dataloader):  # 1st epoch
         assert any([torch.equal(batch, batch_expected[j_batch]) for j_batch in range(3)])
@@ -89,6 +93,7 @@ def test_batch_sampler_batch_shuffle(dataset, batch_expected):
 def test_batch_sampler_periodic(dataset):
     batch_sampler = BatchSamplerPeriodic.create(dataset.n_sample, batch_size=4, period=5)
     dataloader = DataLoader(dataset=dataset, batch_sampler=batch_sampler)
+    assert dataloader.batch_sampler.n_batch == 5
 
     batch_expected = [
         torch.tensor([[10, 20, 30], [15, 25, 35], [20, 30, 40]]),
