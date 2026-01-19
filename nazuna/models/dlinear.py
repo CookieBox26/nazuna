@@ -64,9 +64,24 @@ class BaseDLinear(BaseModel):
 
 
 class DLinear(BaseDLinear):
-    data_based_hyperparams = []
-
+    """
+    !!! note "Original Research"
+        This model is based on the following research:
+        > Ailing Zeng, Muxi Chen, Lei Zhang, and Qiang Xu.
+          "Are Transformers Effective for Time Series Forecasting?"
+          In Proceedings of the AAAI Conference on Artificial Intelligence (AAAI), 2023.
+          [Paper](https://arxiv.org/abs/2205.13504) |
+          [GitHub](https://github.com/cure-lab/LTSF-Linear)
+    """
     def _init_layers(self, seq_len, pred_len, kernel_size, bias, quantile_mode):
+        """
+        Args:
+            seq_len: Input sequence length
+            pred_len: Prediction length
+            kernel_size: Kernel size for the moving average decomposition
+            bias: Whether to use bias in linear layers
+            quantile_mode: Source of quantiles for scaling ('full', 'cum', or 'rolling')
+        """
         super()._init_layers(seq_len, pred_len, kernel_size, bias)
         self.quantile_mode = quantile_mode
         self.scaler = IqrScaler()

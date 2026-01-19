@@ -104,10 +104,30 @@ class BasePatchTST(BaseModel):
         return loss, {}
 
 
-class PatchTSTIqr(BasePatchTST):
+class PatchTST(BasePatchTST):
+    """
+    !!! note "Original Research"
+        This model is based on the following research:
+        > Yuqi Nie, Nam H. Nguyen, Phanwadee Sinthong, and Jayant Kalagnanam.
+          "A Time Series is Worth 64 Words: Long-term Forecasting with Transformers."
+          In International Conference on Learning Representations (ICLR), 2023.
+          [Paper](https://arxiv.org/abs/2211.14730) |
+          [GitHub](https://github.com/yuqinie98/PatchTST)
+    """
+
     data_based_hyperparams = []
 
     def _init_layers(self, seq_len, pred_len, quantile_mode):
+        """
+        Args:
+            seq_len: Input sequence length (must be >= `patch_len`)
+            pred_len: Prediction length
+            quantile_mode: Source of quantiles for scaling
+
+        Note:
+            Fixed architecture parameters: `patch_len=8`, `stride=4`, `d_model=32`,
+            `n_heads=2`, `n_layers=2`, `d_ff=128`, `dropout=0.1`
+        """
         super()._init_layers(seq_len, pred_len)
         self.quantile_mode = quantile_mode
         self.scaler = IqrScaler()

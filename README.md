@@ -29,6 +29,7 @@ This repository can be installed as a Python package.
 │  │  ├─ base.py
 │  │  ├─ dlinear.py
 │  │  └─ patchtst.py
+│  ├─ reports/  # Reporting functions
 │  │
 │  ├─ task_runner.py  # Task runner that orchestrates the above modules
 │  │
@@ -49,7 +50,7 @@ pip install -e '.[test,docs]'  #  install the package in editable mode
 ruff check  # lint check
 pytest  # run tests locally
 # update documentation in ./docs/
-mkdocs serve  # preview documentation locally
+mkdocs serve --livereload  # preview documentation locally
 # update the version in ./pyproject.toml
 # commit changes
 ```

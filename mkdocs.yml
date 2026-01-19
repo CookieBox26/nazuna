@@ -8,6 +8,7 @@ extra_css:
 nav:
   - Home: index.md
   - Reference: reference.md
+  - Reference (Models): reference_models.md
 extra:
   social:
     - icon: fontawesome/brands/github
@@ -24,5 +25,10 @@ plugins:
             docstring_section_style: list
             show_source: false
             show_bases: true
+            filters: []
 markdown_extensions:
+  - admonition
+  - pymdownx.details
   - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true

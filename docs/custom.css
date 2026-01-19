@@ -1,16 +1,17 @@
-@import url('https://fonts.googleapis.com/css2?family=Armata&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Source+Code+Pro:ital,wght@0,200..900;1,200..900&family=Armata&family=IBM+Plex+Sans+JP&display=swap');
 :root, [data-md-color-scheme=default] {
     --md-default-bg-color: #f7fbfa;
-    --md-code-bg-color: #e4e7e8;
+    --md-code-fg-color: #536267;
+    --md-code-bg-color: #dee2e3;
 }
 [data-md-color-primary=white] {
-    --md-typeset-a-color: #10a674;
+    --md-typeset-a-color: #0d895f;
 }
 [data-md-color-accent=indigo] {
     --md-accent-fg-color: #8ecab8;
 }
 body {
-    font-family: 'Armata', var(--md-text-font-family);
+    font-family: 'Armata', 'IBM Plex Sans JP', var(--md-text-font-family);
 }
 .md-typeset {
     font-size: 0.7rem;
@@ -19,11 +20,13 @@ body {
 .md-nav {
     font-size: 0.65rem;
 }
-code {
-    font-weight: normal;
+code, pre, .md-typeset code {
+    font-family: 'Source Code Pro', var(--md-code-font-family);
+    font-optical-sizing: auto;
+    font-weight: 500;
 }
 .md-typeset code {
-    font-size: .9em;
+    font-size: .94em;
     padding: .05em .4em;
 }
 .md-header {

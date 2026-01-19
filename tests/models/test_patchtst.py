@@ -1,11 +1,11 @@
 from nazuna.data_manager import TimeSeriesDataset
-from nazuna.models.patchtst import PatchTSTIqr
+from nazuna.models.patchtst import PatchTST
 import torch
 import torch.nn as nn
 
 
 def test_forward(device):
-    model = PatchTSTIqr.create(
+    model = PatchTST.create(
         device=device,
         seq_len=16,
         pred_len=4,
@@ -34,7 +34,7 @@ def test_forward(device):
 
 
 def test_get_loss(device):
-    model = PatchTSTIqr.create(
+    model = PatchTST.create(
         device=device,
         seq_len=16,
         pred_len=4,
