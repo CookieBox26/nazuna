@@ -82,4 +82,7 @@ class MSELoss(BaseLoss):
 
 class MAELoss(MSELoss):
     def calc_loss(self, pred, true):
-        return torch.abs(pred[:, :self.pred_len, :] - true[:, :self.pred_len, :])
+        diff = pred[:, :self.pred_len, :] - true[:, :self.pred_len, :]
+        if self.tolerance > 0:
+            diff = torch.where(torch.abs(diff) < self.tolerance, torch.zeros_like(diff), diff)
+        return torch.abs(diff)
