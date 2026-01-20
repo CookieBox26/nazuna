@@ -25,6 +25,7 @@ class MSELoss(BaseLoss):
         n_channel: int,
         pred_len: int,
         decay_rate: float | None = None,
+        tolerance: float = 0,
     ):
         """
         Args:
@@ -32,6 +33,8 @@ class MSELoss(BaseLoss):
             pred_len: Length of the prediction sequence.
             decay_rate: Exponential decay rate for sequence weighting.
                 If None or 1, uniform weights are used.
+            tolerance: Errors below this threshold are treated as zero.
+                Default is 0 (no tolerance).
 
         Note:
             The weight for step i is decay_rate^i (before normalization).
@@ -42,6 +45,7 @@ class MSELoss(BaseLoss):
         self.n_channel = n_channel
         self.pred_len = pred_len
         self.decay_rate = decay_rate
+        self.tolerance = tolerance
 
     def set_w_channel(self):
         self.w_channel = torch.ones(self.n_channel, dtype=torch.float, device=self.device)
@@ -61,7 +65,10 @@ class MSELoss(BaseLoss):
         self.set_w_seq()
 
     def calc_loss(self, pred, true):
-        return (pred[:, :self.pred_len, :] - true[:, :self.pred_len, :]) ** 2
+        diff = pred[:, :self.pred_len, :] - true[:, :self.pred_len, :]
+        if self.tolerance > 0:
+            diff = torch.where(torch.abs(diff) < self.tolerance, torch.zeros_like(diff), diff)
+        return diff ** 2
 
     def forward(self, pred, true):
         loss = self.calc_loss(pred, true)  # batch_size, pred_len, n_channel
