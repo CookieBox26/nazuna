@@ -30,27 +30,32 @@ code, pre, .md-typeset code {
 }
 .md-typeset code {
     font-size: .94em;
-    padding: .05em .4em;
+    padding: .05em .25em;
 }
 .md-header {
     background-color: #daece7;
 	box-shadow: none;
 }
 .md-typeset h1 {
-    margin: 0;
+    margin: 0 0 -0.25em;
 }
 .md-typeset h2 {
     font-weight: bold;
-    margin: 1.5em 0;
+    margin: 1.5em 0 -0.25em;
 }
 .md-typeset h3{
     font-weight: bold;
 }
-.md-typeset h4 {
+.md-typeset h3 code {
+    font-size: 1.1em;
+    font-weight: 600;
+}
+.md-typeset h4 code {
     margin-top: 1.5em;
 }
-.md-typeset h3 code, .md-typeset h4 code {
-    font-size: 1.1em;
+.md-typeset h4 code {
+    font-size: 1.05em;
+    font-weight: 600;
 }
 .md-typeset .admonition, .md-typeset details {
 	box-shadow: none;

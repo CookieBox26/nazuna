@@ -22,8 +22,8 @@ This repository can be installed as a Python package.
 │
 ├─ nazuna/
 │  ├─ data_manager.py  # Time-series data management class
-│  ├─ criteria.py  # Loss functions for training and evaluation
 │  ├─ batch_sampler.py  # Batch sampler
+│  ├─ criteria.py  # Loss functions for training and evaluation
 │  ├─ scaler.py  # Scaler (used by models)
 │  ├─ models/  # Time-series forecasting models
 │  │  ├─ base.py

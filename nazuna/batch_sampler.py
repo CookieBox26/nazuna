@@ -4,6 +4,9 @@ import inspect
 
 
 class BatchSampler:
+    """A sampler that splits samples into batches in sequential order.
+    """
+
     @classmethod
     def create(cls, n_sample, batch_size, **kwargs):
         if 'argnames' not in cls.__dict__:
@@ -12,7 +15,12 @@ class BatchSampler:
         filtered = {k: v for k, v in kwargs.items() if k in cls.argnames}
         return cls(n_sample, batch_size, **filtered)
 
-    def __init__(self, n_sample, batch_size):
+    def __init__(self, n_sample: int, batch_size: int) -> None:
+        """
+        Args:
+            n_sample: Total number of samples.
+            batch_size: Batch size.
+        """
         self.n_sample = n_sample
         self.batch_size = batch_size
         self.n_batch = int(np.ceil(self.n_sample / batch_size))
@@ -47,7 +55,19 @@ class BatchSamplerRandom(BatchSampler, ABC):
 
 
 class BatchSamplerShuffle(BatchSamplerRandom):
-    def __init__(self, n_sample, batch_size, seed=0):
+    """A sampler that shuffles samples and splits them into batches.
+
+    - At the start of each iteration, sample indices are shuffled,
+      and batches are created based on the shuffled order.
+    """
+
+    def __init__(self, n_sample: int, batch_size: int, seed: int = 0) -> None:
+        """
+        Args:
+            n_sample: Total number of samples.
+            batch_size: Batch size.
+            seed: Random seed.
+        """
         super().__init__(n_sample, batch_size, seed)
         self.sample_ids_shuffled = [i for i in range(self.n_sample)]
 

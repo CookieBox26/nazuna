@@ -4,8 +4,14 @@
 
 ::: nazuna.data_manager.TimeSeriesDataManager
 
-::: nazuna.criteria.MSELoss
+## Batch Sampler
+
+::: nazuna.batch_sampler.BatchSampler
+
+::: nazuna.batch_sampler.BatchSamplerShuffle
 
 ## Criteria
+
+::: nazuna.criteria.MSELoss
 
 ::: nazuna.criteria.MAELoss
