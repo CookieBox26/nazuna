@@ -48,7 +48,7 @@ pip install -e '.[test,docs]'  #  install the package in editable mode
 # make some changes to the code in ./nazuna/
 # implement tests in ./tests/
 ruff check  # lint check
-pytest  # run tests locally
+pytest -m "not slow"  # run tests locally
 # update documentation in ./docs/
 mkdocs serve --livereload  # preview documentation locally
 # update the version in ./pyproject.toml

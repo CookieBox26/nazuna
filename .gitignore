@@ -1,7 +1,7 @@
 __pycache__/
 .pytest_cache/
 dist/
-outputs/
+out/
 .claude/settings.local.json
 .claude/request.*.md
 !.claude/request.sample.md

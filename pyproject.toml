@@ -12,6 +12,7 @@ authors = [
   { name = "CookieBox26", email = "cookie-box@cookie-box.info" },
 ]
 dependencies = [
+  "toml",
   "numpy",
   "pandas",
 ]
@@ -44,3 +45,8 @@ artifacts = ["nazuna/datasets/**/*.csv"]
 
 [tool.ruff]
 select = ["F401"]
+
+[tool.pytest.ini_options]
+markers = [
+  "slow: time-consuming tests"
+]

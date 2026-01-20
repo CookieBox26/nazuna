@@ -20,7 +20,7 @@ pip install git+https://github.com/CookieBox26/nazuna.git@<revision>  # specific
 Run the following command to evaluate JMA weather data:
 
 ```bash
-python -m nazuna.examples.evaluate_jma
+python -m nazuna.examples.eval_jma_hourly
 ```
 
 ### Features
