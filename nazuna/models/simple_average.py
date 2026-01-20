@@ -3,7 +3,7 @@ import torch
 
 
 class BaseSimpleAverage(BaseModel):
-    def _init_layers(self, seq_len, pred_len, period_len, **kwargs):
+    def _setup(self, seq_len, pred_len, period_len, **kwargs):
         self.seq_len = seq_len
         self.pred_len = pred_len
         self.period_len = period_len
@@ -29,7 +29,7 @@ class BaseSimpleAverage(BaseModel):
 
 
 class SimpleAverage(BaseSimpleAverage):
-    def _init_layers(self, seq_len, pred_len, period_len, decay_rate=1.0, max_n_period=10):
+    def _setup(self, seq_len, pred_len, period_len, decay_rate=1.0, max_n_period=10):
         """
         Args:
             seq_len: Input sequence length (must be divisible by `period_len`)
@@ -38,7 +38,7 @@ class SimpleAverage(BaseSimpleAverage):
             decay_rate: Weight decay rate for older periods (default: 1.0, meaning equal weights)
             max_n_period: Maximum number of periods to consider
         """
-        super()._init_layers(seq_len, pred_len, period_len)
+        super()._setup(seq_len, pred_len, period_len)
         self.decay_rate = decay_rate
         self.max_n_period = max_n_period
         self.w_base = torch.tensor(

@@ -26,7 +26,7 @@ class series_decomp(nn.Module):
 
 
 class BaseDLinear(BaseModel):
-    def _init_layers(self, seq_len, pred_len, kernel_size, bias):
+    def _setup(self, seq_len, pred_len, kernel_size, bias):
         self.seq_len = seq_len
         self.pred_len = pred_len
         self.decompsition = series_decomp(kernel_size)
@@ -73,7 +73,7 @@ class DLinear(BaseDLinear):
           [Paper](https://arxiv.org/abs/2205.13504) |
           [GitHub](https://github.com/cure-lab/LTSF-Linear)
     """
-    def _init_layers(self, seq_len, pred_len, kernel_size, bias, quantile_mode):
+    def _setup(self, seq_len, pred_len, kernel_size, bias, quantile_mode):
         """
         Args:
             seq_len: Input sequence length
@@ -82,7 +82,7 @@ class DLinear(BaseDLinear):
             bias: Whether to use bias in linear layers
             quantile_mode: Source of quantiles for scaling ('full', 'cum', or 'rolling')
         """
-        super()._init_layers(seq_len, pred_len, kernel_size, bias)
+        super()._setup(seq_len, pred_len, kernel_size, bias)
         self.quantile_mode = quantile_mode
         self.scaler = IqrScaler()
 

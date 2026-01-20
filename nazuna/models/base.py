@@ -5,17 +5,17 @@ from abc import ABC, abstractmethod
 class BaseModel(torch.nn.Module, ABC):
     """
     Base class for time-series forecasting models.
-    Subclasses must implement _init_layers() to define their layers.
+    Subclasses must implement _setup() to define their layers.
     The device is handled by this base class, so subclasses don't need to manage it.
     """
     def __init__(self, device, **kwargs):
         super().__init__()
         self.device = device
-        self._init_layers(**kwargs)
+        self._setup(**kwargs)
         self.to(device)
 
     @abstractmethod
-    def _init_layers(self, **kwargs):
+    def _setup(self, **kwargs):
         pass
 
     @classmethod

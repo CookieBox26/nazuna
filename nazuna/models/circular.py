@@ -80,7 +80,7 @@ class BaseCircular(BaseModel):
     Base model for time series prediction using periodic sin/cos features.
     """
 
-    def _init_layers(self, pred_len, n_channel, periods):
+    def _setup(self, pred_len, n_channel, periods):
         self.pred_len = pred_len
         self.n_channel = n_channel
         self.periods = periods
@@ -129,14 +129,14 @@ class BaseCircular(BaseModel):
 class Circular(BaseCircular):
     data_based_hyperparams = []
 
-    def _init_layers(self, pred_len, n_channel, periods):
+    def _setup(self, pred_len, n_channel, periods):
         """
         Args:
             pred_len: Prediction length
             n_channel: Number of output channels
             periods: List of periods to use (default: [2, 3, ..., 24])
         """
-        super()._init_layers(pred_len, n_channel, periods)
+        super()._setup(pred_len, n_channel, periods)
 
     def __init__(self, device, **kwargs):
         super().__init__(device, **kwargs)

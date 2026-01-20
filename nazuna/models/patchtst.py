@@ -23,7 +23,7 @@ class PositionalEncoding(nn.Module):
 
 
 class BasePatchTST(BaseModel):
-    def _init_layers(self, seq_len, pred_len):
+    def _setup(self, seq_len, pred_len):
         self.seq_len = seq_len
         self.pred_len = pred_len
 
@@ -117,7 +117,7 @@ class PatchTST(BasePatchTST):
 
     data_based_hyperparams = []
 
-    def _init_layers(self, seq_len, pred_len, quantile_mode):
+    def _setup(self, seq_len, pred_len, quantile_mode):
         """
         Args:
             seq_len: Input sequence length (must be >= `patch_len`)
@@ -128,7 +128,7 @@ class PatchTST(BasePatchTST):
             Fixed architecture parameters: `patch_len=8`, `stride=4`, `d_model=32`,
             `n_heads=2`, `n_layers=2`, `d_ff=128`, `dropout=0.1`
         """
-        super()._init_layers(seq_len, pred_len)
+        super()._setup(seq_len, pred_len)
         self.quantile_mode = quantile_mode
         self.scaler = IqrScaler()
 
