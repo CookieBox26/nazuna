@@ -73,7 +73,7 @@ class DLinear(BaseDLinear):
           [Paper](https://arxiv.org/abs/2205.13504) |
           [GitHub](https://github.com/cure-lab/LTSF-Linear)
     """
-    def _setup(self, seq_len, pred_len, kernel_size, bias, quantile_mode):
+    def _setup(self, seq_len: int, pred_len: int, kernel_size: int, bias: bool, quantile_mode: str) -> None:
         """
         Args:
             seq_len: Input sequence length

@@ -29,7 +29,7 @@ class BaseSimpleAverage(BaseModel):
 
 
 class SimpleAverage(BaseSimpleAverage):
-    def _setup(self, seq_len, pred_len, period_len, decay_rate=1.0, max_n_period=10):
+    def _setup(self, seq_len: int, pred_len: int, period_len: int, decay_rate: float = 1.0, max_n_period: int = 10) -> None:
         """
         Args:
             seq_len: Input sequence length (must be divisible by `period_len`)

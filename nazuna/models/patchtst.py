@@ -114,10 +114,7 @@ class PatchTST(BasePatchTST):
           [Paper](https://arxiv.org/abs/2211.14730) |
           [GitHub](https://github.com/yuqinie98/PatchTST)
     """
-
-    data_based_hyperparams = []
-
-    def _setup(self, seq_len, pred_len, quantile_mode):
+    def _setup(self, seq_len: int, pred_len: int, quantile_mode: str) -> None:
         """
         Args:
             seq_len: Input sequence length (must be >= `patch_len`)

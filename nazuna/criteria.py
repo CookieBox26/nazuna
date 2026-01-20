@@ -1,26 +1,28 @@
 import torch
-from abc import ABC
+from abc import ABC, abstractmethod
 
 
 class BaseLoss(torch.nn.Module, ABC):
-    def __init__(self):
+    def __init__(self, device, **kwargs):
         super().__init__()
+        self.device = device
+        self._setup(**kwargs)
+        self.to(device)
 
-    def setup(self):
+    @abstractmethod
+    def _setup(self, **kwargs):
         pass
 
     @classmethod
     def create(cls, device, **kwargs):
-        criterion = cls(**kwargs)
-        criterion.device = device
-        criterion.setup()
-        return criterion
+        return cls(device=device, **kwargs)
 
 
 class MSELoss(BaseLoss):
-    """Mean Squared Error loss with channel and sequence weighting."""
-
-    def __init__(
+    """
+    Mean Squared Error loss with channel and sequence weighting.
+    """
+    def _setup(
         self,
         n_channel: int,
         pred_len: int,
@@ -41,17 +43,18 @@ class MSELoss(BaseLoss):
             For example, if decay_rate=0.9, step 0 has weight 1.0, step 1 has 0.9,
             step 2 has 0.81, and so on.
         """
-        super().__init__()
         self.n_channel = n_channel
         self.pred_len = pred_len
         self.decay_rate = decay_rate
         self.tolerance = tolerance
+        self._set_w_channel()
+        self._set_w_seq()
 
-    def set_w_channel(self):
+    def _set_w_channel(self):
         self.w_channel = torch.ones(self.n_channel, dtype=torch.float, device=self.device)
         self.w_channel /= self.w_channel.sum()
 
-    def set_w_seq(self):
+    def _set_w_seq(self):
         r = self.decay_rate
         if r is None or r == 1:
             w = torch.ones(self.pred_len, dtype=torch.float, device=self.device)
@@ -59,10 +62,6 @@ class MSELoss(BaseLoss):
             idx = torch.arange(self.pred_len, dtype=torch.float, device=self.device)
             w = torch.pow(torch.tensor(r, dtype=torch.float, device=self.device), idx)  # [1, r, r^2, ...]
         self.w_seq = w / w.sum()
-
-    def setup(self):
-        self.set_w_channel()
-        self.set_w_seq()
 
     def calc_loss(self, pred, true):
         diff = pred[:, :self.pred_len, :] - true[:, :self.pred_len, :]

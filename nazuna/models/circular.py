@@ -127,9 +127,7 @@ class BaseCircular(BaseModel):
 
 
 class Circular(BaseCircular):
-    data_based_hyperparams = []
-
-    def _setup(self, pred_len, n_channel, periods):
+    def _setup(self, pred_len: int, n_channel: int, periods: list[int]) -> None:
         """
         Args:
             pred_len: Prediction length
