@@ -1,32 +1,36 @@
-from nazuna.data_manager import TimeSeriesDataManager
-from nazuna.datasets import get_path
-from nazuna.task_runner import EvalTaskRunner
+from nazuna.task_runner import run_tasks
+
+
+conf_toml_str = '''
+out_dir = "out/eval_jma_hourly"
+exist_ok = true
+
+[data]
+path = [ "jma", "weather_japan_hourly_2025-09-01_2025-12-31_27_blocks.csv",]
+colname_timestamp = "timestamp"
+seq_len = 96  # 24 * 4
+pred_len = 24
+
+[[tasks]]
+task_type = "eval"
+data_range = [ 0.8, 1.0,]
+criterion_cls_path = "nazuna.criteria.MAELoss"
+criterion_params = { n_channel = 27, pred_len = 24 }
+model_cls_path = "nazuna.models.simple_average.SimpleAverage"
+model_params = { seq_len = 96, pred_len = 24, period_len = 24 }
+
+[[tasks]]
+task_type = "eval"
+data_range = [ 0.8, 1.0,]
+criterion_cls_path = "nazuna.criteria.MAELoss"
+criterion_params = { n_channel = 27, pred_len = 24 }
+model_cls_path = "nazuna.models.simple_average.SimpleAverage"
+model_params = { seq_len = 72, pred_len = 24, period_len = 24 }
+'''
 
 
 def main():
-    conf_data = {
-        'path': get_path('jma', 'weather_japan_hourly_2025-09-01_2025-12-31_27_blocks.csv'),
-        'colname_timestamp': 'timestamp', 'seq_len': 24 * 4, 'pred_len': 24,
-    }
-    dm = TimeSeriesDataManager(**conf_data)
-
-    print()
-
-    conf_task = {'n_channel': 27, 'seq_len': 24 * 4, 'pred_len': 24}
-    runner = EvalTaskRunner(
-        dm=dm, out_dir='out/eval_jma_hourly/task_0', exist_ok=True,
-        **conf_task,
-    )
-    loss = runner.run()
-    print('24 * 4 -> 24 : ', loss)
-
-    conf_task = {'n_channel': 27, 'seq_len': 24 * 3, 'pred_len': 24}
-    runner = EvalTaskRunner(
-        dm=dm, out_dir='out/eval_jma_hourly/task_1', exist_ok=True,
-        **conf_task,
-    )
-    loss = runner.run()
-    print('24 * 3 -> 24 : ', loss)
+    run_tasks(conf_toml_str)
 
 
 if __name__ == '__main__':

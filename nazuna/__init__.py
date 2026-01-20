@@ -2,6 +2,8 @@ from importlib import import_module
 import random
 import numpy as np
 import torch
+import time
+from contextlib import contextmanager
 
 
 def fix_seed(seed=0):
@@ -21,3 +23,14 @@ def load_class(path):
     except (ImportError, AttributeError):
         raise ImportError(path)
     return cls
+
+
+@contextmanager
+def measure_time(info):
+    start = time.perf_counter()
+    try:
+        yield
+    finally:
+        elapsed = time.perf_counter() - start
+        mins, secs = divmod(elapsed, 60)
+        info['elapsed'] = f'{int(mins)} min {int(secs)} sec'

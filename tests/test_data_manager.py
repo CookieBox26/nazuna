@@ -17,7 +17,7 @@ def test_data_loader(dm, device):
     data_loader_train = dm.get_data_loader(
         data_range=(0.0, 0.8),
         batch_sampler_cls=load_class('nazuna.batch_sampler.BatchSampler'),
-        batch_sampler_kwargs={'batch_size': 16},
+        batch_sampler_params={'batch_size': 16},
         offset=0, rolling_window=28, device=device,
     )
 
@@ -46,7 +46,7 @@ def test_data_loader_offset(dm, device):
     data_loader_train = dm.get_data_loader(
         data_range=(0.0, 0.8),
         batch_sampler_cls=load_class('nazuna.batch_sampler.BatchSampler'),
-        batch_sampler_kwargs={'batch_size': 16},
+        batch_sampler_params={'batch_size': 16},
         offset=28, rolling_window=28, device=device,
     )
 

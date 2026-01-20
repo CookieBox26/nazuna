@@ -43,7 +43,7 @@ Documentation = "https://nazuna.readthedocs.io/en/latest/"
 [tool.hatch.build.targets.wheel]
 artifacts = ["nazuna/datasets/**/*.csv"]
 
-[tool.ruff]
+[tool.ruff.lint]
 select = ["F401"]
 
 [tool.pytest.ini_options]

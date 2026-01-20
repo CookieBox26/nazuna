@@ -77,8 +77,8 @@ class TimeSeriesDataset(Dataset):
             to_tensor(np.array([b[8] for b in batch])),
         )
 
-    def get_data_loader(self, batch_sampler_cls, batch_sampler_kwargs):
-        batch_sampler = batch_sampler_cls(self.n_sample, **batch_sampler_kwargs)
+    def get_data_loader(self, batch_sampler_cls, batch_sampler_params):
+        batch_sampler = batch_sampler_cls(self.n_sample, **batch_sampler_params)
         return DataLoader(self, batch_sampler=batch_sampler, collate_fn=self.collate_fn)
 
 
@@ -153,7 +153,7 @@ class TimeSeriesDataManager:
         self,
         data_range,
         batch_sampler_cls,
-        batch_sampler_kwargs,
+        batch_sampler_params,
         offset,
         rolling_window,
         device,
@@ -162,4 +162,4 @@ class TimeSeriesDataManager:
         dataset = TimeSeriesDataset(
             df_target, self.seq_len, self.pred_len, offset, rolling_window, device,
         )
-        return dataset.get_data_loader(batch_sampler_cls, batch_sampler_kwargs)
+        return dataset.get_data_loader(batch_sampler_cls, batch_sampler_params)
