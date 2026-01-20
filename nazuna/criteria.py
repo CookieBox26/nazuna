@@ -32,6 +32,11 @@ class MSELoss(BaseLoss):
             pred_len: Length of the prediction sequence.
             decay_rate: Exponential decay rate for sequence weighting.
                 If None or 1, uniform weights are used.
+
+        Note:
+            The weight for step i is decay_rate^i (before normalization).
+            For example, if decay_rate=0.9, step 0 has weight 1.0, step 1 has 0.9,
+            step 2 has 0.81, and so on.
         """
         super().__init__()
         self.n_channel = n_channel
