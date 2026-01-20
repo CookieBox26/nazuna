@@ -1,5 +1,8 @@
 __pycache__/
 dist/
 .pytest_cache/
-.claude/
+.claude/settings.local.json
+.claude/request.*.md
+!.claude/request.sample.md
+.claude/run.sh
 .obsidian/
