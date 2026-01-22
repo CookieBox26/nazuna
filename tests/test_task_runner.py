@@ -44,9 +44,7 @@ def test_train_task_runner(tmp_path, get_data_manager):
     runner.run()
 
     assert runner.result_path.is_file()
-    runner.result_path.unlink()
     assert runner.out_path.is_dir()
-    runner.out_path.rmdir()
 
 
 conf_toml_str = '''
