@@ -15,15 +15,18 @@ pip install git+https://github.com/CookieBox26/nazuna.git  # main HEAD
 pip install git+https://github.com/CookieBox26/nazuna.git@<revision>  # specific revision
 ```
 
-### Running an Example
-
-Run the following command to evaluate JMA weather data:
+### Running Examples
 
 ```bash
-python -m nazuna.examples.eval_jma_hourly
+# Evaluate SimpleAverage model on JMA weather data:
+python -m nazuna.examples eval_sa_jma_daily
+python -m nazuna.examples eval_sa_jma_hourly_3m
+python -m nazuna.examples eval_sa_jma_hourly_24m
+
+# Train SimpleAverageVariableDecay model on JMA weather data:
+python -m nazuna.examples train_savd_jma_daily
 ```
 
 ### Features
 
 - Scaling coefficients can be changed dynamically.
-- This package includes sample datasets. Use `nazuna.datasets.get_path()` to get the path to a sample dataset.

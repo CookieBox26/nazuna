@@ -12,6 +12,10 @@ from nazuna.data_manager import TimeSeriesDataManager
 from nazuna import load_class, measure_time
 
 
+def _to_snake_case(s):
+    return '_'.join(s.lower().split())
+
+
 def _get_timestamp():
     return datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
 
@@ -42,6 +46,7 @@ def _validate_params(func, params):
 class BaseTaskRunner(ABC):
     dm: TimeSeriesDataManager
     device: str = ''
+    name: str = ''
     out_dir: str | Path = ''
     exist_ok: bool = False
 
@@ -64,6 +69,8 @@ class BaseTaskRunner(ABC):
             self._run()
         self.result_path = self.out_path / 'result.toml'
         self.result_path.write_text(toml.dumps(self.result), newline='\n', encoding='utf8')
+        elapsed = self.result['elapsed']
+        print(f'[Task] Finished task: {self.result_path.as_posix()} ({elapsed})')
 
 
 @dataclasses.dataclass
@@ -98,6 +105,8 @@ class EvalTaskRunner(BaseTaskRunner):
         self.model_cls = load_class(self.model_cls_path)
         _validate_params(self.model_cls._setup, self.model_params)
 
+        criterion_n_channel = self.criterion_params.get('n_channel', None)
+        assert (criterion_n_channel is None) or (criterion_n_channel == self.dm.n_channel)
         criterion_pred_len = self.criterion_params.get('pred_len', None)
         assert (criterion_pred_len is None) or (criterion_pred_len <= self.dm.pred_len)
 
@@ -289,7 +298,8 @@ class Config:
         self.task_type = params.pop('task_type')
         task_runner_cls = TaskType[self.task_type].value
         params.setdefault('device', self.device)
-        params.setdefault('out_dir', self.out_path / f'task_{i_task}')
+        params.setdefault('name', f'Task {i_task}')
+        params.setdefault('out_dir', self.out_path / _to_snake_case(params['name']))
         params.setdefault('exist_ok', self.exist_ok)
         return task_runner_cls, params
 
@@ -340,8 +350,10 @@ def run_tasks(conf_: Config | dict | Path | str):
         cls_, params_ = conf.get_task_runner(i_task)
         task_runners.append(cls_(dm=dm, **params_))
 
-    for task_runner in task_runners:
-        task_runner.run()
+    result = {}
+    with measure_time(result):
+        for task_runner in task_runners:
+            task_runner.run()
 
     report_path = conf.out_path / 'report.md'
     with report_path.open('w', newline='\n', encoding='utf8') as f:
@@ -352,6 +364,9 @@ def run_tasks(conf_: Config | dict | Path | str):
         f.write('\n')
         f.write('### Result\n')
         for task_runner in task_runners:
+            f.write(f'#### {task_runner.name}\n')
             f.write('```toml\n')
             f.write(toml.dumps(task_runner.result))
             f.write('```\n')
+    elapsed = result['elapsed']
+    print(f'Finished all tasks: {report_path.as_posix()} ({elapsed})')

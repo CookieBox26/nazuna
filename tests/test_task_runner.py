@@ -14,7 +14,7 @@ def test_eval_task_runner(tmp_path, get_data_manager):
         'model_cls_path': 'nazuna.models.simple_average.SimpleAverage',
         'model_params': {'seq_len': 28, 'pred_len': 7, 'period_len': 7},
     }
-    runner = EvalTaskRunner(dm=dm, out_dir=tmp_path / 'task_0', **conf_task)
+    runner = EvalTaskRunner(dm=dm, name='Task 0', out_dir=tmp_path / 'task_0', **conf_task)
     runner.run()
 
     assert runner.result_path.is_file()
@@ -40,7 +40,7 @@ def test_train_task_runner(tmp_path, get_data_manager):
         'lr_scheduler_params': {'T_max': 10},
         'n_epoch': 2,
     }
-    runner = TrainTaskRunner(dm=dm, out_dir=tmp_path / 'task_0', **conf_task)
+    runner = TrainTaskRunner(dm=dm, name='Task 0', out_dir=tmp_path / 'task_0', **conf_task)
     runner.run()
 
     assert runner.result_path.is_file()

@@ -1,8 +1,4 @@
-from nazuna.task_runner import run_tasks
-
-
-conf_toml_str = '''
-out_dir = "out/eval_jma_hourly"
+out_dir = "./out/eval_sa_jma_hourly_3m"
 exist_ok = true
 
 [data]
@@ -26,12 +22,3 @@ criterion_cls_path = "nazuna.criteria.MAELoss"
 criterion_params = { n_channel = 27, pred_len = 24 }
 model_cls_path = "nazuna.models.simple_average.SimpleAverage"
 model_params = { seq_len = 72, pred_len = 24, period_len = 24 }
-'''
-
-
-def main():
-    run_tasks(conf_toml_str)
-
-
-if __name__ == '__main__':
-    main()

@@ -1,11 +1,14 @@
 import pytest
-import nazuna.examples.eval_jma_daily
-import nazuna.examples.eval_jma_hourly
+from nazuna.examples import run_example
 
 
-def test_examples_eval_jma_daily():
-    nazuna.examples.eval_jma_daily.main()
-
-@pytest.mark.slow
-def test_examples_eval_jma_hourly():
-    nazuna.examples.eval_jma_hourly.main()
+@pytest.mark.parametrize(
+    'identifier', [
+        pytest.param('eval_sa_jma_daily'),
+        pytest.param('eval_sa_jma_hourly_3m', marks=pytest.mark.slow),
+        pytest.param('eval_sa_jma_hourly_24m', marks=pytest.mark.slow),
+        pytest.param('train_savd_jma_daily'),
+    ],
+)
+def test_examples(identifier):
+    run_example(identifier)

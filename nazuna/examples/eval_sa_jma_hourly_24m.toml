@@ -1,0 +1,16 @@
+out_dir = "./out/eval_sa_jma_hourly_24m"
+exist_ok = true
+
+[data]
+path = [ "jma", "weather_japan_hourly_2023-01-01_2025-12-31_11_blocks.csv",]
+colname_timestamp = "timestamp"
+seq_len = 96  # 24 * 4
+pred_len = 24
+
+[[tasks]]
+task_type = "eval"
+data_range_eval = [ 0.8, 1.0,]
+criterion_cls_path = "nazuna.criteria.MAELoss"
+criterion_params = { n_channel = 11, pred_len = 24 }
+model_cls_path = "nazuna.models.simple_average.SimpleAverage"
+model_params = { seq_len = 96, pred_len = 24, period_len = 24 }
