@@ -54,12 +54,3 @@ mkdocs serve --livereload  # preview documentation locally
 # update the version in ./pyproject.toml
 # commit changes
 ```
-
-#### For reference: Example of Asking Claude to Create a PR
-
-```bash
-ts=$(date '+%Y%m%d%H%M')
-cp .claude/request.sample.md .claude/request.$ts.md
-q="Please implement the request described in \`.claude/request.$ts.md\`"
-claude --allowedTools=Write -p "$q"
-```
