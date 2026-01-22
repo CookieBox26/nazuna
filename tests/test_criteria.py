@@ -17,25 +17,25 @@ def test_mse_loss(device):
     ]], device=device)
 
     criterion = load_class('nazuna.criteria.MSELoss').create(device, n_channel=3, pred_len=4)
-    error, errors_each_sample, errors_each_roads = criterion(batch_0, batch_1)
+    loss = criterion(batch_0, batch_1)
 
     # ( 1^2 + 2^2 + 3^2 + 4^2 ) / 4 = 30 / 4 = 7.5
     # ( 2^2 + 4^2 + 6^2 + 8^2 ) / 4 = 120 / 4 = 30
     expected = torch.tensor([[7.5, 30., 7.5]], device=device)
-    assert torch.allclose(errors_each_roads, expected)
+    assert torch.allclose(loss.each_sample_channel, expected)
 
     # (7.5 + 30 + 7.5) / 3 = 15
     expected = torch.tensor([15.], device=device)
-    assert torch.allclose(errors_each_sample, expected)
-    assert torch.allclose(error, expected[0])
+    assert torch.allclose(loss.each_sample, expected)
+    assert torch.allclose(loss.batch_mean, expected[0])
 
     criterion = load_class('nazuna.criteria.MSELoss').create(device, n_channel=3, pred_len=2)
-    error, errors_each_sample, errors_each_roads = criterion(batch_0, batch_1)
+    loss = criterion(batch_0, batch_1)
 
     # ( 1^2 + 2^2 ) / 2 = 5 / 2 = 2.5
     # ( 2^2 + 4^2 ) / 2 = 20 / 2 = 10
     expected = torch.tensor([[2.5, 10., 2.5]], device=device)
-    assert torch.allclose(errors_each_roads, expected)
+    assert torch.allclose(loss.each_sample_channel, expected)
 
 
 def test_mse_loss_tolerance(device):
@@ -62,17 +62,17 @@ def test_mse_loss_tolerance(device):
     criterion = load_class('nazuna.criteria.MSELoss').create(
         device, n_channel=3, pred_len=4, tolerance=1.5,
     )
-    error, errors_each_sample, errors_each_roads = criterion(batch_0, batch_1)
+    loss = criterion(batch_0, batch_1)
     expected = torch.tensor([[7.25, 30., 7.25]], device=device)
-    assert torch.allclose(errors_each_roads, expected)
+    assert torch.allclose(loss.each_sample_channel, expected)
 
     # tolerance=0: default behavior (same as no tolerance)
     criterion = load_class('nazuna.criteria.MSELoss').create(
         device, n_channel=3, pred_len=4, tolerance=0,
     )
-    error, errors_each_sample, errors_each_roads = criterion(batch_0, batch_1)
+    loss = criterion(batch_0, batch_1)
     expected = torch.tensor([[7.5, 30., 7.5]], device=device)  # Same as original test
-    assert torch.allclose(errors_each_roads, expected)
+    assert torch.allclose(loss.each_sample_channel, expected)
 
 
 def test_mae_loss_tolerance(device):
@@ -99,9 +99,9 @@ def test_mae_loss_tolerance(device):
     criterion = load_class('nazuna.criteria.MAELoss').create(
         device, n_channel=3, pred_len=4, tolerance=1.5,
     )
-    error, errors_each_sample, errors_each_roads = criterion(batch_0, batch_1)
+    loss = criterion(batch_0, batch_1)
     expected = torch.tensor([[2.25, 5., 2.25]], device=device)
-    assert torch.allclose(errors_each_roads, expected)
+    assert torch.allclose(loss.each_sample_channel, expected)
 
     # tolerance=0: default behavior (same as no tolerance)
     # channel 0: (1 + 2 + 3 + 4) / 4 = 10 / 4 = 2.5
@@ -110,6 +110,6 @@ def test_mae_loss_tolerance(device):
     criterion = load_class('nazuna.criteria.MAELoss').create(
         device, n_channel=3, pred_len=4, tolerance=0,
     )
-    error, errors_each_sample, errors_each_roads = criterion(batch_0, batch_1)
+    loss = criterion(batch_0, batch_1)
     expected = torch.tensor([[2.5, 5., 2.5]], device=device)
-    assert torch.allclose(errors_each_roads, expected)
+    assert torch.allclose(loss.each_sample_channel, expected)

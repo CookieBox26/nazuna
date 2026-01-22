@@ -59,8 +59,7 @@ class BaseDLinear(BaseModel):
         input_ = self.extract_input(batch)
         target = self.extract_target(batch)
         output, _ = self(input_)
-        loss = criterion(output, target)
-        return loss, {}
+        return criterion(output, target)
 
 
 class DLinear(BaseDLinear):

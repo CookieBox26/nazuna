@@ -14,7 +14,7 @@ white_list = [ "temp_avg_nagoya", "temp_avg_fukuoka",]
 
 [[tasks]]
 task_type = "eval"
-data_range = [ 0.8, 1.0,]
+data_range_eval = [ 0.8, 1.0,]
 criterion_cls_path = "nazuna.criteria.MAELoss"
 criterion_params = { n_channel = 2, pred_len = 7 }
 model_cls_path = "nazuna.models.simple_average.SimpleAverage"

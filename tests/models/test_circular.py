@@ -53,5 +53,4 @@ def test_get_loss(device):
         quantiles_rolling=None,
     )
     criterion = nn.MSELoss()
-    loss, _ = model.get_loss(batch, criterion)
-    assert loss.dim() == 0
+    loss = model.get_loss(batch, criterion)

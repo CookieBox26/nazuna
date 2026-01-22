@@ -13,7 +13,7 @@ pred_len = 24
 
 [[tasks]]
 task_type = "eval"
-data_range = [ 0.8, 1.0,]
+data_range_eval = [ 0.8, 1.0,]
 criterion_cls_path = "nazuna.criteria.MAELoss"
 criterion_params = { n_channel = 27, pred_len = 24 }
 model_cls_path = "nazuna.models.simple_average.SimpleAverage"
@@ -21,7 +21,7 @@ model_params = { seq_len = 96, pred_len = 24, period_len = 24 }
 
 [[tasks]]
 task_type = "eval"
-data_range = [ 0.8, 1.0,]
+data_range_eval = [ 0.8, 1.0,]
 criterion_cls_path = "nazuna.criteria.MAELoss"
 criterion_params = { n_channel = 27, pred_len = 24 }
 model_cls_path = "nazuna.models.simple_average.SimpleAverage"

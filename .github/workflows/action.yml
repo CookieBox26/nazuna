@@ -13,4 +13,4 @@ jobs:
           git checkout --detach ${{ github.sha }}
       - run: pipx install uv
       - run: uv sync --extra torch-cpu --extra test
-      - run: uv run pytest
+      - run: uv run pytest -m ""

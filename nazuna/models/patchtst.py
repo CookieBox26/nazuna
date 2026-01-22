@@ -100,8 +100,7 @@ class BasePatchTST(BaseModel):
         input_ = self.extract_input(batch)
         target = self.extract_target(batch)
         output = self(input_)
-        loss = criterion(output, target)
-        return loss, {}
+        return criterion(output, target)
 
 
 class PatchTST(BasePatchTST):

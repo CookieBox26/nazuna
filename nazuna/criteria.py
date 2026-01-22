@@ -1,5 +1,18 @@
-import torch
 from abc import ABC, abstractmethod
+import dataclasses
+import torch
+
+
+@dataclasses.dataclass
+class TimeSeriesLoss:
+    batch_size: int
+    batch_mean: torch.Tensor
+    each_sample: torch.Tensor
+    each_sample_channel: torch.Tensor | None = None
+    info: dict = dataclasses.field(default_factory=dict)
+
+    def batch_sum(self) -> float:
+        return self.each_sample.shape[0] * self.batch_mean.item()
 
 
 class BaseLoss(torch.nn.Module, ABC):
@@ -63,17 +76,18 @@ class MSELoss(BaseLoss):
             w = torch.pow(torch.tensor(r, dtype=torch.float, device=self.device), idx)  # [1, r, r^2, ...]
         self.w_seq = w / w.sum()
 
-    def calc_loss(self, pred, true):
+    def get_diff(self, pred, true):
         diff = pred[:, :self.pred_len, :] - true[:, :self.pred_len, :]
         if self.tolerance > 0:
             diff = torch.where(torch.abs(diff) < self.tolerance, torch.zeros_like(diff), diff)
         return diff ** 2
 
     def forward(self, pred, true):
-        loss = self.calc_loss(pred, true)  # batch_size, pred_len, n_channel
+        loss = self.get_diff(pred, true)  # batch_size, pred_len, n_channel
         me_of_each_sample_channel = torch.einsum('j,ijk->ik', (self.w_seq, loss))
         me_of_each_sample = torch.einsum('k,ik->i', (self.w_channel, me_of_each_sample_channel))
-        return (
+        return TimeSeriesLoss(
+            true.shape[0],
             me_of_each_sample.mean(),  # (scalar)
             me_of_each_sample,  # batch_size
             me_of_each_sample_channel,  # batch_size, n_channel
@@ -81,7 +95,7 @@ class MSELoss(BaseLoss):
 
 
 class MAELoss(MSELoss):
-    def calc_loss(self, pred, true):
+    def get_diff(self, pred, true):
         diff = pred[:, :self.pred_len, :] - true[:, :self.pred_len, :]
         if self.tolerance > 0:
             diff = torch.where(torch.abs(diff) < self.tolerance, torch.zeros_like(diff), diff)
