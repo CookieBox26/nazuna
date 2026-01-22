@@ -1,5 +1,5 @@
 from nazuna.models.simple_average import (
-    SimpleAverage, SimpleAverageVariableDecay,
+    SimpleAverage, SimpleAverageVariableDecay, SimpleAverageVariableDecayChannelwise,
 )
 import torch
 
@@ -57,6 +57,48 @@ def test_simple_average_variable_decay(device):
     loss = ((output - true) ** 2).mean()
     loss.backward()
     assert model.decay_rate.grad is not None
+
+    # Test that optimizer.step() updates the value.
+    before = model.decay_rate.detach().clone()
+    optimizer.step()
+    after = model.decay_rate.detach()
+    assert not torch.allclose(before, after)
+
+
+def test_simple_average_variable_decay_channelwise(device):
+    n_channel = 3
+    model = SimpleAverageVariableDecayChannelwise.create(
+        device=device,
+        seq_len=4,
+        pred_len=2,
+        period_len=2,
+        n_channel=n_channel,
+    )
+    params = dict(model.named_parameters())
+    assert 'decay_rate' in params
+    assert params['decay_rate'].shape == (n_channel,)
+    assert params['decay_rate'].requires_grad is True
+
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.01)
+    optimizer.zero_grad()
+
+    x = torch.tensor([[  # A batch with 3 channels and 4 steps
+        [10., 10., 10.],
+        [20., 20., 20.],
+        [30., 30., 30.],
+        [40., 40., 40.],
+    ]], device=model.device)
+    true = torch.tensor([[
+        [20., 20., 20.],
+        [30., 30., 30.],
+    ]], device=model.device)
+
+    # Test that backward computes a gradient.
+    output, _ = model(x)
+    loss = ((output - true) ** 2).mean()
+    loss.backward()
+    assert model.decay_rate.grad is not None
+    assert model.decay_rate.grad.shape == (n_channel,)
 
     # Test that optimizer.step() updates the value.
     before = model.decay_rate.detach().clone()
