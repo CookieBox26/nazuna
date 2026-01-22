@@ -234,15 +234,18 @@ class TrainTaskRunner(EvalTaskRunner):
             loss_per_sample_eval = loss_eval['loss_per_sample']
 
             if loss_per_sample_eval < loss_per_sample_eval_best:
-                # TODO: save model state
                 loss_per_sample_eval_best = loss_per_sample_eval
                 early_stop_counter = 0
+                self.result['i_epoch_best'] = i_epoch
+                self.result['loss_per_sample_eval_best'] = loss_per_sample_eval_best
             else:
                 early_stop_counter += 1
             if (self.early_stop) and (early_stop_counter >= 5):
                 stop = True
             if stop:
                 break
+
+        torch.save(self.model.state_dict(), self.out_path / 'model_state.pth')
 
 
 @dataclasses.dataclass

@@ -27,9 +27,10 @@ This repository can be installed as a Python package.
 │  ├─ scaler.py  # Scaler (used by models)
 │  ├─ models/  # Time-series forecasting models
 │  │  ├─ base.py
+│  │  ├─ simple_average.py
+│  │  ├─ circular.py
 │  │  ├─ dlinear.py
 │  │  └─ patchtst.py
-│  ├─ reports/  # Reporting functions
 │  │
 │  ├─ task_runner.py  # Task runner that orchestrates the above modules
 │  │
