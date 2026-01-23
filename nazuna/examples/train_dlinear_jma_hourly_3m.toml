@@ -1,0 +1,34 @@
+out_dir = "./out/train_dlinear_jma_hourly_3m"
+exist_ok = true
+
+[data]
+path = [ "jma", "weather_japan_hourly_2025-09-01_2025-12-31_27_blocks.csv",]
+colname_timestamp = "timestamp"
+seq_len = 96  # 24 * 4
+pred_len = 24
+
+[[tasks]]
+task_type = "eval"
+name = "Eval SimpleAverage"
+data_range_eval = [ 0.8, 1.0,]
+criterion_cls_path = "nazuna.criteria.MAELoss"
+criterion_params = { n_channel = 27, pred_len = 24 }
+model_cls_path = "nazuna.models.simple_average.SimpleAverage"
+model_params = { seq_len = 96, pred_len = 24, period_len = 24 }
+
+[[tasks]]
+task_type = "train"
+name = "Train DLinear"
+data_range_train = [ 0.0, 0.8,]
+data_range_eval = [ 0.8, 1.0,]
+criterion_cls_path = "nazuna.criteria.MAELoss"
+criterion_params = { n_channel = 27, pred_len = 24 }
+model_cls_path = "nazuna.models.dlinear.DLinear"
+model_params = { seq_len = 96, pred_len = 24, kernel_size = 25, bias = true, quantile_mode = "full" }
+batch_sampler_cls_path = "nazuna.batch_sampler.BatchSamplerShuffle"
+batch_sampler_params = { batch_size = 32 }
+optimizer_cls_path = "torch.optim.Adam"
+optimizer_params = { lr = 0.001 }
+lr_scheduler_cls_path = "torch.optim.lr_scheduler.CosineAnnealingLR"
+lr_scheduler_params = { T_max = 10 }
+n_epoch = 20

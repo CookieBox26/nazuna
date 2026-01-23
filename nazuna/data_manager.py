@@ -14,13 +14,13 @@ class TimeSeriesDataset(Dataset):
     def to_tensor(self, x):
         return torch.tensor(x, dtype=torch.float32, device=self.device)
 
-    def get_quantiles(self, df_):
+    def calc_quantiles(self, df_):
         quantiles = [[], [], []]
         for col in self.df_org.columns:
             qtiles = list(df_[col].quantile([0.25, 0.5, 0.75]))
             for i_q in range(3):
                 quantiles[i_q].append(qtiles[i_q])
-        return quantiles
+        return quantiles  # 3, n_channel
 
     def __init__(self, df, seq_len, pred_len, offset, rolling_window, device):
         self.device = device
@@ -39,7 +39,7 @@ class TimeSeriesDataset(Dataset):
         self.pred_len = pred_len
         self.n_sample = len(self.df) - (seq_len - 1) - pred_len
         self.n_channel = len(self.df.columns)
-        self.quantiles_full = self.get_quantiles(self.df_org)
+        self.quantiles_full = self.calc_quantiles(self.df_org)
 
     def __len__(self):
         return self.n_sample
@@ -52,8 +52,8 @@ class TimeSeriesDataset(Dataset):
         idx_1 = idx_0 + self.seq_len
         idx_2 = idx_0 + self.seq_len + self.pred_len
 
-        quantiles_cum = self.get_quantiles(self.df_org[:(self.offset + idx_1)])
-        quantiles_rolling = self.get_quantiles(
+        quantiles_cum = self.calc_quantiles(self.df_org[:(self.offset + idx_1)])
+        quantiles_rolling = self.calc_quantiles(
             self.df_org[(self.offset + idx_1 - self.rolling_window):(self.offset + idx_1)]
         )
 
@@ -72,9 +72,9 @@ class TimeSeriesDataset(Dataset):
             np.array([b[3] for b in batch]),  # batch_size, pred_len
             to_tensor(np.array([b[4] for b in batch])),  # batch_size, pred_len
             to_tensor(np.array([b[5] for b in batch])),  # batch_size, pred_len, n_channel
-            to_tensor(np.array([b[6] for b in batch])),
-            to_tensor(np.array([b[7] for b in batch])),
-            to_tensor(np.array([b[8] for b in batch])),
+            to_tensor(np.array([b[6] for b in batch])).unsqueeze(2),  # batch_size, 3, 1, n_channel
+            to_tensor(np.array([b[7] for b in batch])).unsqueeze(2),  # batch_size, 3, 1, n_channel
+            to_tensor(np.array([b[8] for b in batch])).unsqueeze(2),  # batch_size, 3, 1, n_channel
         )
 
     def get_data_loader(self, batch_sampler_cls, batch_sampler_params):

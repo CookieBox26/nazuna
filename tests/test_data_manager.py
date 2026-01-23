@@ -38,9 +38,9 @@ def test_data_loader(dm, device):
         assert batch.tsta_future.shape == (batch_size_actual, 7)
         assert batch.tste_future.shape == (batch_size_actual, 7)
         assert batch.data_future.shape == (batch_size_actual, 7, 2)
-        assert batch.quantiles_full.shape == (batch_size_actual, 3, 2)
-        assert batch.quantiles_cum.shape == (batch_size_actual, 3, 2)
-        assert batch.quantiles_rolling.shape == (batch_size_actual, 3, 2)
+        assert batch.quantiles_full.shape == (batch_size_actual, 3, 1, 2)
+        assert batch.quantiles_cum.shape == (batch_size_actual, 3, 1, 2)
+        assert batch.quantiles_rolling.shape == (batch_size_actual, 3, 1, 2)
 
 def test_data_loader_offset(dm, device):
     data_loader_train = dm.get_data_loader(
@@ -61,7 +61,7 @@ def test_data_loader_offset(dm, device):
         for i_sample in [0, 4]:
             print(
                 batch.tsta[i_sample][27],  # prediction origin
-                ' {:6.3f}'.format(batch.quantiles_full[i_sample, i_q, i_col]),
-                ' {:6.3f}'.format(batch.quantiles_cum[i_sample, i_q, i_col]),
-                ' {:6.3f}'.format(batch.quantiles_rolling[i_sample, i_q, i_col]),
+                ' {:6.3f}'.format(batch.quantiles_full[i_sample, i_q, 0, i_col]),
+                ' {:6.3f}'.format(batch.quantiles_cum[i_sample, i_q, 0, i_col]),
+                ' {:6.3f}'.format(batch.quantiles_rolling[i_sample, i_q, 0, i_col]),
             )

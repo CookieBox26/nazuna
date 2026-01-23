@@ -219,6 +219,7 @@ class TrainTaskRunner(EvalTaskRunner):
 
         self.result['epochs'] = []
         for i_epoch in range(self.n_epoch):
+            print(f'----- Epoch {i_epoch} -----')
             self.result['epochs'].append({})
 
             loss_train = self.train()

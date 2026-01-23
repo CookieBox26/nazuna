@@ -25,9 +25,13 @@ python -m nazuna.examples eval_sa_jma_hourly_24m
 
 # Train SimpleAverageVariableDecay model on JMA weather data:
 python -m nazuna.examples train_savd_jma_daily
+python -m nazuna.examples train_savd_jma_hourly_3m
 
 # Train SimpleAverageVariableDecayChannelwise model on JMA weather data:
 python -m nazuna.examples train_savdc_jma_daily
+
+# Train DLinear model on JMA weather data:
+python -m nazuna.examples train_dlinear_jma_hourly_3m
 ```
 
 ### Features
