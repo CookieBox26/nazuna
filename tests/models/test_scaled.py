@@ -1,10 +1,10 @@
 from nazuna.data_manager import TimeSeriesDataset
-from nazuna.models.scaled import BaseScaledModel
+from nazuna.models.base import BaseModelWithScaler
 import torch
 import torch.nn as nn
 
 
-class DummyScaledModel(BaseScaledModel):
+class DummyScaledModel(BaseModelWithScaler):
     """A simple model for testing BaseScaledModel."""
 
     def _setup(self, seq_len: int, pred_len: int, quantile_mode: str) -> None:
@@ -21,7 +21,7 @@ class DummyScaledModel(BaseScaledModel):
         return x
 
 
-class DummyScaledModelWithTuple(BaseScaledModel):
+class DummyScaledModelWithTuple(BaseModelWithScaler):
     """A model that returns a tuple from forward()."""
 
     def _setup(self, seq_len: int, pred_len: int, quantile_mode: str) -> None:

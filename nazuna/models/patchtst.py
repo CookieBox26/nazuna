@@ -1,6 +1,4 @@
-from abc import abstractmethod
-from nazuna.models.base import BaseModel
-from nazuna.scaler import IqrScaler
+from nazuna.models.base import BaseModel, BaseModelWithScaler
 import torch
 import torch.nn as nn
 import math
@@ -84,26 +82,8 @@ class BasePatchTST(BaseModel):
         yhat = yhat.transpose(1, 2)  # [B, H, C]
         return yhat
 
-    @abstractmethod
-    def extract_input(self, batch):
-        pass
 
-    @abstractmethod
-    def extract_target(self, batch):
-        pass
-
-    @abstractmethod
-    def predict(self, batch):
-        pass
-
-    def get_loss(self, batch, criterion):
-        input_ = self.extract_input(batch)
-        target = self.extract_target(batch)
-        output = self(input_)
-        return criterion(output, target)
-
-
-class PatchTST(BasePatchTST):
+class PatchTST(BaseModelWithScaler, BasePatchTST):
     """
     !!! note "Original Research"
         This model is based on the following research:
@@ -124,38 +104,5 @@ class PatchTST(BasePatchTST):
             Fixed architecture parameters: `patch_len=8`, `stride=4`, `d_model=32`,
             `n_heads=2`, `n_layers=2`, `d_ff=128`, `dropout=0.1`
         """
-        super()._setup(seq_len, pred_len)
-        self.quantile_mode = quantile_mode
-        self.scaler = IqrScaler()
-
-    def _get_quantiles(self, batch):
-        if self.quantile_mode == 'full':
-            quantiles = batch.quantiles_full
-        elif self.quantile_mode == 'cum':
-            quantiles = batch.quantiles_cum
-        elif self.quantile_mode == 'rolling':
-            quantiles = batch.quantiles_rolling
-        else:
-            raise ValueError(f'Unknown quantile_mode: {self.quantile_mode}')
-        q1s_ = quantiles[:, 0, :]
-        q2s_ = quantiles[:, 1, :]
-        q3s_ = quantiles[:, 2, :]
-        return q1s_, q2s_, q3s_
-
-    def extract_input(self, batch):
-        q1s_, q2s_, q3s_ = self._get_quantiles(batch)
-        return self.scaler.scale(
-            batch.data[:, -self.seq_len:, :], q1s_=q1s_, q2s_=q2s_, q3s_=q3s_
-        )
-
-    def extract_target(self, batch):
-        q1s_, q2s_, q3s_ = self._get_quantiles(batch)
-        return self.scaler.scale(
-            batch.data_future[:, :self.pred_len], q1s_=q1s_, q2s_=q2s_, q3s_=q3s_
-        )
-
-    def predict(self, batch):
-        q1s_, q2s_, q3s_ = self._get_quantiles(batch)
-        input = self.extract_input(batch)
-        output = self(input)
-        return self.scaler.rescale(output, q1s_=q1s_, q2s_=q2s_, q3s_=q3s_)
+        BasePatchTST._setup(self, seq_len, pred_len)
+        self._setup_scaler(quantile_mode)
