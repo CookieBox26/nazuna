@@ -1,5 +1,4 @@
-from abc import abstractmethod
-from nazuna.models.base import BaseModel
+from nazuna.models.base import BasicBaseModel
 from nazuna.scaler import IqrScaler
 import torch
 import torch.nn as nn
@@ -22,10 +21,33 @@ class PositionalEncoding(nn.Module):
         return self.dropout(x + self.pe[:s].unsqueeze(0))
 
 
-class BasePatchTST(BaseModel):
-    def _setup(self, seq_len, pred_len):
-        self.seq_len = seq_len
-        self.pred_len = pred_len
+class PatchTST(BasicBaseModel):
+    """
+    !!! note "Original Research"
+        This model is based on the following research:
+        > Yuqi Nie, Nam H. Nguyen, Phanwadee Sinthong, and Jayant Kalagnanam.
+          "A Time Series is Worth 64 Words: Long-term Forecasting with Transformers."
+          In International Conference on Learning Representations (ICLR), 2023.
+          [Paper](https://arxiv.org/abs/2211.14730) |
+          [GitHub](https://github.com/yuqinie98/PatchTST)
+    """
+    def _setup(
+        self,
+        seq_len: int,
+        pred_len: int,
+        quantile_mode: str,
+    ) -> None:
+        """
+        Args:
+            seq_len: Input sequence length (must be >= `patch_len`)
+            pred_len: Prediction length
+            quantile_mode: Source of quantiles for scaling ('full', 'cum', or 'rolling')
+
+        Note:
+            Fixed architecture parameters: `patch_len=8`, `stride=4`, `d_model=32`,
+            `n_heads=2`, `n_layers=2`, `d_ff=128`, `dropout=0.1`
+        """
+        super()._setup(seq_len, pred_len)
 
         self.patch_len = 8
         self.stride = 4
@@ -58,6 +80,7 @@ class BasePatchTST(BaseModel):
             enc_layer, num_layers=self.n_layers, enable_nested_tensor=False
         )
         self.head = nn.Linear(self.d_model, self.pred_len)
+        self.scaler = IqrScaler(quantile_mode)
 
     def _patchify(self, x):  # x: [B, L, C] -> [B, C, P, patch_len]
         x = x.transpose(1, 2)  # [B, C, L]
@@ -82,80 +105,4 @@ class BasePatchTST(BaseModel):
         yhat = self.head(token)  # [B*C, pred_len]
         yhat = yhat.view(B, C, self.pred_len)  # [B, C, H]
         yhat = yhat.transpose(1, 2)  # [B, H, C]
-        return yhat
-
-    @abstractmethod
-    def extract_input(self, batch):
-        pass
-
-    @abstractmethod
-    def extract_target(self, batch):
-        pass
-
-    @abstractmethod
-    def predict(self, batch):
-        pass
-
-    def get_loss(self, batch, criterion):
-        input_ = self.extract_input(batch)
-        target = self.extract_target(batch)
-        output = self(input_)
-        return criterion(output, target)
-
-
-class PatchTST(BasePatchTST):
-    """
-    !!! note "Original Research"
-        This model is based on the following research:
-        > Yuqi Nie, Nam H. Nguyen, Phanwadee Sinthong, and Jayant Kalagnanam.
-          "A Time Series is Worth 64 Words: Long-term Forecasting with Transformers."
-          In International Conference on Learning Representations (ICLR), 2023.
-          [Paper](https://arxiv.org/abs/2211.14730) |
-          [GitHub](https://github.com/yuqinie98/PatchTST)
-    """
-    def _setup(self, seq_len: int, pred_len: int, quantile_mode: str) -> None:
-        """
-        Args:
-            seq_len: Input sequence length (must be >= `patch_len`)
-            pred_len: Prediction length
-            quantile_mode: Source of quantiles for scaling
-
-        Note:
-            Fixed architecture parameters: `patch_len=8`, `stride=4`, `d_model=32`,
-            `n_heads=2`, `n_layers=2`, `d_ff=128`, `dropout=0.1`
-        """
-        super()._setup(seq_len, pred_len)
-        self.quantile_mode = quantile_mode
-        self.scaler = IqrScaler()
-
-    def _get_quantiles(self, batch):
-        if self.quantile_mode == 'full':
-            quantiles = batch.quantiles_full
-        elif self.quantile_mode == 'cum':
-            quantiles = batch.quantiles_cum
-        elif self.quantile_mode == 'rolling':
-            quantiles = batch.quantiles_rolling
-        else:
-            raise ValueError(f'Unknown quantile_mode: {self.quantile_mode}')
-        q1s_ = quantiles[:, 0, :]
-        q2s_ = quantiles[:, 1, :]
-        q3s_ = quantiles[:, 2, :]
-        return q1s_, q2s_, q3s_
-
-    def extract_input(self, batch):
-        q1s_, q2s_, q3s_ = self._get_quantiles(batch)
-        return self.scaler.scale(
-            batch.data[:, -self.seq_len:, :], q1s_=q1s_, q2s_=q2s_, q3s_=q3s_
-        )
-
-    def extract_target(self, batch):
-        q1s_, q2s_, q3s_ = self._get_quantiles(batch)
-        return self.scaler.scale(
-            batch.data_future[:, :self.pred_len], q1s_=q1s_, q2s_=q2s_, q3s_=q3s_
-        )
-
-    def predict(self, batch):
-        q1s_, q2s_, q3s_ = self._get_quantiles(batch)
-        input = self.extract_input(batch)
-        output = self(input)
-        return self.scaler.rescale(output, q1s_=q1s_, q2s_=q2s_, q3s_=q3s_)
+        return yhat, {}

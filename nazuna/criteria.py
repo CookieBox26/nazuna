@@ -4,7 +4,7 @@ import torch
 
 
 @dataclasses.dataclass
-class TimeSeriesLoss:
+class TimeSeriesError:
     batch_size: int
     batch_mean: torch.Tensor
     each_sample: torch.Tensor
@@ -15,7 +15,7 @@ class TimeSeriesLoss:
         return self.each_sample.shape[0] * self.batch_mean.item()
 
 
-class BaseLoss(torch.nn.Module, ABC):
+class BaseError(torch.nn.Module, ABC):
     def __init__(self, device, **kwargs):
         super().__init__()
         self.device = device
@@ -31,9 +31,9 @@ class BaseLoss(torch.nn.Module, ABC):
         return cls(device=device, **kwargs)
 
 
-class MSELoss(BaseLoss):
+class MSE(BaseError):
     """
-    Mean Squared Error loss with channel and sequence weighting.
+    Mean Squared Error with channel and sequence weighting.
     """
     def _setup(
         self,
@@ -86,7 +86,7 @@ class MSELoss(BaseLoss):
         loss = self.get_diff(pred, true)  # batch_size, pred_len, n_channel
         me_of_each_sample_channel = torch.einsum('j,ijk->ik', (self.w_seq, loss))
         me_of_each_sample = torch.einsum('k,ik->i', (self.w_channel, me_of_each_sample_channel))
-        return TimeSeriesLoss(
+        return TimeSeriesError(
             true.shape[0],
             me_of_each_sample.mean(),  # (scalar)
             me_of_each_sample,  # batch_size
@@ -94,7 +94,7 @@ class MSELoss(BaseLoss):
         )
 
 
-class MAELoss(MSELoss):
+class MAE(MSE):
     def get_diff(self, pred, true):
         diff = pred[:, :self.pred_len, :] - true[:, :self.pred_len, :]
         if self.tolerance > 0:

@@ -16,7 +16,7 @@ def test_mse_loss(device):
         [44., 48., 44.],
     ]], device=device)
 
-    criterion = load_class('nazuna.criteria.MSELoss').create(device, n_channel=3, pred_len=4)
+    criterion = load_class('nazuna.criteria.MSE').create(device, n_channel=3, pred_len=4)
     loss = criterion(batch_0, batch_1)
 
     # ( 1^2 + 2^2 + 3^2 + 4^2 ) / 4 = 30 / 4 = 7.5
@@ -29,7 +29,7 @@ def test_mse_loss(device):
     assert torch.allclose(loss.each_sample, expected)
     assert torch.allclose(loss.batch_mean, expected[0])
 
-    criterion = load_class('nazuna.criteria.MSELoss').create(device, n_channel=3, pred_len=2)
+    criterion = load_class('nazuna.criteria.MSE').create(device, n_channel=3, pred_len=2)
     loss = criterion(batch_0, batch_1)
 
     # ( 1^2 + 2^2 ) / 2 = 5 / 2 = 2.5
@@ -59,7 +59,7 @@ def test_mse_loss_tolerance(device):
     # channel 0: (0^2 + 2^2 + 3^2 + 4^2) / 4 = 29 / 4 = 7.25
     # channel 1: (2^2 + 4^2 + 6^2 + 8^2) / 4 = 120 / 4 = 30
     # channel 2: (0^2 + 2^2 + 3^2 + 4^2) / 4 = 29 / 4 = 7.25
-    criterion = load_class('nazuna.criteria.MSELoss').create(
+    criterion = load_class('nazuna.criteria.MSE').create(
         device, n_channel=3, pred_len=4, tolerance=1.5,
     )
     loss = criterion(batch_0, batch_1)
@@ -67,7 +67,7 @@ def test_mse_loss_tolerance(device):
     assert torch.allclose(loss.each_sample_channel, expected)
 
     # tolerance=0: default behavior (same as no tolerance)
-    criterion = load_class('nazuna.criteria.MSELoss').create(
+    criterion = load_class('nazuna.criteria.MSE').create(
         device, n_channel=3, pred_len=4, tolerance=0,
     )
     loss = criterion(batch_0, batch_1)
@@ -96,7 +96,7 @@ def test_mae_loss_tolerance(device):
     # channel 0: (0 + 2 + 3 + 4) / 4 = 9 / 4 = 2.25
     # channel 1: (2 + 4 + 6 + 8) / 4 = 20 / 4 = 5
     # channel 2: (0 + 2 + 3 + 4) / 4 = 9 / 4 = 2.25
-    criterion = load_class('nazuna.criteria.MAELoss').create(
+    criterion = load_class('nazuna.criteria.MAE').create(
         device, n_channel=3, pred_len=4, tolerance=1.5,
     )
     loss = criterion(batch_0, batch_1)
@@ -107,7 +107,7 @@ def test_mae_loss_tolerance(device):
     # channel 0: (1 + 2 + 3 + 4) / 4 = 10 / 4 = 2.5
     # channel 1: (2 + 4 + 6 + 8) / 4 = 20 / 4 = 5
     # channel 2: (1 + 2 + 3 + 4) / 4 = 10 / 4 = 2.5
-    criterion = load_class('nazuna.criteria.MAELoss').create(
+    criterion = load_class('nazuna.criteria.MAE').create(
         device, n_channel=3, pred_len=4, tolerance=0,
     )
     loss = criterion(batch_0, batch_1)

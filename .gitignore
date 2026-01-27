@@ -1,7 +1,10 @@
 __pycache__/
 dist/
-out/
+
 .claude/
 .obsidian/
-trials/
+
+out/
+
+backyard/
 run.sh

@@ -1,32 +1,13 @@
-from nazuna.models.base import BaseModel
+from nazuna.models.base import BasicBaseModel
 import torch
 
 
-class BaseSimpleAverage(BaseModel):
-    def _setup(self, seq_len, pred_len, period_len, **kwargs):
-        self.seq_len = seq_len
-        self.pred_len = pred_len
+class BaseSimpleAverage(BasicBaseModel):
+    def _setup(self, seq_len, pred_len, period_len):
+        super()._setup(seq_len, pred_len)
         self.period_len = period_len
         assert self.seq_len % self.period_len == 0
         self.n_period = int(self.seq_len / self.period_len)
-
-    def extract_input(self, batch):
-        return batch.data[:, -self.seq_len:, :]
-
-    def extract_target(self, batch):
-        return batch.data_future[:, :self.pred_len]
-
-    def predict(self, batch):
-        input_ = self.extract_input(batch)
-        output = self(input_)
-        return output
-
-    def get_loss(self, batch, criterion):
-        input_ = self.extract_input(batch)
-        target = self.extract_target(batch)
-        output = self(input_)
-        loss = criterion(output[0], target)
-        return loss
 
 
 class SimpleAverage(BaseSimpleAverage):

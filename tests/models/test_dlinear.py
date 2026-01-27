@@ -1,5 +1,6 @@
 from nazuna.data_manager import TimeSeriesDataset
 from nazuna.models.dlinear import DLinear
+from nazuna.criteria import MSE
 import torch
 import torch.nn as nn
 
@@ -47,13 +48,11 @@ def test_get_loss(device):
             [50., 50., 50.],
             [60., 60., 60.],
         ]], device=device),
-        quantiles_full=torch.tensor([[
+        quantiles={'full': torch.tensor([[
             [0., 0., 0.],
             [10., 10., 10.],
             [20., 20., 20.],
-        ]], device=device),
-        quantiles_cum=None,
-        quantiles_rolling=None,
+        ]], device=device)},
     )
-    criterion = nn.MSELoss()
+    criterion = MSE.create(device, n_channel=3, pred_len=2)
     loss = model.get_loss(batch, criterion)

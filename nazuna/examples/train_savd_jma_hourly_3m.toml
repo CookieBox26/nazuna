@@ -11,7 +11,7 @@ pred_len = 24
 task_type = "eval"
 name = "Eval SimpleAverage"
 data_range_eval = [ 0.8, 1.0,]
-criterion_cls_path = "nazuna.criteria.MAELoss"
+criterion_cls_path = "nazuna.criteria.MAE"
 criterion_params = { n_channel = 27, pred_len = 24 }
 model_cls_path = "nazuna.models.simple_average.SimpleAverage"
 model_params = { seq_len = 96, pred_len = 24, period_len = 24 }
@@ -21,7 +21,7 @@ task_type = "train"
 name = "Train SimpleAverageVariableDecay"
 data_range_train = [ 0.0, 0.8,]
 data_range_eval = [ 0.8, 1.0,]
-criterion_cls_path = "nazuna.criteria.MAELoss"
+criterion_cls_path = "nazuna.criteria.MAE"
 criterion_params = { n_channel = 27, pred_len = 24 }
 model_cls_path = "nazuna.models.simple_average.SimpleAverageVariableDecay"
 model_params = { seq_len = 96, pred_len = 24, period_len = 24 }

@@ -1,4 +1,4 @@
-from nazuna.models.base import BaseModel
+from nazuna.models.base import BasicBaseModel
 from nazuna.scaler import IqrScaler
 from nazuna import load_class
 
@@ -6,18 +6,12 @@ from nazuna import load_class
 def _make_concrete(cls):
     """Create a concrete class from an abstract base class by providing dummy implementations."""
     class ConcreteModel(cls):
-        def extract_input(self, batch):
-            raise NotImplementedError('Not used in ResidualModel')
-
-        def extract_target(self, batch):
-            raise NotImplementedError('Not used in ResidualModel')
-
         def predict(self, batch):
             raise NotImplementedError('Not used in ResidualModel')
     return ConcreteModel
 
 
-class ResidualModel(BaseModel):
+class ResidualModel(BasicBaseModel):
     """
     Residual learning framework that combines a naive model and a neural model.
 
@@ -46,10 +40,8 @@ class ResidualModel(BaseModel):
             neural_model_cls_path: Class path for the neural model (e.g., 'nazuna.models.dlinear.BaseDLinear')
             neural_model_params: Parameters for the neural model
         """
-        self.seq_len = seq_len
-        self.pred_len = pred_len
-        self.quantile_mode = quantile_mode
-        self.scaler = IqrScaler()
+        super()._setup(seq_len, pred_len)
+        self.scaler = IqrScaler(quantile_mode)
 
         naive_model_cls = _make_concrete(load_class(naive_model_cls_path))
         self.naive_model = naive_model_cls(device=self.device, **naive_model_params)
@@ -66,42 +58,9 @@ class ResidualModel(BaseModel):
         if isinstance(neural_out, tuple):
             neural_out = neural_out[0]
 
-        return naive_out + neural_out
-
-    def _get_quantiles(self, batch):
-        if self.quantile_mode == 'full':
-            quantiles = batch.quantiles_full
-        elif self.quantile_mode == 'cum':
-            quantiles = batch.quantiles_cum
-        elif self.quantile_mode == 'rolling':
-            quantiles = batch.quantiles_rolling
-        else:
-            raise ValueError(f'Unknown quantile_mode: {self.quantile_mode}')
-        q1s_ = quantiles[:, 0, :]
-        q2s_ = quantiles[:, 1, :]
-        q3s_ = quantiles[:, 2, :]
-        return q1s_, q2s_, q3s_
-
-    def extract_input(self, batch):
-        q1s_, q2s_, q3s_ = self._get_quantiles(batch)
-        return self.scaler.scale(
-            batch.data[:, -self.seq_len:, :], q1s_=q1s_, q2s_=q2s_, q3s_=q3s_
-        )
-
-    def extract_target(self, batch):
-        q1s_, q2s_, q3s_ = self._get_quantiles(batch)
-        return self.scaler.scale(
-            batch.data_future[:, :self.pred_len], q1s_=q1s_, q2s_=q2s_, q3s_=q3s_
-        )
+        return naive_out + neural_out, {}
 
     def predict(self, batch):
-        q1s_, q2s_, q3s_ = self._get_quantiles(batch)
-        input_ = self.extract_input(batch)
-        output = self(input_)
-        return self.scaler.rescale(output, q1s_=q1s_, q2s_=q2s_, q3s_=q3s_)
-
-    def get_loss(self, batch, criterion):
-        input_ = self.extract_input(batch)
-        target = self.extract_target(batch)
-        output = self(input_)
-        return criterion(output, target)
+        input_ = self.scaler.scale(batch.data[:, -self.seq_len:, :], batch)
+        output, _ = self(input_)
+        return self.scaler.rescale(output, batch)

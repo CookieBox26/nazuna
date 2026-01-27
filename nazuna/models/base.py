@@ -1,5 +1,8 @@
 import torch
 from abc import ABC, abstractmethod
+from typing import Self, IO, Any
+import os
+from nazuna.criteria import TimeSeriesError
 
 
 class BaseModel(torch.nn.Module, ABC):
@@ -8,44 +11,83 @@ class BaseModel(torch.nn.Module, ABC):
     Subclasses must implement _setup() to construct their layers.
     The device is handled by this base class, so subclasses don't need to manage it.
     """
-    def __init__(self, device, **kwargs):
+    def __init__(self, device, **kwargs) -> None:
         super().__init__()
         self.device = device
         self._setup(**kwargs)
         self.to(device)
 
     @abstractmethod
-    def _setup(self, **kwargs):
+    def _setup(self, **kwargs) -> None:
         """
         Construct layers.
         """
         pass
 
+    @abstractmethod
+    def forward(self, input_) -> tuple[torch.Tensor, dict[str, Any]]:
+        pass
+
+    @abstractmethod
+    def get_loss(self, batch, criterion) -> TimeSeriesError:
+        pass
+
+    @abstractmethod
+    def get_loss_and_backward(self, batch, criterion) -> TimeSeriesError:
+        pass
+
+    @abstractmethod
+    def get_error(self, batch, criterion) -> TimeSeriesError:
+        pass
+
     @classmethod
-    def create(cls, device, state_path=None, **kwargs):
+    def create(
+        cls,
+        device: str,
+        state_path: str | os.PathLike[str] | IO[bytes] = None,
+        **kwargs,
+    ) -> Self:
         model = cls(device=device, **kwargs)
         if state_path:
             model.load_state_dict(torch.load(state_path, map_location=device))
             model.eval()
         return model
 
-    @abstractmethod
-    def get_loss(self, batch, criterion):
-        """
-        Must return a TimeSeriesLoss object.
-        """
-        pass
+    def count_trainable_parameters(self):
+        return sum(p.numel() for p in self.parameters() if p.requires_grad)
 
-    def get_loss_and_backward(self, batch, criterion):
-        """
-        """
+
+class BasicBaseModel(BaseModel):
+    def _setup(self, seq_len, pred_len):
+        self.seq_len = seq_len
+        self.pred_len = pred_len
+        self.scaler = None
+        self.rescale_loss = False
+
+    def _get_loss_impl(self, batch, criterion, rescale_loss) -> TimeSeriesError:
+        input_ = batch.data[:, -self.seq_len:, :]
+        if self.scaler:
+            input_ = self.scaler.scale(input_, batch)
+        output, info = self(input_)
+
+        target = batch.data_future[:, :self.pred_len]
+        if self.scaler:
+            if rescale_loss:
+                output = self.scaler.rescale(output, batch)
+            else:
+                target = self.scaler.scale(target, batch)
+
+        loss = criterion(output, target)
+        loss.info.update(info)
+        return loss
+
+    def get_loss(self, batch, criterion) -> TimeSeriesError:
+        return self._get_loss_impl(batch, criterion, self.rescale_loss)
+
+    def get_loss_and_backward(self, batch, criterion) -> TimeSeriesError:
         loss = self.get_loss(batch, criterion)
         loss.batch_mean.backward()
         return loss
 
-    @abstractmethod
-    def predict(self, batch):
-        pass
-
-    def count_trainable_parameters(self):
-        return sum(p.numel() for p in self.parameters() if p.requires_grad)
+    def get_error(self, batch, criterion) -> TimeSeriesError:
+        return self._get_loss_impl(batch, criterion, True)

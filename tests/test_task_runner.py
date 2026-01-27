@@ -9,7 +9,7 @@ def test_eval_task_runner(tmp_path, get_data_manager):
     dm = get_data_manager()
     conf_task = {
         'data_range_eval': (0.8, 1.0),
-        'criterion_cls_path': 'nazuna.criteria.MAELoss',
+        'criterion_cls_path': 'nazuna.criteria.MAE',
         'criterion_params': {'n_channel': 2, 'pred_len': 7},
         'model_cls_path': 'nazuna.models.simple_average.SimpleAverage',
         'model_params': {'seq_len': 28, 'pred_len': 7, 'period_len': 7},
@@ -27,7 +27,7 @@ def test_train_task_runner(tmp_path, get_data_manager):
     dm = get_data_manager()
     conf_task = {
         'data_range_eval': (0.6, 0.8),
-        'criterion_cls_path': 'nazuna.criteria.MSELoss',
+        'criterion_cls_path': 'nazuna.criteria.MSE',
         'criterion_params': {'n_channel': 2, 'pred_len': 7},
         'model_cls_path': 'nazuna.models.simple_average.SimpleAverageVariableDecay',
         'model_params': {'seq_len': 28, 'pred_len': 7, 'period_len': 7},
@@ -61,7 +61,7 @@ white_list = [ "temp_avg_nagoya", "temp_avg_fukuoka",]
 [[tasks]]
 task_type = "eval"
 data_range_eval = [ 0.8, 1.0,]
-criterion_cls_path = "nazuna.criteria.MSELoss"
+criterion_cls_path = "nazuna.criteria.MSE"
 criterion_params = { n_channel = 2, pred_len = 7 }
 model_cls_path = "nazuna.models.simple_average.SimpleAverage"
 model_params = { seq_len = 28, pred_len = 7, period_len = 7 }
@@ -69,7 +69,7 @@ model_params = { seq_len = 28, pred_len = 7, period_len = 7 }
 [[tasks]]
 task_type = "train"
 data_range_eval = [ 0.8, 1.0,]
-criterion_cls_path = "nazuna.criteria.MSELoss"
+criterion_cls_path = "nazuna.criteria.MSE"
 criterion_params = { n_channel = 2, pred_len = 7 }
 model_cls_path = "nazuna.models.simple_average.SimpleAverageVariableDecay"
 model_params = { seq_len = 28, pred_len = 7, period_len = 7 }

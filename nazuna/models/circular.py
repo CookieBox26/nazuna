@@ -6,7 +6,8 @@ and outputs predictions through linear transformation.
 """
 
 from abc import abstractmethod
-from nazuna.models.base import BaseModel
+from nazuna.models.base import BasicBaseModel
+from nazuna.criteria import TimeSeriesError
 import torch
 import torch.nn as nn
 import numpy as np
@@ -75,13 +76,13 @@ class CircularHelper:
         return torch.stack(waves)
 
 
-class BaseCircular(BaseModel):
+class BaseCircular(BasicBaseModel):
     """
     Base model for time series prediction using periodic sin/cos features.
     """
 
-    def _setup(self, pred_len, n_channel, periods):
-        self.pred_len = pred_len
+    def _setup(self, seq_len, pred_len, n_channel, periods):
+        super()._setup(seq_len, pred_len)
         self.n_channel = n_channel
         self.periods = periods
 
@@ -99,12 +100,12 @@ class BaseCircular(BaseModel):
             tste_future (Tensor): Future timesteps, shape [batch, pred_len]
 
         Returns:
-            Tensor: Predictions, shape [batch, pred_len, n_channel]
+            tuple: (Predictions [batch, pred_len, n_channel], info dict)
         """
         v = self.helper.get_wave(tste_future)  # [len_features, batch, pred_len]
         v = v.permute(1, 2, 0)  # [batch, pred_len, len_features]
         v = self.linear(v)  # [batch, pred_len, n_channel]
-        return v
+        return v, {}
 
     @abstractmethod
     def extract_input(self, batch):
@@ -118,22 +119,33 @@ class BaseCircular(BaseModel):
     def predict(self, batch):
         pass
 
-    def get_loss(self, batch, criterion):
+    def get_loss(self, batch, criterion) -> TimeSeriesError:
         input_ = self.extract_input(batch)
         target = self.extract_target(batch)
-        output = self(input_)
-        return criterion(output, target)
+        output, info = self(input_)
+        loss = criterion(output, target)
+        loss.info.update(info)
+        return loss
+
+    def get_loss_and_backward(self, batch, criterion) -> TimeSeriesError:
+        loss = self.get_loss(batch, criterion)
+        loss.batch_mean.backward()
+        return loss
+
+    def get_error(self, batch, criterion) -> TimeSeriesError:
+        return self.get_loss(batch, criterion)
 
 
 class Circular(BaseCircular):
-    def _setup(self, pred_len: int, n_channel: int, periods: list[int]) -> None:
+    def _setup(self, seq_len: int, pred_len: int, n_channel: int, periods: list[int]) -> None:
         """
         Args:
+            seq_len: Input sequence length (not used by this model, but required for interface consistency)
             pred_len: Prediction length
             n_channel: Number of output channels
             periods: List of periods to use (default: [2, 3, ..., 24])
         """
-        super()._setup(pred_len, n_channel, periods)
+        super()._setup(seq_len, pred_len, n_channel, periods)
 
     def __init__(self, device, **kwargs):
         super().__init__(device, **kwargs)
@@ -159,4 +171,5 @@ class Circular(BaseCircular):
         Run prediction and return output.
         """
         input_ = self.extract_input(batch)
-        return self(input_)
+        output, _ = self(input_)
+        return output

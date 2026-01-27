@@ -7,8 +7,9 @@ from torch.utils.data import Dataset, DataLoader
 
 class TimeSeriesDataset(Dataset):
     TimeSeriesBatch = collections.namedtuple('TimeSeriesBatch', [
-        'tsta', 'tste', 'data', 'tsta_future', 'tste_future', 'data_future',
-        'quantiles_full', 'quantiles_cum', 'quantiles_rolling',
+        'tsta', 'tste', 'data',
+        'tsta_future', 'tste_future', 'data_future',
+        'quantiles',
     ])
 
     def to_tensor(self, x):
@@ -52,29 +53,34 @@ class TimeSeriesDataset(Dataset):
         idx_1 = idx_0 + self.seq_len
         idx_2 = idx_0 + self.seq_len + self.pred_len
 
-        quantiles_cum = self.calc_quantiles(self.df_org[:(self.offset + idx_1)])
-        quantiles_rolling = self.calc_quantiles(
-            self.df_org[(self.offset + idx_1 - self.rolling_window):(self.offset + idx_1)]
-        )
+        quantiles = {
+            'full': self.quantiles_full,
+            'cum': self.calc_quantiles(self.df_org[:(self.offset + idx_1)]),
+            'rolling': self.calc_quantiles(
+                self.df_org[(self.offset + idx_1 - self.rolling_window):(self.offset + idx_1)]
+            ),
+        }
 
         return TimeSeriesDataset.TimeSeriesBatch(
             self.tsta[idx_0:idx_1], self.tste[idx_0:idx_1], self.df.iloc[idx_0:idx_1, :].values,
             self.tsta[idx_1:idx_2], self.tste[idx_1:idx_2], self.df.iloc[idx_1:idx_2, :].values,
-            self.quantiles_full, quantiles_cum, quantiles_rolling,
+            quantiles,
         )
 
     def collate_fn(self, batch):
-        to_tensor = self.to_tensor
+        quantiles = {
+            'full': self.to_tensor(np.array([b[6]['full'] for b in batch])).unsqueeze(2),  # batch_size, 3, 1, n_channel
+            'cum': self.to_tensor(np.array([b[6]['cum'] for b in batch])).unsqueeze(2),  # batch_size, 3, 1, n_channel
+            'rolling': self.to_tensor(np.array([b[6]['rolling'] for b in batch])).unsqueeze(2),  # batch_size, 3, 1, n_channel
+        }
         return TimeSeriesDataset.TimeSeriesBatch(
             np.array([b[0] for b in batch]),  # batch_size, seq_len
-            to_tensor(np.array([b[1] for b in batch])),  # batch_size, seq_len
-            to_tensor(np.array([b[2] for b in batch])),  # batch_size, seq_len, n_channel
+            self.to_tensor(np.array([b[1] for b in batch])),  # batch_size, seq_len
+            self.to_tensor(np.array([b[2] for b in batch])),  # batch_size, seq_len, n_channel
             np.array([b[3] for b in batch]),  # batch_size, pred_len
-            to_tensor(np.array([b[4] for b in batch])),  # batch_size, pred_len
-            to_tensor(np.array([b[5] for b in batch])),  # batch_size, pred_len, n_channel
-            to_tensor(np.array([b[6] for b in batch])).unsqueeze(2),  # batch_size, 3, 1, n_channel
-            to_tensor(np.array([b[7] for b in batch])).unsqueeze(2),  # batch_size, 3, 1, n_channel
-            to_tensor(np.array([b[8] for b in batch])).unsqueeze(2),  # batch_size, 3, 1, n_channel
+            self.to_tensor(np.array([b[4] for b in batch])),  # batch_size, pred_len
+            self.to_tensor(np.array([b[5] for b in batch])),  # batch_size, pred_len, n_channel
+            quantiles,
         )
 
     def get_data_loader(self, batch_sampler_cls, batch_sampler_params):

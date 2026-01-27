@@ -128,7 +128,7 @@ class BatchSamplerPeriodic(BatchSamplerRandom):
         self.rng.shuffle(self.batch_ids_shuffled)
         return super().__iter__()
 
-    def _get_i_batch(self, r, i_batch_):
+    def _get_r_group_i_batch(self, r, i_batch_):
         # Returns the list of sample indices belonging to the i_batch_-th batch of group r.
         sample_ids_ = self.sample_ids_grouped[r]
         list_indices = [
@@ -141,4 +141,4 @@ class BatchSamplerPeriodic(BatchSamplerRandom):
         if self.i_batch_actual == self.n_batch:
             raise StopIteration()
         r, i_batch_ = self.batch_ids_shuffled[self.i_batch_actual]
-        return self._get_i_batch(r, i_batch_)
+        return self._get_r_group_i_batch(r, i_batch_)
