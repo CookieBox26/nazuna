@@ -9,7 +9,7 @@ import inspect
 import torch
 from nazuna.datasets import get_path
 from nazuna.data_manager import TimeSeriesDataManager
-from nazuna import load_class, measure_time
+from nazuna import fix_seed, load_class, measure_time
 
 
 def _to_snake_case(s):
@@ -221,6 +221,7 @@ class TrainTaskRunner(EvalTaskRunner):
         for i_epoch in range(self.n_epoch):
             print(f'----- Epoch {i_epoch} -----')
             self.result['epochs'].append({})
+            self.result['epochs'][-1]['i_epoch'] = i_epoch
 
             loss_train = self.train()
             self.result['epochs'][-1]['train'] = loss_train
@@ -238,6 +239,7 @@ class TrainTaskRunner(EvalTaskRunner):
                 loss_per_sample_eval_best = loss_per_sample_eval
                 early_stop_counter = 0
                 self.result['i_epoch_best'] = i_epoch
+                self.result['n_sample_eval'] = self.data_loader_eval.dataset.n_sample
                 self.result['loss_per_sample_eval_best'] = loss_per_sample_eval_best
             else:
                 early_stop_counter += 1
@@ -347,6 +349,7 @@ class Config:
 
 def run_tasks(conf_: Config | dict | Path | str):
     conf = Config.create(conf_)
+    fix_seed()
 
     dm = TimeSeriesDataManager(**conf.get_data_param())
     task_runners = []

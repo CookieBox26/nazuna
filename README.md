@@ -30,6 +30,7 @@ This repository can be installed as a Python package.
 │  │  ├─ simple_average.py
 │  │  ├─ circular.py
 │  │  ├─ dlinear.py
+│  │  ├─ nbeats.py
 │  │  └─ patchtst.py
 │  │
 │  ├─ task_runner.py  # Task runner that orchestrates the above modules
@@ -49,7 +50,8 @@ pip install -e '.[test,docs]'  #  install the package in editable mode
 # make some changes to the code in ./nazuna/
 # implement tests in ./tests/
 ruff check  # lint check
-pytest -m "not slow"  # run tests locally
+pytest  # run tests locally
+# pytest -m ""  # run all tests, including slow ones
 # update documentation in ./docs/
 mkdocs serve --livereload  # preview documentation locally
 # update the version in ./pyproject.toml
