@@ -13,6 +13,7 @@ from nazuna import fix_seed, load_class, measure_time
 
 
 def _to_snake_case(s):
+    s = s.translate(str.maketrans('()=', '___'))
     return '_'.join(s.lower().split())
 
 

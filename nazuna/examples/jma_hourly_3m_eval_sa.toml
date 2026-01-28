@@ -1,4 +1,4 @@
-out_dir = "./out/eval_sa_jma_hourly_3m"
+out_dir = "./out/jma_hourly_3m_eval_sa"
 exist_ok = true
 
 [data]
@@ -9,6 +9,7 @@ pred_len = 24
 
 [[tasks]]
 task_type = "eval"
+name = "Eval SimpleAverage (seq_len=96)"
 data_range_eval = [ 0.8, 1.0,]
 criterion_cls_path = "nazuna.criteria.MAE"
 criterion_params = { n_channel = 27, pred_len = 24 }
@@ -17,6 +18,7 @@ model_params = { seq_len = 96, pred_len = 24, period_len = 24 }
 
 [[tasks]]
 task_type = "eval"
+name = "Eval SimpleAverage (seq_len=72)"
 data_range_eval = [ 0.8, 1.0,]
 criterion_cls_path = "nazuna.criteria.MAE"
 criterion_params = { n_channel = 27, pred_len = 24 }

@@ -1,4 +1,4 @@
-out_dir = "./out/train_savd_jma_hourly_3m"
+out_dir = "./out/jma_hourly_3m_train_savd"
 exist_ok = true
 
 [data]

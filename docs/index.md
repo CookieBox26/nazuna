@@ -15,22 +15,30 @@ pip install git+https://github.com/CookieBox26/nazuna.git  # main HEAD
 pip install git+https://github.com/CookieBox26/nazuna.git@<revision>  # specific revision
 ```
 
+### Usage
+
+Run tasks defined in a TOML config file:
+
+```bash
+python -m nazuna ./my_config.toml
+```
+
 ### Running Examples
+
+Nazuna includes example configurations that use bundled JMA weather data. You can run them with `python -m nazuna.examples`:
 
 ```bash
 # For debugging Evaluate and Train
-python -m nazuna.examples eval_sa_jma_daily
-python -m nazuna.examples train_savd_jma_daily
+python -m nazuna.examples jma_daily_eval_sa
+python -m nazuna.examples jma_daily_train_savd
 
-# Evaluate SimpleAverage model on JMA weather data:
-python -m nazuna.examples eval_sa_jma_hourly_3m
-python -m nazuna.examples eval_sa_jma_hourly_24m
+# Examples for JMA weather data (3 months)
+python -m nazuna.examples jma_hourly_3m_eval_sa
+python -m nazuna.examples jma_hourly_3m_train_savd
+python -m nazuna.examples jma_hourly_3m_train_dlinear
 
-# Train SimpleAverageVariableDecay(Channelwise) model on JMA weather data:
-python -m nazuna.examples train_savd_jma_hourly_3m
-
-# Train DLinear model on JMA weather data:
-python -m nazuna.examples train_dlinear_jma_hourly_3m
+# Examples for JMA weather data (24 months)
+python -m nazuna.examples jma_hourly_24m_eval_sa
 ```
 
 ### Features
