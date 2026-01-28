@@ -45,6 +45,18 @@ class TimeSeriesDataset(Dataset):
     def __len__(self):
         return self.n_sample
 
+    def _get_quantiles_sample(self, idx_1):
+        quantiles = {}
+        if 'full' in self.quantile_keys:
+            quantiles['full'] = self.quantiles_full
+        if 'cum' in self.quantile_keys:
+            quantiles['cum'] = self.calc_quantiles(self.df_org[:(self.offset + idx_1)])
+        if 'rolling' in self.quantile_keys:
+            quantiles['rolling'] = self.calc_quantiles(
+                self.df_org[(self.offset + idx_1 - self.rolling_window):(self.offset + idx_1)]
+            )
+        return quantiles
+
     def __getitem__(self, idx_0):
         # idx_0 :  Start of the reference window
         # idx_0 + seq_len - 1 :  End of the reference window (current time) (= idx_1 - 1)
@@ -52,26 +64,16 @@ class TimeSeriesDataset(Dataset):
         # idx_0 + seq_len - 1 + pred_len :  End of the prediction window (= idx_2 - 1)
         idx_1 = idx_0 + self.seq_len
         idx_2 = idx_0 + self.seq_len + self.pred_len
-
-        quantiles = {
-            'full': self.quantiles_full,
-            'cum': self.calc_quantiles(self.df_org[:(self.offset + idx_1)]),
-            'rolling': self.calc_quantiles(
-                self.df_org[(self.offset + idx_1 - self.rolling_window):(self.offset + idx_1)]
-            ),
-        }
-
         return TimeSeriesDataset.TimeSeriesBatch(
             self.tsta[idx_0:idx_1], self.tste[idx_0:idx_1], self.df.iloc[idx_0:idx_1, :].values,
             self.tsta[idx_1:idx_2], self.tste[idx_1:idx_2], self.df.iloc[idx_1:idx_2, :].values,
-            quantiles,
+            self._get_quantiles_sample(idx_1),
         )
 
     def collate_fn(self, batch):
         quantiles = {
-            'full': self.to_tensor(np.array([b[6]['full'] for b in batch])).unsqueeze(2),  # batch_size, 3, 1, n_channel
-            'cum': self.to_tensor(np.array([b[6]['cum'] for b in batch])).unsqueeze(2),  # batch_size, 3, 1, n_channel
-            'rolling': self.to_tensor(np.array([b[6]['rolling'] for b in batch])).unsqueeze(2),  # batch_size, 3, 1, n_channel
+            key: self.to_tensor(np.array([b[6][key] for b in batch])).unsqueeze(2)  # batch_size, 3, 1, n_channel
+            for key in self.quantile_keys
         }
         return TimeSeriesDataset.TimeSeriesBatch(
             np.array([b[0] for b in batch]),  # batch_size, seq_len
@@ -84,6 +86,7 @@ class TimeSeriesDataset(Dataset):
         )
 
     def get_data_loader(self, batch_sampler_cls, batch_sampler_params):
+        self.quantile_keys = ['full']  # TODO
         batch_sampler = batch_sampler_cls(self.n_sample, **batch_sampler_params)
         return DataLoader(self, batch_sampler=batch_sampler, collate_fn=self.collate_fn)
 

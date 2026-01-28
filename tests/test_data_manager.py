@@ -20,6 +20,7 @@ def test_data_loader(dm, device):
         batch_sampler_params={'batch_size': 16},
         offset=0, rolling_window=28, device=device,
     )
+    data_loader_train.dataset.quantile_keys = ['full', 'cum', 'rolling']
 
     n_sample_expected = 264
     assert int((365 - 34) * 0.8) == n_sample_expected
@@ -49,6 +50,7 @@ def test_data_loader_offset(dm, device):
         batch_sampler_params={'batch_size': 16},
         offset=28, rolling_window=28, device=device,
     )
+    data_loader_train.dataset.quantile_keys = ['full', 'cum', 'rolling']
 
     n_batch_expected = 15
     assert math.ceil((int((365 - 34) * 0.8) - 28) / 16) == n_batch_expected
