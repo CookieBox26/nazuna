@@ -12,6 +12,6 @@
 
 ## Criteria
 
-::: nazuna.criteria.MSELoss
+::: nazuna.criteria.MSE
 
-::: nazuna.criteria.MAELoss
+::: nazuna.criteria.MAE
