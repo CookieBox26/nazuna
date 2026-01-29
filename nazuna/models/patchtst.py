@@ -75,7 +75,7 @@ class PatchTST(BasicBaseModel):
 
         enc_layer = nn.TransformerEncoderLayer(
             d_model=self.d_model, nhead=self.n_heads, dim_feedforward=self.d_ff,
-            dropout=self.dropout, batch_first=True, norm_first=True,
+            dropout=self.dropout, batch_first=True, norm_first=False,
             activation='gelu'
         )
         self.encoder = nn.TransformerEncoder(
