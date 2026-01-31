@@ -45,6 +45,14 @@ def _validate_params(func, params):
 
 @dataclasses.dataclass
 class BaseTaskRunner(ABC):
+    """
+    Base class for task runners.
+
+    Note:
+        Subclasses must follow these rules:
+        - A TaskRunner should be runnable on its own with just a TimeSeriesDataManager.
+        - Calling run() writes result.toml (and other artifacts if any) to out_dir.
+    """
     dm: TimeSeriesDataManager
     device: str = ''
     name: str = ''
@@ -255,10 +263,186 @@ class TrainTaskRunner(EvalTaskRunner):
 @dataclasses.dataclass
 class OptunaTaskRunner(BaseTaskRunner):
     """
-    Search for optimal hyperparameters.
+    Search for optimal hyperparameters using Optuna.
     """
+    n_trials: int = 10
+    direction: str = 'minimize'
+    search_space: dict = None
+    data_ranges: list = None
+
+    data_offset_train: int = 0
+    data_rolling_window_train: int = 4
+    data_offset_eval: int = 0
+    data_rolling_window_eval: int = 4
+    batch_size_eval: int = 32
+
+    criterion_cls_path: str = 'nazuna.criteria.MAE'
+    criterion_params: dict = None
+
+    model_cls_path: str = ''
+    model_params: dict = None
+
+    batch_sampler_cls_path: str = ''
+    batch_sampler_params: dict = None
+
+    optimizer_cls_path: str = ''
+    optimizer_params: dict = None
+
+    lr_scheduler_cls_path: str = ''
+    lr_scheduler_params: dict = None
+
+    n_epoch: int = 0
+    early_stop: bool = False
+
+    def __post_init__(self):
+        super().__post_init__()
+        assert self.search_space is not None, 'search_space is required'
+        assert self.data_ranges is not None, 'data_ranges is required'
+        assert len(self.data_ranges) > 0, 'data_ranges must not be empty'
+        assert self.n_trials > 0, 'n_trials must be positive'
+        assert self.n_epoch > 0, 'n_epoch must be positive'
+
+        self.criterion_cls = load_class(self.criterion_cls_path)
+        self.model_cls = load_class(self.model_cls_path)
+        self.batch_sampler_cls = load_class(self.batch_sampler_cls_path)
+        self.optimizer_cls = load_class(self.optimizer_cls_path)
+        self.lr_scheduler_cls = None
+        if self.lr_scheduler_cls_path:
+            self.lr_scheduler_cls = load_class(self.lr_scheduler_cls_path)
+
+        self._best_model_state = None
+        self._best_trial_number = None
+
+    @staticmethod
+    def _suggest_param(trial, name, spec):
+        """Convert search_space spec to Optuna suggest_* call."""
+        method = spec[0]
+        if method == 'log_uniform':
+            return trial.suggest_float(name, spec[1], spec[2], log=True)
+        elif method == 'uniform':
+            return trial.suggest_float(name, spec[1], spec[2])
+        elif method == 'int':
+            return trial.suggest_int(name, spec[1], spec[2])
+        elif method == 'categorical':
+            return trial.suggest_categorical(name, spec[1])
+        else:
+            raise ValueError(f'Unknown search space method: {method}')
+
+    @staticmethod
+    def _merge_params(base_params, suggested, search_space):
+        """Merge base params with suggested params based on search_space keys."""
+        merged = copy.deepcopy(base_params) if base_params else {}
+        for key in search_space:
+            merged[key] = suggested[key]
+        return merged
+
+    def _create_objective(self):
+        def objective(trial):
+            suggested = {}
+            for name, spec in self.search_space.items():
+                suggested[name] = self._suggest_param(trial, name, spec)
+
+            model_params = self._merge_params(
+                self.model_params, suggested,
+                {k: v for k, v in self.search_space.items() if k in (self.model_params or {})}
+            )
+            optimizer_params = self._merge_params(
+                self.optimizer_params, suggested,
+                {k: v for k, v in self.search_space.items() if k in (self.optimizer_params or {})}
+            )
+            batch_sampler_params = self._merge_params(
+                self.batch_sampler_params, suggested,
+                {k: v for k, v in self.search_space.items() if k in (self.batch_sampler_params or {})}
+            )
+
+            for key in suggested:
+                if key not in (model_params or {}):
+                    if key not in (optimizer_params or {}):
+                        if key not in (batch_sampler_params or {}):
+                            model_params[key] = suggested[key]
+
+            losses = []
+            best_model_state_this_trial = None
+            best_loss_this_trial = float('inf')
+
+            for i_fold, data_range in enumerate(self.data_ranges):
+                data_range_train = data_range['train']
+                data_range_eval = data_range['eval']
+
+                runner = TrainTaskRunner(
+                    dm=self.dm,
+                    device=self.device,
+                    name=f'Trial {trial.number} Fold {i_fold}',
+                    out_dir=self.out_path / f'trial_{trial.number}' / f'fold_{i_fold}',
+                    exist_ok=self.exist_ok,
+                    data_range_train=data_range_train,
+                    data_range_eval=data_range_eval,
+                    data_offset_train=self.data_offset_train,
+                    data_rolling_window_train=self.data_rolling_window_train,
+                    data_offset_eval=self.data_offset_eval,
+                    data_rolling_window_eval=self.data_rolling_window_eval,
+                    batch_size_eval=self.batch_size_eval,
+                    criterion_cls_path=self.criterion_cls_path,
+                    criterion_params=self.criterion_params,
+                    model_cls_path=self.model_cls_path,
+                    model_params=model_params,
+                    batch_sampler_cls_path=self.batch_sampler_cls_path,
+                    batch_sampler_params=batch_sampler_params,
+                    optimizer_cls_path=self.optimizer_cls_path,
+                    optimizer_params=optimizer_params,
+                    lr_scheduler_cls_path=self.lr_scheduler_cls_path,
+                    lr_scheduler_params=self.lr_scheduler_params,
+                    n_epoch=self.n_epoch,
+                    early_stop=self.early_stop,
+                )
+                runner._run()
+                fold_loss = runner.result.get('loss_per_sample_eval_best', float('inf'))
+                losses.append(fold_loss)
+
+                if fold_loss < best_loss_this_trial:
+                    best_loss_this_trial = fold_loss
+                    best_model_state_this_trial = copy.deepcopy(runner.model.state_dict())
+
+            mean_loss = sum(losses) / len(losses)
+
+            if self._best_model_state is None or mean_loss < self.result.get('best_value', float('inf')):
+                self._best_model_state = best_model_state_this_trial
+                self._best_trial_number = trial.number
+
+            return mean_loss
+
+        return objective
+
     def _run(self):
-        pass
+        try:
+            import optuna
+        except ImportError:
+            raise ImportError('optuna is required. Install with: pip install nazuna[optuna]')
+
+        study = optuna.create_study(direction=self.direction)
+        study.optimize(self._create_objective(), n_trials=self.n_trials)
+
+        self.result['best_trial_number'] = study.best_trial.number
+        self.result['best_value'] = study.best_value
+        self.result['best_params'] = study.best_params
+        self.result['n_trials'] = len(study.trials)
+
+        trials_history = []
+        for t in study.trials:
+            trials_history.append({
+                'number': t.number,
+                'value': t.value,
+                'params': t.params,
+                'state': t.state.name,
+            })
+        self.result['trials'] = trials_history
+
+        if self._best_model_state is not None:
+            torch.save(self._best_model_state, self.out_path / 'best_model_state.pth')
+
+        import pickle
+        with open(self.out_path / 'study.pkl', 'wb') as f:
+            pickle.dump(study, f)
 
 
 @dataclasses.dataclass
@@ -273,6 +457,7 @@ class DiagnosticsTaskRunner(BaseTaskRunner):
 class TaskType(Enum):
     eval = EvalTaskRunner
     train = TrainTaskRunner
+    optuna = OptunaTaskRunner
 
 
 @dataclasses.dataclass

@@ -26,6 +26,9 @@ classifiers = [
 torch-cpu = [
   "torch>=2.0.0",
 ]
+optuna = [
+  "optuna",
+]
 test = [
   "pytest",
   "ruff",
