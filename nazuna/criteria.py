@@ -76,27 +76,27 @@ class MSE(BaseError):
             w = torch.pow(torch.tensor(r, dtype=torch.float, device=self.device), idx)  # [1, r, r^2, ...]
         self.w_seq = w / w.sum()
 
-    def get_diff(self, pred, true):
-        diff = pred[:, :self.pred_len, :] - true[:, :self.pred_len, :]
+    def get_error(self, pred, true):
+        error = pred[:, :self.pred_len, :] - true[:, :self.pred_len, :]
         if self.tolerance > 0:
-            diff = torch.where(torch.abs(diff) < self.tolerance, torch.zeros_like(diff), diff)
-        return diff ** 2
+            error = torch.where(torch.abs(error) < self.tolerance, torch.zeros_like(error), error)
+        return error ** 2
 
     def forward(self, pred, true):
-        loss = self.get_diff(pred, true)  # batch_size, pred_len, n_channel
-        me_of_each_sample_channel = torch.einsum('j,ijk->ik', (self.w_seq, loss))
-        me_of_each_sample = torch.einsum('k,ik->i', (self.w_channel, me_of_each_sample_channel))
+        error = self.get_error(pred, true)  # batch_size, pred_len, n_channel
+        error_of_each_sample_channel = torch.einsum('j,ijk->ik', (self.w_seq, error))
+        error_of_each_sample = torch.einsum('k,ik->i', (self.w_channel, error_of_each_sample_channel))
         return TimeSeriesError(
             true.shape[0],
-            me_of_each_sample.mean(),  # (scalar)
-            me_of_each_sample,  # batch_size
-            me_of_each_sample_channel,  # batch_size, n_channel
+            error_of_each_sample.mean(),  # (scalar)
+            error_of_each_sample,  # batch_size
+            error_of_each_sample_channel,  # batch_size, n_channel
         )
 
 
 class MAE(MSE):
-    def get_diff(self, pred, true):
-        diff = pred[:, :self.pred_len, :] - true[:, :self.pred_len, :]
+    def get_error(self, pred, true):
+        error = pred[:, :self.pred_len, :] - true[:, :self.pred_len, :]
         if self.tolerance > 0:
-            diff = torch.where(torch.abs(diff) < self.tolerance, torch.zeros_like(diff), diff)
-        return torch.abs(diff)
+            error = torch.where(torch.abs(error) < self.tolerance, torch.zeros_like(error), error)
+        return torch.abs(error)
