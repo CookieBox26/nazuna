@@ -23,5 +23,5 @@ jobs:
           git fetch --no-tags origin ${{ github.sha }}
           git checkout --detach ${{ github.sha }}
       - run: pipx install uv
-      - run: uv syncc --extra torch-cpu --extra docs
+      - run: uv sync --extra torch-cpu --extra docs
       - run: uv run mkdocs build --strict
