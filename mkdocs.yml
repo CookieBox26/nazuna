@@ -7,6 +7,7 @@ extra_css:
   - custom.css
 nav:
   - Home: index.md
+  - Key Ideas: key_ideas.md
   - Reference: reference.md
   - Reference (Models): reference_models.md
 extra:

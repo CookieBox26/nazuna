@@ -33,3 +33,13 @@ optimizer_params = { lr = 0.05 }
 lr_scheduler_cls_path = "torch.optim.lr_scheduler.CosineAnnealingLR"
 lr_scheduler_params = { T_max = 5 }
 n_epoch = 10
+
+[[tasks]]
+task_type = "eval"
+name = "Eval SimpleAverageVariableDecay"
+data_range_eval = [ 0.8, 1.0,]
+criterion_cls_path = "nazuna.criteria.MAE"
+criterion_params = { n_channel = 2, pred_len = 7, tolerance = 0.05 }
+model_cls_path = "nazuna.models.simple_average.SimpleAverageVariableDecay"
+model_params = { seq_len = 28, pred_len = 7, period_len = 7 }
+model_state = { task_name = "Train SimpleAverageVariableDecay" }

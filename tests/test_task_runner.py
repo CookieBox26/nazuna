@@ -19,11 +19,8 @@ def test_eval_task_runner(tmp_path, get_data_manager):
     }
     runner = EvalTaskRunner(dm=dm, name='Task 0', out_dir=tmp_path / 'task_0', **conf_task)
     runner.run()
-
     assert runner.result_path.is_file()
-    runner.result_path.unlink()
     assert runner.out_path.is_dir()
-    runner.out_path.rmdir()
 
 
 def test_train_task_runner(tmp_path, get_data_manager):
@@ -45,7 +42,6 @@ def test_train_task_runner(tmp_path, get_data_manager):
     }
     runner = TrainTaskRunner(dm=dm, name='Task 0', out_dir=tmp_path / 'task_0', **conf_task)
     runner.run()
-
     assert runner.result_path.is_file()
     assert runner.out_path.is_dir()
 

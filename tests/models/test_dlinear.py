@@ -2,7 +2,6 @@ from nazuna.data_manager import TimeSeriesDataset
 from nazuna.models.dlinear import DLinear
 from nazuna.criteria import MSE
 import torch
-import torch.nn as nn
 
 
 def test_forward(device):

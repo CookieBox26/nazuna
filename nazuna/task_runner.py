@@ -1,4 +1,6 @@
 from abc import ABC, abstractmethod
+from typing import IO
+import os
 from enum import Enum
 import dataclasses
 import toml
@@ -9,6 +11,7 @@ import inspect
 import torch
 from nazuna.datasets import get_path
 from nazuna.data_manager import TimeSeriesDataManager
+from nazuna.criteria import BaseImprovement
 from nazuna import fix_seed, load_class, measure_time
 
 
@@ -95,8 +98,12 @@ class EvalTaskRunner(BaseTaskRunner):
     criterion_cls_path: str = 'nazuna.criteria.MAELoss'
     criterion_params: dict = None
 
+    baseline_model_cls_path: str = None
+    baseline_model_params: dict = None
+
     model_cls_path: str = 'nazuna.models.simple_average.SimpleAverage'
     model_params: dict = None
+    model_state_path: str | os.PathLike[str] | IO[bytes] = None
 
     n_channel: int = -1
     seq_len: int = -1
@@ -111,6 +118,12 @@ class EvalTaskRunner(BaseTaskRunner):
 
         self.criterion_cls = load_class(self.criterion_cls_path)
         _validate_params(self.criterion_cls._setup, self.criterion_params)
+
+        self.eval_improvement = issubclass(self.criterion_cls, BaseImprovement)
+        if self.eval_improvement:
+            self.baseline_model_cls = load_class(self.baseline_model_cls_path)
+            _validate_params(self.baseline_model_cls._setup, self.baseline_model_params)
+
         self.model_cls = load_class(self.model_cls_path)
         _validate_params(self.model_cls._setup, self.model_params)
 
@@ -139,8 +152,15 @@ class EvalTaskRunner(BaseTaskRunner):
         loss_total = 0.0
         with torch.no_grad():
             for i_batch, batch in enumerate(data_loader):
-                loss = self.model.get_loss(batch, self.criterion)
-                loss_total += loss.batch_sum()
+                true = self.model.extract_true(batch)
+                pred, _ = self.model.predict(batch)
+                if self.eval_improvement:
+                    baseline = self.baseline_model.extract_true(batch)
+                    loss = self.criterion(baseline, pred, true)
+                    loss_total += loss.batch_sum()
+                else:
+                    loss = self.criterion(pred, true)
+                    loss_total += loss.batch_sum()
         return {
             'n_sample': data_loader.dataset.n_sample,
             'loss_total': loss_total,
@@ -150,7 +170,11 @@ class EvalTaskRunner(BaseTaskRunner):
     def _run(self):
         self.set_data_loader_eval()
         self.criterion = self.criterion_cls.create(self.device, **self.criterion_params)
-        self.model = self.model_cls.create(self.device, **self.model_params)
+        if self.eval_improvement:
+            self.baseline_model = self.baseline_model_cls.create(
+                self.device, **self.baseline_model_params,
+            )
+        self.model = self.model_cls.create(self.device, self.model_state_path, **self.model_params)
         loss_eval = self.eval()
         self.result.update(loss_eval)
 
@@ -250,6 +274,7 @@ class TrainTaskRunner(EvalTaskRunner):
                 self.result['i_epoch_best'] = i_epoch
                 self.result['n_sample_eval'] = self.data_loader_eval.dataset.n_sample
                 self.result['loss_per_sample_eval_best'] = loss_per_sample_eval_best
+                torch.save(self.model.state_dict(), self.out_path / 'model_state.pth')
             else:
                 early_stop_counter += 1
             if (self.early_stop) and (early_stop_counter >= 5):
@@ -257,7 +282,8 @@ class TrainTaskRunner(EvalTaskRunner):
             if stop:
                 break
 
-        torch.save(self.model.state_dict(), self.out_path / 'model_state.pth')
+        if self.data_range_eval is None:
+            torch.save(self.model.state_dict(), self.out_path / 'model_state.pth')
 
 
 @dataclasses.dataclass
@@ -473,10 +499,20 @@ class Config:
         self.out_path = Path(self.out_dir).expanduser()
         if (not self.exist_ok) and self.out_path.exists():
             raise FileExistsError(f'Already exists: {self.out_path.as_posix()}')
-        self.out_path.mkdir(parents=True, exist_ok=self.exist_ok)
         assert self.data is not None
         self.device = self.device or str(torch.device('cuda' if torch.cuda.is_available() else 'cpu'))
         assert self.tasks is not None
+        self.out_paths = {}
+        for i_task, _ in enumerate(self.tasks):
+            self.tasks[i_task].setdefault('name', f'Task {i_task}')
+            if self.tasks[i_task]['name'] in self.out_paths:
+                raise ValueError(f'Duplicate task name: {self.tasks[i_task]["name"]}')
+            self.tasks[i_task].setdefault(
+                'out_dir', self.out_path / _to_snake_case(self.tasks[i_task]['name']),
+            )
+            self.out_paths[self.tasks[i_task]['name']] = Path(self.tasks[i_task]['out_dir'])
+
+        self.out_path.mkdir(parents=True, exist_ok=self.exist_ok)
         self.to_toml_path()
 
     def get_data_param(self):
@@ -490,9 +526,10 @@ class Config:
         self.task_type = params.pop('task_type')
         task_runner_cls = TaskType[self.task_type].value
         params.setdefault('device', self.device)
-        params.setdefault('name', f'Task {i_task}')
-        params.setdefault('out_dir', self.out_path / _to_snake_case(params['name']))
         params.setdefault('exist_ok', self.exist_ok)
+        if 'model_state' in params:
+            params['model_state_path'] = self.out_paths[params['model_state']['task_name']] / 'model_state.pth'
+            del params['model_state']
         return task_runner_cls, params
 
     @classmethod
