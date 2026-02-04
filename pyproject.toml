@@ -15,6 +15,9 @@ dependencies = [
   "toml",
   "numpy",
   "pandas",
+  "matplotlib",
+  "statsmodels",
+  "optuna",
 ]
 classifiers = [
   "Programming Language :: Python :: 3",
@@ -25,9 +28,6 @@ classifiers = [
 [project.optional-dependencies]
 torch-cpu = [
   "torch>=2.0.0",
-]
-optuna = [
-  "optuna",
 ]
 test = [
   "pytest",

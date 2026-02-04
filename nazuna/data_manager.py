@@ -151,7 +151,7 @@ class TimeSeriesDataManager:
         df.insert(1, 'timestep', [self.step_start + i * self.step_width for i in range(n_rows)])
         self.df = df
 
-    def _extract_data(self, data_range):
+    def extract_data(self, data_range):
         n_rows = len(self.df)
         n_front = n_rows - (self.seq_len - 1) - self.pred_len
         i_start = int(n_front * data_range[0])
@@ -167,7 +167,7 @@ class TimeSeriesDataManager:
         rolling_window,
         device,
     ):
-        df_target = self._extract_data(data_range)
+        df_target = self.extract_data(data_range)
         dataset = TimeSeriesDataset(
             df_target, self.seq_len, self.pred_len, offset, rolling_window, device,
         )

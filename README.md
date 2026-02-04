@@ -1,6 +1,7 @@
 # Nazuna
 
 Nazuna provides utilities for analyzing time-series forecasting models.  
+For installation and usage instructions, see the documentation:  
 https://nazuna.readthedocs.io/en/latest/  
 
 > [!IMPORTANT]
@@ -21,6 +22,7 @@ This repository can be installed as a Python package.
 ├─ pyproject.toml
 │
 ├─ nazuna/
+│  │
 │  ├─ data_manager.py  # Time-series data management class
 │  ├─ batch_sampler.py  # Batch sampler
 │  ├─ criteria.py  # Loss functions for training and evaluation
@@ -33,7 +35,12 @@ This repository can be installed as a Python package.
 │  │  ├─ nbeats.py
 │  │  └─ patchtst.py
 │  │
+│  ├─ diagnoser.py
+│  ├─ optuna_helper.py
+│  │
 │  ├─ task_runner.py  # Task runner that orchestrates the above modules
+│  │
+│  ├─ report.py
 │  │
 │  ├─ datasets/  # Sample datasets
 │  │  └─ jma/

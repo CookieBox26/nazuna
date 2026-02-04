@@ -8,11 +8,17 @@ import copy
 from pathlib import Path
 import datetime
 import inspect
+import pickle
+import numpy as np
+import optuna
 import torch
 from nazuna.datasets import get_path
 from nazuna.data_manager import TimeSeriesDataManager
 from nazuna.criteria import BaseImprovement
 from nazuna import fix_seed, load_class, measure_time
+from nazuna.optuna_helper import OptunaHelper
+from nazuna.diagnoser import Diagnoser
+from nazuna.report import report
 
 
 def _to_snake_case(s):
@@ -49,12 +55,20 @@ def _validate_params(func, params):
 @dataclasses.dataclass
 class BaseTaskRunner(ABC):
     """
-    Base class for task runners.
+    Base class for task runners.  
+    Subclasses must follow these rules:  
 
-    Note:
-        Subclasses must follow these rules:
-        - A TaskRunner should be runnable on its own with just a TimeSeriesDataManager.
-        - Calling run() writes result.toml (and other artifacts if any) to out_dir.
+    - A TaskRunner should be runnable on its own with just a `TimeSeriesDataManager` instance.
+    - Calling `run()` writes `result.toml` (and other artifacts if any) to `out_dir`.
+
+    Attributes:
+        dm (TimeSeriesDataManager): TimeSeriesDataManager instance **(required)**.
+        device (str = ''): Device name for computation (Ex. 'cpu', 'cuda').
+            If not specified, it will be automatically detected from your environment.
+        name (str = ''): Name of this task. Not used when running a task standalone.
+        out_dir (str | Path = ''): Output path for this task's artifacts.
+            Defaults to 'out/YYYYmmdd-HHMMSS/task_0/' if not specified.
+        exist_ok (bool = False): Whether to allow the output path to already exist.
     """
     dm: TimeSeriesDataManager
     device: str = ''
@@ -89,26 +103,39 @@ class BaseTaskRunner(ABC):
 class EvalTaskRunner(BaseTaskRunner):
     """
     Evaluate a model on a specified data range.
+
+    Attributes:
+        data_range_eval (tuple[float, float] | None = None): Data range for evaluation
+            as (start, end) ratios **(required for EvalTaskRunner; optional for TrainTaskRunner)**.
+        data_offset_eval (int = 0): Offset for evaluation data.
+        data_rolling_window_eval (int = 4): Rolling window size for computing quartiles for scaling
+            (unused if quartile-based rolling-window scaling is disabled).
+        batch_size_eval (int = 32): Batch size for evaluation.
+        criterion_cls_path (str = None): Class path for the criterion (Ex. 'nazuna.criteria.MAELoss')
+            **(required)**.
+        criterion_params (dict = None): Parameters for the criterion **(required)**.
+        baseline_model_cls_path (str = None): Class path for the baseline model.
+            Required only when the criterion requires a baseline.
+        baseline_model_params (dict = None): Parameters for the baseline model.
+        model_cls_path (str = None): Class path for the model
+            (Ex. 'nazuna.models.simple_average.SimpleAverage') **(required)**.
+        model_params (dict = None): Parameters for the model **(required)**.
+        model_state_path (str | PathLike | IO[bytes] = None): Path to the model state file.
     """
     data_range_eval: tuple[float, float] | None = None
     data_offset_eval: int = 0
     data_rolling_window_eval: int = 4
     batch_size_eval: int = 32
 
-    criterion_cls_path: str = 'nazuna.criteria.MAELoss'
+    criterion_cls_path: str = None
     criterion_params: dict = None
 
     baseline_model_cls_path: str = None
     baseline_model_params: dict = None
 
-    model_cls_path: str = 'nazuna.models.simple_average.SimpleAverage'
+    model_cls_path: str = None
     model_params: dict = None
     model_state_path: str | os.PathLike[str] | IO[bytes] = None
-
-    n_channel: int = -1
-    seq_len: int = -1
-    pred_len: int = -1
-    period_len: int = -1
 
     def __post_init__(self):
         super().__post_init__()
@@ -183,6 +210,25 @@ class EvalTaskRunner(BaseTaskRunner):
 class TrainTaskRunner(EvalTaskRunner):
     """
     Train a model on a specified data range.
+
+    Attributes:
+        data_range_train (tuple[float, float] | None = None): Data range for training
+            as (start, end) ratios **(required)**.
+        data_offset_train (int = 0): Offset for training data.
+        data_rolling_window_train (int = 4): Rolling window size for computing quartiles for scaling
+            (unused if quartile-based rolling-window scaling is disabled).
+        batch_sampler_cls_path (str = ''): Class path for the batch sampler
+            (Ex. 'nazuna.batch_sampler.BatchSamplerShuffle') **(required)**.
+        batch_sampler_params (dict = None): Parameters for the batch sampler **(required)**.
+        optimizer_cls_path (str = ''): Class path for the optimizer
+            (Ex. 'torch.optim.Adam') **(required)**.
+        optimizer_params (dict = None): Parameters for the optimizer **(required)**.
+        lr_scheduler_cls_path (str = ''): Class path for the learning rate scheduler
+            (Ex. 'torch.optim.lr_scheduler.CosineAnnealingLR'). Optional.
+        lr_scheduler_params (dict = None): Parameters for the learning rate scheduler.
+        n_epoch (int = 0): Number of training epochs **(required)**.
+        early_stop (bool = False): Whether to enable early stopping.
+            Stops training if evaluation loss does not improve for 5 consecutive epochs.
     """
     data_range_train: tuple[int, int] = None
     data_offset_train: int = 0
@@ -287,9 +333,61 @@ class TrainTaskRunner(EvalTaskRunner):
 
 
 @dataclasses.dataclass
+class DiagnosticsTaskRunner(BaseTaskRunner):
+    """
+    Diagnose data characteristics such as seasonality.
+
+    Attributes:
+        data_range_diag (tuple[float, float] | None = None): Data range for diagnostics
+            as (start, end) ratios **(required)**.
+        period (int | None = None): Seasonal period for STL decomposition **(required)**.
+    """
+    data_range_diag: tuple[float, float] | None = None
+    period: int | None = None
+
+    def _run(self):
+        diagnoser = Diagnoser(self.dm, self.data_range_diag)
+        diagnostics, data = diagnoser.run(period=self.period)
+        self.result.update(diagnostics)
+        np.savez(
+            self.out_path / 'sample.npz',
+            values=data['values'],
+            columns=data['columns'],
+            timestamps=data['timestamps'],
+        )
+
+
+@dataclasses.dataclass
 class OptunaTaskRunner(BaseTaskRunner):
     """
     Search for optimal hyperparameters using Optuna.
+
+    Attributes:
+        n_trials (int = 10): Number of Optuna trials to run.
+        direction (str = 'minimize'): Optimization direction ('minimize' or 'maximize').
+        search_space (dict = None): Hyperparameter search space definition **(required)**.
+            Keys are parameter names, values are lists like ['log_uniform', low, high],
+            ['uniform', low, high], ['int', low, high], or ['categorical', choices].
+        data_ranges (list = None): List of data range dicts for cross-validation **(required)**.
+            Each dict should have 'train' and 'eval' keys with (start, end) ratio tuples.
+        data_offset_train (int = 0): Offset for training data.
+        data_rolling_window_train (int = 4): Rolling window size for training data.
+        data_offset_eval (int = 0): Offset for evaluation data.
+        data_rolling_window_eval (int = 4): Rolling window size for evaluation data.
+        batch_size_eval (int = 32): Batch size for evaluation.
+        criterion_cls_path (str): Class path for the criterion **(required)**.
+        criterion_params (dict = None): Parameters for the criterion.
+        model_cls_path (str = ''): Class path for the model **(required)**.
+        model_params (dict = None): Base parameters for the model.
+            Search space parameters will be merged into this.
+        batch_sampler_cls_path (str = ''): Class path for the batch sampler **(required)**.
+        batch_sampler_params (dict = None): Base parameters for the batch sampler.
+        optimizer_cls_path (str = ''): Class path for the optimizer **(required)**.
+        optimizer_params (dict = None): Base parameters for the optimizer.
+        lr_scheduler_cls_path (str = ''): Class path for the learning rate scheduler. Optional.
+        lr_scheduler_params (dict = None): Parameters for the learning rate scheduler.
+        n_epoch (int = 0): Number of training epochs per trial **(required)**.
+        early_stop (bool = False): Whether to enable early stopping within each trial.
     """
     n_trials: int = 10
     direction: str = 'minimize'
@@ -339,53 +437,16 @@ class OptunaTaskRunner(BaseTaskRunner):
         self._best_model_state = None
         self._best_trial_number = None
 
-    @staticmethod
-    def _suggest_param(trial, name, spec):
-        """Convert search_space spec to Optuna suggest_* call."""
-        method = spec[0]
-        if method == 'log_uniform':
-            return trial.suggest_float(name, spec[1], spec[2], log=True)
-        elif method == 'uniform':
-            return trial.suggest_float(name, spec[1], spec[2])
-        elif method == 'int':
-            return trial.suggest_int(name, spec[1], spec[2])
-        elif method == 'categorical':
-            return trial.suggest_categorical(name, spec[1])
-        else:
-            raise ValueError(f'Unknown search space method: {method}')
-
-    @staticmethod
-    def _merge_params(base_params, suggested, search_space):
-        """Merge base params with suggested params based on search_space keys."""
-        merged = copy.deepcopy(base_params) if base_params else {}
-        for key in search_space:
-            merged[key] = suggested[key]
-        return merged
-
     def _create_objective(self):
         def objective(trial):
-            suggested = {}
-            for name, spec in self.search_space.items():
-                suggested[name] = self._suggest_param(trial, name, spec)
-
-            model_params = self._merge_params(
-                self.model_params, suggested,
-                {k: v for k, v in self.search_space.items() if k in (self.model_params or {})}
-            )
-            optimizer_params = self._merge_params(
-                self.optimizer_params, suggested,
-                {k: v for k, v in self.search_space.items() if k in (self.optimizer_params or {})}
-            )
-            batch_sampler_params = self._merge_params(
-                self.batch_sampler_params, suggested,
-                {k: v for k, v in self.search_space.items() if k in (self.batch_sampler_params or {})}
-            )
-
-            for key in suggested:
-                if key not in (model_params or {}):
-                    if key not in (optimizer_params or {}):
-                        if key not in (batch_sampler_params or {}):
-                            model_params[key] = suggested[key]
+            model_params, optimizer_params, batch_sampler_params = \
+                OptunaHelper.build_params_for_trial(
+                    trial,
+                    self.search_space,
+                    self.model_params,
+                    self.optimizer_params,
+                    self.batch_sampler_params,
+                )
 
             losses = []
             best_model_state_this_trial = None
@@ -440,11 +501,6 @@ class OptunaTaskRunner(BaseTaskRunner):
         return objective
 
     def _run(self):
-        try:
-            import optuna
-        except ImportError:
-            raise ImportError('optuna is required. Install with: pip install nazuna[optuna]')
-
         study = optuna.create_study(direction=self.direction)
         study.optimize(self._create_objective(), n_trials=self.n_trials)
 
@@ -466,28 +522,59 @@ class OptunaTaskRunner(BaseTaskRunner):
         if self._best_model_state is not None:
             torch.save(self._best_model_state, self.out_path / 'best_model_state.pth')
 
-        import pickle
         with open(self.out_path / 'study.pkl', 'wb') as f:
             pickle.dump(study, f)
-
-
-@dataclasses.dataclass
-class DiagnosticsTaskRunner(BaseTaskRunner):
-    """
-    Diagnose data (details TBD).
-    """
-    def _run(self):
-        pass
 
 
 class TaskType(Enum):
     eval = EvalTaskRunner
     train = TrainTaskRunner
     optuna = OptunaTaskRunner
+    diag = DiagnosticsTaskRunner
 
 
 @dataclasses.dataclass
 class Config:
+    """
+    Class that holds a series of task settings.
+
+    Attributes:
+        seed (int = 0): Random seed for reproducibility.
+        out_dir (str | Path = ''): Output path for the series of tasks.
+            Outputs config.toml and report.md here.
+            Defaults to 'out/YYYYmmdd-HHMMSS/' if not specified.
+
+            - If individual task output paths are not specified, subdirectories are created
+              under this path using task names.
+            - You may also create this directory in advance and place a config.toml inside it
+              (it will be overwritten with the resolved config.toml).
+              In that case, set exist_ok to True.
+
+        exist_ok (bool = False): Whether to allow the output path to already exist.
+        data (dict = None): Data configuration for
+            [TimeSeriesDataManager](reference.md#nazuna.data_manager.TimeSeriesDataManager)
+            **(required)**.
+        device (str = ''): Device name for computation (Ex. 'cpu', 'cuda').
+            If not specified, it will be automatically detected from your environment.
+        tasks (list[dict] = None): List of individual task configurations **(required)**.
+            Each dict should have a 'task_type' key with a task type identifier
+            (eval, train, optuna, diag), plus the required settings for that task type.
+            See [Reference (Task Runners)](reference_task_runners.md) for details.
+
+    !!! warning "About individual task names when running a series of tasks"
+
+        Task names are used in the following cases:
+
+        - If an individual task's output path is not specified, a subdirectory is created.
+          The subdirectory name is the task name with symbols escaped and converted to snake_case.
+        - You can specify model_state.pth trained in previous tasks by task name.
+
+        Therefore, the following processing is done when creating a Config:
+
+        - If a task name is not specified, it defaults to 'Task i' (0-indexed sequential number).
+        - Duplicate task names are not allowed and will raise an error.
+    """
+    seed: int = 0
     out_dir: str | Path = ''
     exist_ok: bool = False
     data: dict = None
@@ -572,7 +659,7 @@ class Config:
 
 def run_tasks(conf_: Config | dict | Path | str):
     conf = Config.create(conf_)
-    fix_seed()
+    fix_seed(conf.seed)
 
     dm = TimeSeriesDataManager(**conf.get_data_param())
     task_runners = []
@@ -586,17 +673,6 @@ def run_tasks(conf_: Config | dict | Path | str):
             task_runner.run()
 
     report_path = conf.out_path / 'report.md'
-    with report_path.open('w', newline='\n', encoding='utf8') as f:
-        f.write('### Configuration\n')
-        f.write('```toml\n')
-        f.write(conf.to_toml_str())
-        f.write('```\n')
-        f.write('\n')
-        f.write('### Result\n')
-        for task_runner in task_runners:
-            f.write(f'#### {task_runner.name}\n')
-            f.write('```toml\n')
-            f.write(toml.dumps(task_runner.result))
-            f.write('```\n')
+    report(report_path, conf.to_toml_str(), task_runners)
     elapsed = result['elapsed']
     print(f'Finished all tasks: {report_path.as_posix()} ({elapsed})')

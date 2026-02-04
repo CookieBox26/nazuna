@@ -8,8 +8,11 @@ extra_css:
 nav:
   - Home: index.md
   - Key Ideas: key_ideas.md
+  - About Config File: config.md
   - Reference: reference.md
   - Reference (Models): reference_models.md
+  - Reference (Diagnoser): reference_diagnoser.md
+  - Reference (Task Runners): reference_task_runners.md
 extra:
   social:
     - icon: fontawesome/brands/github

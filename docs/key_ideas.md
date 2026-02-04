@@ -1,2 +1,3 @@
+- Scaling coefficients can be changed dynamically.
 - The model is responsible for extracting necessary information from batches and scaling.
 - The model is also responsible for computing loss and setting gradients.

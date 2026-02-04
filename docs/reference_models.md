@@ -1,7 +1,3 @@
-# Reference (Models)
-
-## Models
-
 ::: nazuna.models.simple_average.SimpleAverage
 
 === "en"

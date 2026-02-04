@@ -1,5 +1,3 @@
-# Reference
-
 ## Data Manager
 
 ::: nazuna.data_manager.TimeSeriesDataManager
