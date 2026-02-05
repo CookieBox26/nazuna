@@ -51,6 +51,6 @@ python -m nazuna.examples jma_hourly_3m_eval_sa
 python -m nazuna.examples jma_hourly_3m_train_savd
 python -m nazuna.examples jma_hourly_3m_train_dlinear
 
-# Examples for JMA weather data (24 months)
-python -m nazuna.examples jma_hourly_24m_eval_sa
+# Examples for JMA weather data (36 months)
+python -m nazuna.examples jma_hourly_36m_eval_sa
 ```

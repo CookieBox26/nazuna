@@ -18,7 +18,7 @@ class Diagnoser:
     decomposition.
     """
 
-    def __init__(self, dm, data_range):
+    def __init__(self, dm: TimeSeriesDataManager, data_range: tuple[float, float]):
         """
         Args:
             dm: TimeSeriesDataManager instance containing the time series data.

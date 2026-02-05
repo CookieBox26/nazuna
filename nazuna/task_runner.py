@@ -174,25 +174,52 @@ class EvalTaskRunner(BaseTaskRunner):
             device=self.device,
         )
 
-    def eval(self):
+    def eval(self, output_loss_per_channel=True):
         data_loader = self.data_loader_eval
         loss_total = 0.0
+        loss_per_channel_total = None
+        sample_saved = False
         with torch.no_grad():
             for i_batch, batch in enumerate(data_loader):
                 true = self.model.extract_true(batch)
                 pred, _ = self.model.predict(batch)
                 if self.eval_improvement:
-                    baseline = self.baseline_model.extract_true(batch)
+                    baseline, _ = self.baseline_model.predict(batch)
                     loss = self.criterion(baseline, pred, true)
-                    loss_total += loss.batch_sum()
                 else:
+                    baseline = None
                     loss = self.criterion(pred, true)
-                    loss_total += loss.batch_sum()
-        return {
-            'n_sample': data_loader.dataset.n_sample,
+                loss_total += loss.batch_sum()
+                if output_loss_per_channel and loss.each_sample_channel is not None:
+                    batch_channel_sum = loss.each_sample_channel.sum(dim=0)
+                    if loss_per_channel_total is None:
+                        loss_per_channel_total = batch_channel_sum
+                    else:
+                        loss_per_channel_total += batch_channel_sum
+
+                if not sample_saved:
+                    save_data = {
+                        'pred': pred[0].cpu().numpy(),
+                        'data': batch.data[0].cpu().numpy(),
+                        'data_future': batch.data_future[0].cpu().numpy(),
+                    }
+                    if baseline is not None:
+                        save_data['baseline'] = baseline[0].cpu().numpy()
+                    np.savez(self.out_path / 'pred_0_0.npz', **save_data)
+                    sample_saved = True
+
+        n_sample = data_loader.dataset.n_sample
+        result = {
+            'n_sample': n_sample,
             'loss_total': loss_total,
-            'loss_per_sample': loss_total / data_loader.dataset.n_sample,
+            'loss_per_sample': loss_total / n_sample,
         }
+
+        if loss_per_channel_total is not None:
+            loss_per_channel = (loss_per_channel_total / n_sample).cpu().tolist()
+            result['loss_per_channel'] = dict(zip(self.dm.cols, loss_per_channel))
+
+        return result
 
     def _run(self):
         self.set_data_loader_eval()
@@ -203,6 +230,9 @@ class EvalTaskRunner(BaseTaskRunner):
             )
         self.model = self.model_cls.create(self.device, self.model_state_path, **self.model_params)
         loss_eval = self.eval()
+
+        self.result['cols_org'] = dict(zip(self.dm.cols, self.dm.cols_org))
+        self.result['data_range_eval'] = self.data_loader_eval.dataset.info
         self.result.update(loss_eval)
 
 
@@ -296,6 +326,9 @@ class TrainTaskRunner(EvalTaskRunner):
         early_stop_counter = 0
         stop = False
 
+        self.result['cols_org'] = dict(zip(self.dm.cols, self.dm.cols_org))
+        self.result['data_range_train'] = self.data_loader_train.dataset.info
+
         self.result['epochs'] = []
         for i_epoch in range(self.n_epoch):
             print(f'----- Epoch {i_epoch} -----')
@@ -310,7 +343,7 @@ class TrainTaskRunner(EvalTaskRunner):
             if self.data_range_eval is None:
                 continue
 
-            loss_eval = self.eval()
+            loss_eval = self.eval(output_loss_per_channel=False)
             self.result['epochs'][-1]['eval'] = loss_eval
             loss_per_sample_eval = loss_eval['loss_per_sample']
 
@@ -595,7 +628,7 @@ class Config:
             if self.tasks[i_task]['name'] in self.out_paths:
                 raise ValueError(f'Duplicate task name: {self.tasks[i_task]["name"]}')
             self.tasks[i_task].setdefault(
-                'out_dir', self.out_path / _to_snake_case(self.tasks[i_task]['name']),
+                'out_dir', (self.out_path / _to_snake_case(self.tasks[i_task]['name'])).as_posix(),
             )
             self.out_paths[self.tasks[i_task]['name']] = Path(self.tasks[i_task]['out_dir'])
 

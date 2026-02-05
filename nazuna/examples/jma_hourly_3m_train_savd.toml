@@ -51,3 +51,27 @@ lr_scheduler_cls_path = "torch.optim.lr_scheduler.CosineAnnealingLR"
 lr_scheduler_params = { T_max = 20 }
 n_epoch = 20
 early_stop = true
+
+[[tasks]]
+task_type = "eval"
+name = "Eval SimpleAverageVariableDecay (ImprovementRate)"
+data_range_eval = [ 0.8, 1.0,]
+criterion_cls_path = "nazuna.criteria.ImprovementRate"
+criterion_params = { n_channel = 27, pred_len = 24, tolerance = 0.05, error_type = "mae" }
+baseline_model_cls_path = "nazuna.models.simple_average.SimpleAverage"
+baseline_model_params = { seq_len = 96, pred_len = 24, period_len = 24 }
+model_cls_path = "nazuna.models.simple_average.SimpleAverageVariableDecay"
+model_params = { seq_len = 96, pred_len = 24, period_len = 24 }
+model_state = { task_name = "Train SimpleAverageVariableDecay" }
+
+[[tasks]]
+task_type = "eval"
+name = "Eval SimpleAverageVariableDecayChannelwise (ImprovementRate)"
+data_range_eval = [ 0.8, 1.0,]
+criterion_cls_path = "nazuna.criteria.ImprovementRate"
+criterion_params = { n_channel = 27, pred_len = 24, tolerance = 0.05, error_type = "mae" }
+baseline_model_cls_path = "nazuna.models.simple_average.SimpleAverage"
+baseline_model_params = { seq_len = 96, pred_len = 24, period_len = 24 }
+model_cls_path = "nazuna.models.simple_average.SimpleAverageVariableDecayChannelwise"
+model_params = { seq_len = 96, pred_len = 24, period_len = 24, n_channel = 27 }
+model_state = { task_name = "Train SimpleAverageVariableDecayChannelwise" }

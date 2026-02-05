@@ -1,15 +1,18 @@
 from pathlib import Path
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 import toml
 
 
-plt.rcParams['svg.fonttype'] = 'none'  # to reduce file size
+plt.rcParams['svg.fonttype'] = 'path'  # convert text to paths for consistent rendering
 plt.rcParams['svg.hashsalt'] = ''  # to make the IDs deterministic
 plt.rcParams['font.size'] = 11
 
 
 def _plot_sample(sample_path: Path, graph_path: Path) -> None:
+    """Plot sample data from DiagnosticsTaskRunner."""
     data = np.load(sample_path)
     values = data['values']
     columns = data['columns']
@@ -17,7 +20,7 @@ def _plot_sample(sample_path: Path, graph_path: Path) -> None:
 
     timestamps = [str(t) for t in timestamps]
     if all(t.endswith(":00") for t in timestamps):
-        timestamps = [t[:-3] for t in timestamps] 
+        timestamps = [t[:-3] for t in timestamps]
 
     fig, ax = plt.subplots(figsize=(8, 3))
     for i, col in enumerate(columns):
@@ -28,6 +31,36 @@ def _plot_sample(sample_path: Path, graph_path: Path) -> None:
     ax.set_xticks(range(0, len(timestamps), tick_step))
     ax.set_xticklabels(timestamps[::tick_step], rotation=90)
     ax.grid(True, which='major', axis='both', linestyle='--', linewidth=0.5)
+    fig.savefig(graph_path, format='svg', bbox_inches='tight')
+    plt.close(fig)
+
+
+def _plot_pred(pred_path: Path, graph_path: Path) -> None:
+    """Plot prediction vs true (and baseline if available) for the first channel."""
+    npz = np.load(pred_path)
+    data = npz['data'][:, 0]
+    data_future = npz['data_future'][:, 0]
+    pred = npz['pred'][:, 0]
+    has_baseline = 'baseline' in npz.files
+
+    seq_len = len(data)
+    pred_len = len(pred)
+    true_all = np.concatenate([data, data_future])
+
+    fig, ax = plt.subplots(figsize=(6, 3))
+    x_true = range(len(true_all))
+    x_pred = range(seq_len, seq_len + pred_len)
+    ax.plot(x_true, true_all, label='true', marker='o', markersize=2, color='black', linewidth=1)
+    if has_baseline:
+        baseline = npz['baseline'][:, 0]
+        ax.plot(x_pred, baseline, label='baseline', marker='o', markersize=3, color='tab:gray', linestyle='--', linewidth=2)
+    ax.plot(x_pred, pred, label='pred', marker='o', markersize=3, color='tab:blue', linewidth=2)
+    ax.axvline(x=seq_len - 1, color='tab:red', linewidth=1)
+
+    ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+    ax.set_xlabel('step')
+    ax.set_ylabel('y0')
+    ax.grid(True, linestyle='--', linewidth=0.5)
     fig.savefig(graph_path, format='svg', bbox_inches='tight')
     plt.close(fig)
 
@@ -59,6 +92,13 @@ def report(
                 _plot_sample(sample_path, graph_path)
                 rel_path = graph_path.relative_to(report_path.parent)
                 f.write(f'![graph]({rel_path.as_posix()})\n\n')
+
+            pred_path = task_runner.out_path / 'pred_0_0.npz'
+            if pred_path.exists():
+                graph_path = task_runner.out_path / 'pred_0_0.svg'
+                _plot_pred(pred_path, graph_path)
+                rel_path = graph_path.relative_to(report_path.parent)
+                f.write(f'![pred]({rel_path.as_posix()})\n\n')
 
             f.write('```toml\n')
             f.write(toml.dumps(task_runner.result))

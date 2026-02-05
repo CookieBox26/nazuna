@@ -95,7 +95,7 @@ class BaseModel(torch.nn.Module, ABC):
     ) -> Self:
         model = cls(device=device, **kwargs)
         if state_path:
-            model.load_state_dict(torch.load(state_path, map_location=device))
+            model.load_state_dict(torch.load(state_path, map_location=device), strict=False)
             model.eval()
         return model
 

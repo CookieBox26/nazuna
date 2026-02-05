@@ -13,3 +13,5 @@
 ::: nazuna.criteria.MSE
 
 ::: nazuna.criteria.MAE
+
+::: nazuna.criteria.ImprovementRate

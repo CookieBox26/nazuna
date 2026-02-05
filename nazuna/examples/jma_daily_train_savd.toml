@@ -43,3 +43,15 @@ criterion_params = { n_channel = 2, pred_len = 7, tolerance = 0.05 }
 model_cls_path = "nazuna.models.simple_average.SimpleAverageVariableDecay"
 model_params = { seq_len = 28, pred_len = 7, period_len = 7 }
 model_state = { task_name = "Train SimpleAverageVariableDecay" }
+
+[[tasks]]
+task_type = "eval"
+name = "Eval SimpleAverageVariableDecay (ImprovementRate)"
+data_range_eval = [ 0.8, 1.0,]
+criterion_cls_path = "nazuna.criteria.ImprovementRate"
+criterion_params = { n_channel = 2, pred_len = 7, tolerance = 0.05, error_type = "mae" }
+baseline_model_cls_path = "nazuna.models.simple_average.SimpleAverage"
+baseline_model_params = { seq_len = 28, pred_len = 7, period_len = 7 }
+model_cls_path = "nazuna.models.simple_average.SimpleAverageVariableDecay"
+model_params = { seq_len = 28, pred_len = 7, period_len = 7 }
+model_state = { task_name = "Train SimpleAverageVariableDecay" }

@@ -32,3 +32,15 @@ optimizer_params = { lr = 0.001 }
 lr_scheduler_cls_path = "torch.optim.lr_scheduler.CosineAnnealingLR"
 lr_scheduler_params = { T_max = 10 }
 n_epoch = 20
+
+[[tasks]]
+task_type = "eval"
+name = "Eval DLinear (ImprovementRate)"
+data_range_eval = [ 0.8, 1.0,]
+criterion_cls_path = "nazuna.criteria.ImprovementRate"
+criterion_params = { n_channel = 27, pred_len = 24, error_type = "mae" }
+baseline_model_cls_path = "nazuna.models.simple_average.SimpleAverage"
+baseline_model_params = { seq_len = 96, pred_len = 24, period_len = 24 }
+model_cls_path = "nazuna.models.dlinear.DLinear"
+model_params = { seq_len = 96, pred_len = 24, kernel_size = 25, bias = true, quantile_mode = "full" }
+model_state = { task_name = "Train DLinear" }

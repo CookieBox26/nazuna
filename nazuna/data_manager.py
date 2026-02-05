@@ -42,6 +42,11 @@ class TimeSeriesDataset(Dataset):
         self.n_channel = len(self.df.columns)
         self.quantiles_full = self.calc_quantiles(self.df_org)
 
+        self.info = {
+            'timestamp_0': self.tsta[seq_len],
+            'timestamp_1': self.tsta[seq_len + self.n_sample - 1],
+        }
+
     def __len__(self):
         return self.n_sample
 
@@ -146,7 +151,8 @@ class TimeSeriesDataManager:
         self.cols_org = cols
         df = df.loc[:, [self.colname_timestamp] + cols]
         self.n_channel = len(df.columns) - 1
-        df.columns = ['timestamp'] + [f'y{i}' for i in range(self.n_channel)]
+        self.cols = [f'y{i}' for i in range(self.n_channel)]
+        df.columns = ['timestamp'] + self.cols
         n_rows = len(df)
         df.insert(1, 'timestep', [self.step_start + i * self.step_width for i in range(n_rows)])
         self.df = df
