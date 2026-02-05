@@ -41,15 +41,22 @@ class Diagnoser:
 
         Returns:
             Dictionary containing:
-                - 'seasonality_per_channel': list of seasonality strength for each channel
+                - 'cols_org': mapping of column names to original names
+                - 'seasonality_per_channel': seasonality strength for each channel
                 - 'seasonality_mean': mean seasonality strength across all channels
                 - 'period': the period used for decomposition
+                - 'trend_var_per_channel': variance of trend component for each channel
+                - 'seasonal_var_per_channel': variance of seasonal component for each channel
+                - 'residual_var_per_channel': variance of residual component for each channel
         """
         if period is None:
             period = 7
 
         cols_org = {}
         seasonality_per_channel = {}
+        trend_var_per_channel = {}
+        seasonal_var_per_channel = {}
+        residual_var_per_channel = {}
 
         for i_col, col in enumerate(self.df.columns):
             series = self.df[col].values
@@ -63,6 +70,7 @@ class Diagnoser:
 
             residual = result.resid
             trend = result.trend
+            seasonal = result.seasonal
             detrended = series - trend
 
             var_residual = np.var(residual)
@@ -75,6 +83,9 @@ class Diagnoser:
 
             cols_org[col] = self.dm.cols_org[i_col]
             seasonality_per_channel[col] = float(seasonality_strength)
+            trend_var_per_channel[col] = float(np.var(trend))
+            seasonal_var_per_channel[col] = float(np.var(seasonal))
+            residual_var_per_channel[col] = float(var_residual)
 
         valid_values = [v for v in seasonality_per_channel.values() if not np.isnan(v)]
         seasonality_mean = float(np.mean(valid_values)) if valid_values else np.nan
@@ -84,6 +95,9 @@ class Diagnoser:
             'seasonality_per_channel': seasonality_per_channel,
             'seasonality_mean': seasonality_mean,
             'period': period,
+            'trend_var_per_channel': trend_var_per_channel,
+            'seasonal_var_per_channel': seasonal_var_per_channel,
+            'residual_var_per_channel': residual_var_per_channel,
         }
 
     def sample(self, n_channels: int = 4, n_steps: int = 96) -> dict:

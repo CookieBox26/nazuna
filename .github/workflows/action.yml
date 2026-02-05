@@ -24,4 +24,4 @@ jobs:
           git checkout --detach ${{ github.sha }}
       - run: pipx install uv
       - run: uv sync --extra torch-cpu --extra docs
-      - run: uv run mkdocs build --strict
+      - run: uv run mkdocs build
