@@ -95,7 +95,10 @@ class BaseModel(torch.nn.Module, ABC):
     ) -> Self:
         model = cls(device=device, **kwargs)
         if state_path:
-            model.load_state_dict(torch.load(state_path, map_location=device), strict=False)
+            state_dict = torch.load(state_path, map_location=device)
+            if hasattr(model, 'scaler') and model.scaler:
+                model.scaler.prepare_load_state_dict(state_dict)
+            model.load_state_dict(state_dict, strict=False)
             model.eval()
         return model
 
