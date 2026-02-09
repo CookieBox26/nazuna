@@ -44,7 +44,7 @@ This repository can be installed as a Python package.
 │  │
 │  ├─ datasets/  # Sample datasets
 │  │  └─ jma/
-│  └─ examples/  # Usage examples
+│  └─ examples/  # Example configurations
 │
 ├─ tests/
 └─ docs/
