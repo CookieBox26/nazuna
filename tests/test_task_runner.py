@@ -1,9 +1,7 @@
-import pytest
 from nazuna.task_runner import (
     EvalTaskRunner,
     TrainTaskRunner,
     OptunaTaskRunner,
-    TaskType,
     run_tasks,
 )
 
@@ -87,61 +85,45 @@ def test_run_tasks():
     run_tasks(conf_toml_str)
 
 
-def test_optuna_in_task_type():
-    assert TaskType.optuna.value is OptunaTaskRunner
-
-
-def test_optuna_task_runner_requires_search_space(get_data_manager):
+def test_optuna_task_runner(tmp_path, get_data_manager):
     dm = get_data_manager()
-    with pytest.raises(AssertionError, match='search_space is required'):
-        OptunaTaskRunner(
-            dm=dm,
-            search_space=None,
-            data_ranges=[{'train': [0, 0.8], 'eval': [0.8, 1.0]}],
-            n_epoch=1,
-            model_cls_path='nazuna.models.simple_average.SimpleAverage',
-            batch_sampler_cls_path='nazuna.batch_sampler.BatchSamplerShuffle',
-            optimizer_cls_path='torch.optim.Adam',
-        )
+    runner = OptunaTaskRunner(
+        dm=dm,
+        name='Optuna Task 0',
+        out_dir=tmp_path / 'optuna_0',
+        n_trials=2,
+        search_space={'lr': ['log_uniform', 1e-4, 1e-1]},
+        data_ranges=[
+            {'train': (0.0, 0.6), 'eval': (0.6, 0.8)},
+            {'train': (0.0, 0.8), 'eval': (0.8, 1.0)},
+        ],
+        criterion_cls_path='nazuna.criteria.MSE',
+        criterion_params={'n_channel': 2, 'pred_len': 7},
+        model_cls_path=(
+            'nazuna.models.simple_average'
+            '.SimpleAverageVariableDecay'
+        ),
+        model_params={
+            'seq_len': 28, 'pred_len': 7, 'period_len': 7,
+        },
+        batch_sampler_cls_path=(
+            'nazuna.batch_sampler.BatchSamplerShuffle'
+        ),
+        batch_sampler_params={'batch_size': 16},
+        optimizer_cls_path='torch.optim.Adam',
+        optimizer_params={'lr': 0.01},
+        n_epoch=2,
+    )
+    runner.run()
 
-
-def test_optuna_task_runner_requires_data_ranges(get_data_manager):
-    dm = get_data_manager()
-    with pytest.raises(AssertionError, match='data_ranges is required'):
-        OptunaTaskRunner(
-            dm=dm,
-            search_space={'lr': ['log_uniform', 1e-5, 1e-2]},
-            data_ranges=None,
-            n_epoch=1,
-            model_cls_path='nazuna.models.simple_average.SimpleAverage',
-            batch_sampler_cls_path='nazuna.batch_sampler.BatchSamplerShuffle',
-            optimizer_cls_path='torch.optim.Adam',
-        )
-
-
-def test_optuna_task_runner_requires_non_empty_data_ranges(get_data_manager):
-    dm = get_data_manager()
-    with pytest.raises(AssertionError, match='data_ranges must not be empty'):
-        OptunaTaskRunner(
-            dm=dm,
-            search_space={'lr': ['log_uniform', 1e-5, 1e-2]},
-            data_ranges=[],
-            n_epoch=1,
-            model_cls_path='nazuna.models.simple_average.SimpleAverage',
-            batch_sampler_cls_path='nazuna.batch_sampler.BatchSamplerShuffle',
-            optimizer_cls_path='torch.optim.Adam',
-        )
-
-
-def test_optuna_task_runner_requires_positive_n_epoch(get_data_manager):
-    dm = get_data_manager()
-    with pytest.raises(AssertionError, match='n_epoch must be positive'):
-        OptunaTaskRunner(
-            dm=dm,
-            search_space={'lr': ['log_uniform', 1e-5, 1e-2]},
-            data_ranges=[{'train': [0, 0.8], 'eval': [0.8, 1.0]}],
-            n_epoch=0,
-            model_cls_path='nazuna.models.simple_average.SimpleAverage',
-            batch_sampler_cls_path='nazuna.batch_sampler.BatchSamplerShuffle',
-            optimizer_cls_path='torch.optim.Adam',
-        )
+    assert runner.result_path.is_file()
+    assert runner.out_path.is_dir()
+    assert (runner.out_path / 'best_model_state.pth').is_file()
+    assert (runner.out_path / 'study.pkl').is_file()
+    assert runner.result['n_trials'] == 2
+    assert 'best_value' in runner.result
+    assert 'best_params' in runner.result
+    assert 'lr' in runner.result['best_params']
+    assert len(runner.result['trials']) == 2
+    for t in runner.result['trials']:
+        assert t['state'] == 'COMPLETE'

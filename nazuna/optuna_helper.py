@@ -36,11 +36,17 @@ class OptunaHelper:
         """
         method = spec[0]
         if method == 'log_uniform':
-            return trial.suggest_float(name, spec[1], spec[2], log=True)
+            return trial.suggest_float(
+                name, float(spec[1]), float(spec[2]), log=True,
+            )
         elif method == 'uniform':
-            return trial.suggest_float(name, spec[1], spec[2])
+            return trial.suggest_float(
+                name, float(spec[1]), float(spec[2]),
+            )
         elif method == 'int':
-            return trial.suggest_int(name, spec[1], spec[2])
+            return trial.suggest_int(
+                name, int(spec[1]), int(spec[2]),
+            )
         elif method == 'categorical':
             return trial.suggest_categorical(name, spec[1])
         else:

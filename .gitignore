@@ -1,11 +1,4 @@
 __pycache__/
 dist/
-
-.claude/
-CLAUDE.md
-.obsidian/
-
 out/
-
-backyard/
-run.sh
+REPORT.md

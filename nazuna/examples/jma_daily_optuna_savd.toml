@@ -1,0 +1,34 @@
+out_dir = "./out/jma_daily_optuna_savd"
+exist_ok = true
+
+[data]
+path = [ "jma", "weather_japan_daily_2025-01-01_2025-12-31_2_blocks.csv",]
+colname_timestamp = "date"
+seq_len = 28
+pred_len = 7
+white_list = [ "temp_avg_nagoya", "temp_avg_fukuoka",]
+
+[[tasks]]
+task_type = "optuna"
+name = "Optuna SimpleAverageVariableDecay"
+n_trials = 2
+n_epoch = 2
+criterion_cls_path = "nazuna.criteria.MSE"
+criterion_params = { n_channel = 2, pred_len = 7 }
+model_cls_path = "nazuna.models.simple_average.SimpleAverageVariableDecay"
+model_params = { seq_len = 28, pred_len = 7, period_len = 7 }
+batch_sampler_cls_path = "nazuna.batch_sampler.BatchSamplerShuffle"
+batch_sampler_params = { batch_size = 16 }
+optimizer_cls_path = "torch.optim.Adam"
+optimizer_params = { lr = 0.01 }
+
+[tasks.search_space]
+lr = [ "log_uniform", "0.0001", "0.1",]
+
+[[tasks.data_ranges]]
+train = [ 0.0, 0.6,]
+eval = [ 0.6, 0.8,]
+
+[[tasks.data_ranges]]
+train = [ 0.0, 0.8,]
+eval = [ 0.8, 1.0,]

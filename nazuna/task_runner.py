@@ -515,8 +515,11 @@ class OptunaTaskRunner(BaseTaskRunner):
                     n_epoch=self.n_epoch,
                     early_stop=self.early_stop,
                 )
+                runner.out_path.mkdir(parents=True, exist_ok=True)
                 runner._run()
-                fold_loss = runner.result.get('loss_per_sample_eval_best', float('inf'))
+                fold_loss = runner.result.get(
+                    'loss_per_sample_eval_best', float('inf'),
+                )
                 losses.append(fold_loss)
 
                 if fold_loss < best_loss_this_trial:
