@@ -75,6 +75,36 @@ def test_measure_seasonality_constant_series(dm):
     assert result['seasonality_mean'] < 0.1
 
 
+def test_measure_quartiles(diagnoser, dm):
+    result = diagnoser.measure_quartiles()
+
+    expected_keys = {
+        'cols_org', 'q1_per_channel', 'q2_per_channel', 'q3_per_channel',
+    }
+    assert set(result.keys()) == expected_keys
+
+    cols = set(diagnoser.df.columns)
+    assert set(result['q1_per_channel'].keys()) == cols
+    assert set(result['q2_per_channel'].keys()) == cols
+    assert set(result['q3_per_channel'].keys()) == cols
+
+    for col in cols:
+        assert result['q1_per_channel'][col] <= result['q2_per_channel'][col]
+        assert result['q2_per_channel'][col] <= result['q3_per_channel'][col]
+
+    for col, org_name in result['cols_org'].items():
+        i_col = list(diagnoser.df.columns).index(col)
+        assert org_name == dm.cols_org[i_col]
+
+    # Verify against numpy directly
+    for col in cols:
+        series = diagnoser.df[col].values
+        q1, q2, q3 = np.percentile(series, [25, 50, 75])
+        assert abs(result['q1_per_channel'][col] - q1) < 1e-10
+        assert abs(result['q2_per_channel'][col] - q2) < 1e-10
+        assert abs(result['q3_per_channel'][col] - q3) < 1e-10
+
+
 def test_sample(diagnoser):
     result = diagnoser.sample()
     assert 'values' in result
@@ -111,6 +141,8 @@ def test_run(diagnoser):
 
     assert 'seasonality' in result
     assert 'seasonality_per_channel' in result['seasonality']
+    assert 'quartiles' in result
+    assert 'q1_per_channel' in result['quartiles']
 
     assert 'values' in data
     assert 'columns' in data

@@ -60,6 +60,41 @@ class SimpleAverageVariableDecay(BaseSimpleAverage):
         return torch.einsum('j,ijkl->ikl', (w, x_view)), {}
 
 
+class SimpleDiffAverage(BasicBaseModel):
+    def _setup(
+        self,
+        seq_len: int,
+        pred_len: int,
+        period_len: int,
+        decay_rate: float = 1.0,
+    ) -> None:
+        super()._setup(seq_len, pred_len)
+        self.period_len = period_len
+        # After first-order differencing, the length becomes seq_len - 1.
+        diff_len = self.seq_len - 1
+        assert diff_len % self.period_len == 0
+        self.n_period = diff_len // self.period_len
+        self.decay_rate = decay_rate
+        w = torch.tensor(
+            [self.decay_rate**j for j in reversed(range(self.n_period))],
+            dtype=torch.float, device=self.device,
+        )
+        self.weight = w / w.sum()
+
+    def forward(self, x):
+        batch_size, seq_len, n_channel = x.shape
+        dx = x[:, 1:, :] - x[:, :-1, :]  # (batch_size, seq_len-1, n_channel)
+        dx_view = dx.view(
+            batch_size, self.n_period, self.period_len, n_channel,
+        )
+        avg_dx = torch.einsum(
+            'j,ijkl->ikl', self.weight, dx_view,
+        )  # (batch_size, period_len, n_channel)
+        last_val = x[:, -1:, :]  # (batch_size, 1, n_channel)
+        pred = last_val + torch.cumsum(avg_dx, dim=1)
+        return pred, {}
+
+
 class SimpleAverageVariableDecayChannelwise(BaseSimpleAverage):
     def _setup(
         self,

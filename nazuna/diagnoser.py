@@ -100,6 +100,27 @@ class Diagnoser:
             'residual_var_per_channel': residual_var_per_channel,
         }
 
+    def measure_quartiles(self) -> dict:
+        cols_org = {}
+        q1_per_channel = {}
+        q2_per_channel = {}
+        q3_per_channel = {}
+
+        for i_col, col in enumerate(self.df.columns):
+            series = self.df[col].values
+            q1, q2, q3 = np.percentile(series, [25, 50, 75])
+            cols_org[col] = self.dm.cols_org[i_col]
+            q1_per_channel[col] = float(q1)
+            q2_per_channel[col] = float(q2)
+            q3_per_channel[col] = float(q3)
+
+        return {
+            'cols_org': cols_org,
+            'q1_per_channel': q1_per_channel,
+            'q2_per_channel': q2_per_channel,
+            'q3_per_channel': q3_per_channel,
+        }
+
     def sample(self, n_channels: int = 4, n_steps: int = 96) -> dict:
         """
         Extract a small sample of data for visualization.
@@ -137,5 +158,6 @@ class Diagnoser:
         """
         result = {}
         result['seasonality'] = self.measure_seasonality(period=period)
+        result['quartiles'] = self.measure_quartiles()
         data = self.sample()
         return result, data
