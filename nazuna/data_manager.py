@@ -77,7 +77,8 @@ class TimeSeriesDataset(Dataset):
 
     def collate_fn(self, batch):
         quantiles = {
-            key: self.to_tensor(np.array([b[6][key] for b in batch])).unsqueeze(2)  # batch_size, 3, 1, n_channel
+            # 3, n_channel -> batch_size, 3, n_channel -> batch_size, 3, 1, n_channel
+            key: self.to_tensor(np.array([b[6][key] for b in batch])).unsqueeze(2)
             for key in self.quantile_keys
         }
         return TimeSeriesDataset.TimeSeriesBatch(

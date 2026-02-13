@@ -179,6 +179,7 @@ class EvalTaskRunner(BaseTaskRunner):
         loss_total = 0.0
         loss_per_channel_total = None
         sample_saved = False
+        self.model.eval()
         with torch.no_grad():
             for i_batch, batch in enumerate(data_loader):
                 true = self.model.extract_true(batch)
@@ -230,6 +231,7 @@ class EvalTaskRunner(BaseTaskRunner):
             )
         self.model = self.model_cls.create(self.device, self.model_state_path, **self.model_params)
         loss_eval = self.eval()
+        torch.save(self.model.state_dict(), self.out_path / 'model_state.pth')  # for debugging
 
         self.result['cols_org'] = dict(zip(self.dm.cols, self.dm.cols_org))
         self.result['data_range_eval'] = self.data_loader_eval.dataset.info
@@ -299,6 +301,7 @@ class TrainTaskRunner(EvalTaskRunner):
     def train(self):
         data_loader = self.data_loader_train
         loss_total = 0.0
+        self.model.train()
         for i_batch, batch in enumerate(data_loader):
             self.optimizer.zero_grad()
             loss = self.model.get_loss_and_backward(batch, self.criterion)
