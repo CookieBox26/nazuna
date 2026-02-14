@@ -1,1 +1,1 @@
-::: nazuna.diagnoser.Diagnoser
+::: nazuna.utils.diagnoser.Diagnoser
