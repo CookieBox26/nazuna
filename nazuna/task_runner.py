@@ -71,9 +71,9 @@ class BaseTaskRunner(ABC):
         exist_ok (bool = False): Whether to allow the output path to already exist.
     """
     dm: TimeSeriesDataManager
-    device: str = ''
-    name: str = ''
-    out_dir: str | Path = ''
+    device: str = None
+    name: str = None
+    out_dir: str | Path = None
     exist_ok: bool = False
 
     def __post_init__(self):
@@ -266,16 +266,18 @@ class TrainTaskRunner(EvalTaskRunner):
     data_offset_train: int = 0
     data_rolling_window_train: int = 4
 
-    batch_sampler_cls_path: str = ''
+    batch_sampler_cls_path: str = None
     batch_sampler_params: dict = None
 
-    optimizer_cls_path: str = ''
+    optimizer_cls_path: str = None
     optimizer_params: dict = None
 
-    lr_scheduler_cls_path: str = ''
+    lr_scheduler_cls_path: str = None
     lr_scheduler_params: dict = None
 
     n_epoch: int = 0
+    n_epoch_path: str | Path = None
+    n_epoch_path_defer: bool = False
     early_stop: bool = False
 
     def __post_init__(self):
@@ -286,7 +288,14 @@ class TrainTaskRunner(EvalTaskRunner):
         self.lr_scheduler_cls = None
         if self.lr_scheduler_cls_path:
             self.lr_scheduler_cls = load_class(self.lr_scheduler_cls_path)
-        assert self.n_epoch > 0
+        if self.n_epoch_path is None:
+            assert self.n_epoch > 0
+        else:
+            assert self.n_epoch == 0
+            if type(self.n_epoch_path) is str:
+                self.n_epoch_path = Path(self.n_epoch_path)
+            if not self.n_epoch_path_defer:
+                assert self.n_epoch_path.is_file()
 
     def set_data_loader_train(self):
         self.data_loader_train = self.dm.get_data_loader(
@@ -314,6 +323,11 @@ class TrainTaskRunner(EvalTaskRunner):
         }
 
     def _run(self):
+        if self.n_epoch_path is not None:
+            self.n_epoch = toml.loads(
+                Path(self.n_epoch_path).read_text(encoding='utf8')
+            )['i_epoch_best'] + 1
+
         self.set_data_loader_train()
         if self.data_range_eval is not None:
             self.set_data_loader_eval()
@@ -660,8 +674,15 @@ class Config:
         task_runner_cls = TaskType[self.task_type].value
         params.setdefault('device', self.device)
         params.setdefault('exist_ok', self.exist_ok)
+        if 'n_epoch' in params:
+            if isinstance(params['n_epoch'], dict):
+                params['n_epoch_path'] = \
+                    self.out_paths[params['n_epoch']['task_name']] / 'result.toml'
+                params['n_epoch_path_defer'] = True
+                del params['n_epoch']
         if 'model_state' in params:
-            params['model_state_path'] = self.out_paths[params['model_state']['task_name']] / 'model_state.pth'
+            params['model_state_path'] = \
+                self.out_paths[params['model_state']['task_name']] / 'model_state.pth'
             del params['model_state']
         return task_runner_cls, params
 

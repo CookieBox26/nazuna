@@ -88,7 +88,7 @@ def test_optuna_task_runner(tmp_path, get_data_manager):
         assert t['state'] == 'COMPLETE'
 
 
-conf_toml_str = '''
+conf_toml_str_0 = '''
 exist_ok = true
 
 [data]
@@ -100,6 +100,7 @@ white_list = [ "temp_avg_nagoya", "temp_avg_fukuoka",]
 
 [[tasks]]
 task_type = "eval"
+name = "Eval"
 data_range_eval = [ 0.8, 1.0,]
 criterion_cls_path = "nazuna.criteria.MSE"
 criterion_params = { n_channel = 2, pred_len = 7 }
@@ -108,29 +109,48 @@ model_params = { seq_len = 28, pred_len = 7, period_len = 7 }
 
 [[tasks]]
 task_type = "train"
-data_range_eval = [ 0.8, 1.0,]
+name = "Pilot"
+data_range_train = [ 0.0, 0.6,]
+data_range_eval = [ 0.6, 0.8,]
 criterion_cls_path = "nazuna.criteria.MSE"
 criterion_params = { n_channel = 2, pred_len = 7 }
 model_cls_path = "nazuna.models.simple_average.SimpleAverageVariableDecay"
 model_params = { seq_len = 28, pred_len = 7, period_len = 7 }
-data_range_train = [ 0.0, 0.8,]
 batch_sampler_cls_path = "nazuna.batch_sampler.BatchSamplerShuffle"
 batch_sampler_params = { batch_size = 16 }
 optimizer_cls_path = "torch.optim.Adam"
-optimizer_params = { lr = 0.05 }
+optimizer_params = { lr = 0.001 }
 lr_scheduler_cls_path = "torch.optim.lr_scheduler.CosineAnnealingLR"
-lr_scheduler_params = { T_max = 3 }
-n_epoch = 3
+lr_scheduler_params = { T_max = 10 }
+n_epoch = 10
+early_stop = true
+
+[[tasks]]
+task_type = "train"
+name = "Train"
+data_range_train = [ 0.0, 0.8,]
+criterion_cls_path = "nazuna.criteria.MSE"
+criterion_params = { n_channel = 2, pred_len = 7 }
+model_cls_path = "nazuna.models.simple_average.SimpleAverageVariableDecay"
+model_params = { seq_len = 28, pred_len = 7, period_len = 7 }
+batch_sampler_cls_path = "nazuna.batch_sampler.BatchSamplerShuffle"
+batch_sampler_params = { batch_size = 16 }
+optimizer_cls_path = "torch.optim.Adam"
+optimizer_params = { lr = 0.001 }
+lr_scheduler_cls_path = "torch.optim.lr_scheduler.CosineAnnealingLR"
+lr_scheduler_params = { T_max = 10 }
+n_epoch = { task_name = "Pilot" }
 '''
 
 
 def test_run_tasks_0(tmp_path):
     out_dir = tmp_path / 'tasks_0'
-    run_tasks(f'out_dir = "{out_dir.as_posix()}"\n' + conf_toml_str)
+    print(out_dir)
+    run_tasks(f'out_dir = "{out_dir.as_posix()}"\n' + conf_toml_str_0)
     assert out_dir.is_dir()
 
 
 def test_run_tasks_1(tmp_path):
     out_dir = tmp_path / 'tasks_0'
-    run_tasks(f'out_dir = "{out_dir.as_posix()}"\n' + conf_toml_str, skip_task_ids_='1')
+    run_tasks(f'out_dir = "{out_dir.as_posix()}"\n' + conf_toml_str_0, skip_task_ids_='1,2')
     assert out_dir.is_dir()
