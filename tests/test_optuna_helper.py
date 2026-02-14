@@ -1,4 +1,4 @@
-from nazuna.optuna_helper import OptunaHelper
+from nazuna.utils.optuna_helper import OptunaHelper
 
 
 def test_merge_params():

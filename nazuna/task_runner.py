@@ -16,9 +16,9 @@ from nazuna.datasets import get_path
 from nazuna.data_manager import TimeSeriesDataManager
 from nazuna.criteria import BaseImprovement
 from nazuna import fix_seed, load_class, measure_time
-from nazuna.optuna_helper import OptunaHelper
-from nazuna.diagnoser import Diagnoser
-from nazuna.report import report
+from nazuna.utils.optuna_helper import OptunaHelper
+from nazuna.utils.diagnoser import Diagnoser
+from nazuna.utils.report import report
 
 
 def _to_snake_case(s):

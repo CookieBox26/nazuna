@@ -36,11 +36,12 @@ This repository can be installed as a Python package.
 │  │  ├─ nbeats.py
 │  │  └─ patchtst.py
 │  │
-│  ├─ diagnoser.py  # Class for visualizing data and computing summary statistics
-│  ├─ optuna_helper.py  # Helper class for optimizing model hyperparameters
+│  ├─ utils/
+│  │  ├─ diagnoser.py  # Class for visualizing data and computing summary statistics
+│  │  ├─ optuna_helper.py  # Helper class for optimizing model hyperparameters
+│  │  └─ report.py  # Generates reports from task results
 │  │
 │  ├─ task_runner.py  # Task runner that orchestrates the above modules
-│  ├─ report.py  # Generates reports from task results
 │  │
 │  ├─ __main__.py
 │  │
