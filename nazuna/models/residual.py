@@ -24,7 +24,8 @@ class ResidualModel(BasicBaseModel):
         self,
         seq_len: int,
         pred_len: int,
-        quantile_mode: str,
+        quantile_mode_train: str,
+        quantile_mode_eval: str,
         naive_model_cls_path: str,
         naive_model_params: dict,
         neural_model_cls_path: str,
@@ -41,7 +42,7 @@ class ResidualModel(BasicBaseModel):
             neural_model_params: Parameters for the neural model
         """
         super()._setup(seq_len, pred_len)
-        self.scaler = IqrScaler(quantile_mode)
+        self.scaler = IqrScaler(quantile_mode_train, quantile_mode_eval)
 
         naive_model_cls = _make_concrete(load_class(naive_model_cls_path))
         self.naive_model = naive_model_cls(device=self.device, **naive_model_params)

@@ -9,11 +9,15 @@ def test_forward(device):
         device=device,
         seq_len=96,
         pred_len=24,
-        quantile_mode='full',
+        quantile_mode_train='full',
+        quantile_mode_eval='saved',
         naive_model_cls_path='nazuna.models.simple_average.SimpleAverage',
         naive_model_params={'seq_len': 96, 'pred_len': 24, 'period_len': 24, 'decay_rate': 1.0},
         neural_model_cls_path='nazuna.models.dlinear.DLinear',
-        neural_model_params={'seq_len': 96, 'pred_len': 24, 'kernel_size': 25, 'bias': True, 'quantile_mode': 'full'},
+        neural_model_params={
+            'seq_len': 96, 'pred_len': 24, 'kernel_size': 25, 'bias': True,
+            'quantile_mode_train': 'full', 'quantile_mode_eval': 'saved',
+        },
     )
     batch = torch.randn(2, 96, 3, device=device)
     output, _ = model(batch)
@@ -25,11 +29,15 @@ def test_get_loss(device):
         device=device,
         seq_len=16,
         pred_len=4,
-        quantile_mode='full',
+        quantile_mode_train='full',
+        quantile_mode_eval='saved',
         naive_model_cls_path='nazuna.models.simple_average.SimpleAverage',
         naive_model_params={'seq_len': 16, 'pred_len': 4, 'period_len': 4, 'decay_rate': 1.0},
         neural_model_cls_path='nazuna.models.dlinear.DLinear',
-        neural_model_params={'seq_len': 16, 'pred_len': 4, 'kernel_size': 5, 'bias': True, 'quantile_mode': 'full'},
+        neural_model_params={
+            'seq_len': 16, 'pred_len': 4, 'kernel_size': 25, 'bias': True,
+            'quantile_mode_train': 'full', 'quantile_mode_eval': 'saved',
+        },
     )
     batch = TimeSeriesDataset.TimeSeriesBatch(
         tsta=None,

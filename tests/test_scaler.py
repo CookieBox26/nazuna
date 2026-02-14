@@ -4,7 +4,7 @@ from collections import namedtuple
 
 
 def test_iqr_scaler():
-    scaler = IqrScaler('full')
+    scaler = IqrScaler('full', 'saved')
     DummyBatch = namedtuple('DummyBatch', ['quantiles'])
     quantiles = {
         'full': torch.tensor([[

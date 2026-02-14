@@ -99,7 +99,8 @@ class NBEATS(BaseNBEATS):
         self,
         seq_len: int,
         pred_len: int,
-        quantile_mode: str,
+        quantile_mode_train: str,
+        quantile_mode_eval: str,
         n_stacks: int = 2,
         n_blocks: int = 3,
         hidden_size: int = 256,
@@ -116,7 +117,7 @@ class NBEATS(BaseNBEATS):
             theta_size: Dimension of theta (basis expansion coefficients) (default: 32)
         """
         super()._setup(seq_len, pred_len, n_stacks, n_blocks, hidden_size, theta_size)
-        self.scaler = IqrScaler(quantile_mode)
+        self.scaler = IqrScaler(quantile_mode_train, quantile_mode_eval)
 
     def predict(self, batch):
         input_ = self.scaler.scale(batch.data[:, -self.seq_len:, :], batch)

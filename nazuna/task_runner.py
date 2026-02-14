@@ -696,8 +696,12 @@ class Config:
         self.conf_path.write_text(self.to_toml_str(), newline='\n', encoding='utf8')
 
 
-def run_tasks(conf_: Config | dict | Path | str):
+def run_tasks(
+    conf_: Config | dict | Path | str,
+    skip_task_ids_: str = '',
+):
     conf = Config.create(conf_)
+    skip_task_ids = [int(i) for i in skip_task_ids_.split(',') if i != '']
     fix_seed(conf.seed)
 
     dm = TimeSeriesDataManager(**conf.get_data_param())
@@ -708,10 +712,11 @@ def run_tasks(conf_: Config | dict | Path | str):
 
     result = {}
     with measure_time(result):
-        for task_runner in task_runners:
+        for i_task, task_runner in enumerate(task_runners):
+            if i_task in skip_task_ids:
+                continue
             task_runner.run()
 
     report_path = conf.out_path / 'report.md'
     report(report_path, conf.to_toml_str(), task_runners)
-    elapsed = result['elapsed']
-    print(f'Finished all tasks: {report_path.as_posix()} ({elapsed})')
+    print(f'Finished all tasks: {report_path.as_posix()} ({result["elapsed"]})')

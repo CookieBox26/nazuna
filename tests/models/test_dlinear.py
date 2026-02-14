@@ -11,7 +11,8 @@ def test_forward(device):
         pred_len=2,
         kernel_size=3,
         bias=True,
-        quantile_mode='full',
+        quantile_mode_train='full',
+        quantile_mode_eval='saved',
     )
     batch = torch.tensor([[
         [10., 10., 10.],
@@ -30,7 +31,8 @@ def test_get_loss(device):
         pred_len=2,
         kernel_size=3,
         bias=True,
-        quantile_mode='full',
+        quantile_mode_train='full',
+        quantile_mode_eval='saved',
     )
     batch = TimeSeriesDataset.TimeSeriesBatch(
         tsta=None,

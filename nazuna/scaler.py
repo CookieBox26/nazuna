@@ -5,7 +5,6 @@ from abc import ABC, abstractmethod
 class BaseScaler(torch.nn.Module, ABC):
     def __init__(self):
         super().__init__()
-        self.training = False
 
     @abstractmethod
     def scale(self, x, batch):
@@ -17,9 +16,10 @@ class BaseScaler(torch.nn.Module, ABC):
 
 
 class IqrScaler(BaseScaler):
-    def __init__(self, mode):
+    def __init__(self, mode_train, mode_eval):
         super().__init__()
-        self.mode = mode
+        self.mode_train = mode_train
+        self.mode_eval = mode_eval
         self.register_buffer('q1s', None)
         self.register_buffer('q2s', None)
         self.register_buffer('q3s', None)
@@ -30,7 +30,8 @@ class IqrScaler(BaseScaler):
         self.q3s = torch.empty_like(state_dict['scaler.q3s'])
 
     def _get_quantiles(self, batch):
-        if self.mode == 'saved':
+        mode = self.mode_train if self.training else self.mode_eval
+        if mode == 'saved':
             if self.q1s is None:
                 raise ValueError('Saved quartiles not found')
             if self.q1s.shape[0] == batch.data.shape[0]:
@@ -42,9 +43,9 @@ class IqrScaler(BaseScaler):
             )
 
         # batch_size, 3, 1, n_channel -> batch_size, 1, n_channel
-        q1s_ = batch.quantiles[self.mode][:, 0]
-        q2s_ = batch.quantiles[self.mode][:, 1]
-        q3s_ = batch.quantiles[self.mode][:, 2]
+        q1s_ = batch.quantiles[mode][:, 0]
+        q2s_ = batch.quantiles[mode][:, 1]
+        q3s_ = batch.quantiles[mode][:, 2]
         if self.training:
             self.q1s, self.q2s, self.q3s = q1s_, q2s_, q3s_
         return q1s_, q2s_, q3s_

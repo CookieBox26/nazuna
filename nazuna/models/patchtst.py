@@ -37,7 +37,8 @@ class PatchTST(BasicBaseModel):
         self,
         seq_len: int,
         pred_len: int,
-        quantile_mode: str,
+        quantile_mode_train: str,
+        quantile_mode_eval: str,
     ) -> None:
         """
         Args:
@@ -82,7 +83,7 @@ class PatchTST(BasicBaseModel):
             enc_layer, num_layers=self.n_layers, enable_nested_tensor=False
         )
         self.head = nn.Linear(self.d_model, self.pred_len)
-        self.scaler = IqrScaler(quantile_mode)
+        self.scaler = IqrScaler(quantile_mode_train, quantile_mode_eval)
 
     def _patchify(self, x):  # x: [B, L, C] -> [B, C, P, patch_len]
         x = x.transpose(1, 2)  # [B, C, L]

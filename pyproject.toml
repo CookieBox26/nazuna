@@ -50,7 +50,7 @@ artifacts = ["nazuna/datasets/**/*.csv"]
 select = ["F401"]
 
 [tool.pytest.ini_options]
-addopts = "-m 'not slow'"
+addopts = "-q -m 'not slow'"
 markers = [
   "slow: time-consuming tests"
 ]

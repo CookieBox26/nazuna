@@ -24,7 +24,7 @@ data_range_eval = [ 0.8, 1.0,]
 criterion_cls_path = "nazuna.criteria.MAE"
 criterion_params = { n_channel = 27, pred_len = 24 }
 model_cls_path = "nazuna.models.dlinear.DLinear"
-model_params = { seq_len = 96, pred_len = 24, kernel_size = 25, bias = true, quantile_mode = "full" }
+model_params = { seq_len = 96, pred_len = 24, kernel_size = 25, bias = true, quantile_mode_train = "full", quantile_mode_eval = "saved" }
 batch_sampler_cls_path = "nazuna.batch_sampler.BatchSamplerShuffle"
 batch_sampler_params = { batch_size = 32 }
 optimizer_cls_path = "torch.optim.Adam"
@@ -42,5 +42,5 @@ criterion_params = { n_channel = 27, pred_len = 24, error_type = "mae" }
 baseline_model_cls_path = "nazuna.models.simple_average.SimpleAverage"
 baseline_model_params = { seq_len = 96, pred_len = 24, period_len = 24 }
 model_cls_path = "nazuna.models.dlinear.DLinear"
-model_params = { seq_len = 96, pred_len = 24, kernel_size = 25, bias = true, quantile_mode = "full" }
+model_params = { seq_len = 96, pred_len = 24, kernel_size = 25, bias = true, quantile_mode_train = "full", quantile_mode_eval = "saved" }
 model_state = { task_name = "Train DLinear" }

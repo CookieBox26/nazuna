@@ -40,7 +40,8 @@ class DLinear(BasicBaseModel):
         pred_len: int,
         kernel_size: int,
         bias: bool,
-        quantile_mode: str,
+        quantile_mode_train: str,
+        quantile_mode_eval: str,
     ) -> None:
         """
         Args:
@@ -54,7 +55,7 @@ class DLinear(BasicBaseModel):
         self.decompsition = series_decomp(kernel_size)
         self.Linear_Seasonal = nn.Linear(self.seq_len, self.pred_len, bias=bias)
         self.Linear_Trend = nn.Linear(self.seq_len, self.pred_len, bias=bias)
-        self.scaler = IqrScaler(quantile_mode)
+        self.scaler = IqrScaler(quantile_mode_train, quantile_mode_eval)
 
     def forward(self, x):
         seasonal_init, trend_init = self.decompsition(x)

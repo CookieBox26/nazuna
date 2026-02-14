@@ -53,7 +53,10 @@ def _plot_pred(pred_path: Path, graph_path: Path) -> None:
     ax.plot(x_true, true_all, label='true', marker='o', markersize=2, color='black', linewidth=1)
     if has_baseline:
         baseline = npz['baseline'][:, 0]
-        ax.plot(x_pred, baseline, label='baseline', marker='o', markersize=3, color='tab:gray', linestyle='--', linewidth=2)
+        ax.plot(
+            x_pred, baseline, label='baseline', marker='o', markersize=3,
+            color='tab:gray', linestyle='dashed', linewidth=2,
+        )
     ax.plot(x_pred, pred, label='pred', marker='o', markersize=3, color='tab:blue', linewidth=2)
     ax.axvline(x=seq_len - 1, color='tab:red', linewidth=1)
 
@@ -72,13 +75,15 @@ def report(
 ) -> None:
     with report_path.open('w', newline='\n', encoding='utf8') as f:
         f.write('### Configuration\n')
-        f.write('```toml\n')
-        f.write(conf_toml_str)
-        f.write('```\n')
+        f.write(f'```toml\n{conf_toml_str}```\n')
         f.write('\n')
+
         f.write('### Result\n')
         for task_runner in task_runners:
             f.write(f'#### {task_runner.name}\n')
+            if not task_runner.out_path.is_dir():
+                f.write('Not found')
+                continue
             artifacts = [
                 p.name for p in task_runner.out_path.iterdir()
                 if p.is_file() and p.name != 'result.toml'
