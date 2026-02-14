@@ -5,9 +5,10 @@ import torch.nn as nn
 
 
 class series_decomp(nn.Module):
-    def __init__(self, kernel_size):
+    def __init__(self, kernel_size, n_moving_avg=1):
         super().__init__()
         self.kernel_size = kernel_size
+        self.n_moving_avg = n_moving_avg
         self.avg = nn.AvgPool1d(kernel_size=kernel_size, stride=1, padding=0)
 
     def moving_avg(self, x):
@@ -19,7 +20,9 @@ class series_decomp(nn.Module):
         return x
 
     def forward(self, x):
-        moving_mean = self.moving_avg(x)
+        moving_mean = x
+        for _ in range(self.n_moving_avg):
+            moving_mean = self.moving_avg(moving_mean)
         res = x - moving_mean
         return res, moving_mean
 
@@ -42,6 +45,7 @@ class DLinear(BasicBaseModel):
         bias: bool,
         quantile_mode_train: str,
         quantile_mode_eval: str,
+        n_moving_avg: int = 1,
     ) -> None:
         """
         Args:
@@ -50,9 +54,10 @@ class DLinear(BasicBaseModel):
             kernel_size: Kernel size for the moving average decomposition
             bias: Whether to use bias in linear layers
             quantile_mode: Source of quantiles for scaling ('full', 'cum', or 'rolling')
+            n_moving_avg: Number of times to apply moving average
         """
         super()._setup(seq_len, pred_len)
-        self.decompsition = series_decomp(kernel_size)
+        self.decompsition = series_decomp(kernel_size, n_moving_avg)
         self.Linear_Seasonal = nn.Linear(self.seq_len, self.pred_len, bias=bias)
         self.Linear_Trend = nn.Linear(self.seq_len, self.pred_len, bias=bias)
         self.scaler = IqrScaler(quantile_mode_train, quantile_mode_eval)

@@ -332,22 +332,23 @@ class TrainTaskRunner(EvalTaskRunner):
         self.result['cols_org'] = dict(zip(self.dm.cols, self.dm.cols_org))
         self.result['data_range_train'] = self.data_loader_train.dataset.info
 
-        self.result['epochs'] = []
+        loss_history = []
         for i_epoch in range(self.n_epoch):
             print(f'----- Epoch {i_epoch} -----')
-            self.result['epochs'].append({})
-            self.result['epochs'][-1]['i_epoch'] = i_epoch
+            epoch_record = {'i_epoch': i_epoch}
 
             loss_train = self.train()
-            self.result['epochs'][-1]['train'] = loss_train
+            epoch_record['train'] = loss_train
 
             if self.lr_scheduler is not None:
                 self.lr_scheduler.step()
             if self.data_range_eval is None:
+                loss_history.append(epoch_record)
                 continue
 
             loss_eval = self.eval(output_loss_per_channel=False)
-            self.result['epochs'][-1]['eval'] = loss_eval
+            epoch_record['eval'] = loss_eval
+            loss_history.append(epoch_record)
             loss_per_sample_eval = loss_eval['loss_per_sample']
 
             if loss_per_sample_eval < loss_per_sample_eval_best:
@@ -363,6 +364,12 @@ class TrainTaskRunner(EvalTaskRunner):
                 stop = True
             if stop:
                 break
+
+        history_path = self.out_path / 'train_loss_history.toml'
+        history_path.write_text(
+            toml.dumps({'epochs': loss_history}),
+            newline='\n', encoding='utf8',
+        )
 
         if self.data_range_eval is None:
             torch.save(self.model.state_dict(), self.out_path / 'model_state.pth')

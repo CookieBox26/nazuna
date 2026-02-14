@@ -68,6 +68,26 @@ def _plot_pred(pred_path: Path, graph_path: Path) -> None:
     plt.close(fig)
 
 
+def _plot_train_loss(history_path: Path, graph_path: Path) -> None:
+    history = toml.loads(history_path.read_text(encoding='utf8'))
+    epochs = history['epochs']
+    x = [e['i_epoch'] for e in epochs]
+    train_loss = [e['train']['loss_per_sample'] for e in epochs]
+    has_eval = 'eval' in epochs[0]
+
+    fig, ax = plt.subplots(figsize=(6, 3))
+    ax.plot(x, train_loss, label='train', linewidth=1.5)
+    if has_eval:
+        eval_loss = [e['eval']['loss_per_sample'] for e in epochs]
+        ax.plot(x, eval_loss, label='eval', linewidth=1.5)
+    ax.set_xlabel('epoch')
+    ax.set_ylabel('loss per sample')
+    ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+    ax.grid(True, linestyle='--', linewidth=0.5)
+    fig.savefig(graph_path, format='svg', bbox_inches='tight')
+    plt.close(fig)
+
+
 def report(
     report_path: Path,
     conf_toml_str: str,
@@ -82,11 +102,12 @@ def report(
         for task_runner in task_runners:
             f.write(f'#### {task_runner.name}\n')
             if not task_runner.out_path.is_dir():
-                f.write('Not found')
+                f.write('Not found\n\n')
                 continue
             artifacts = [
                 p.name for p in task_runner.out_path.iterdir()
-                if p.is_file() and p.name != 'result.toml'
+                if p.is_file()
+                and p.name != 'result.toml'
             ]
             if artifacts:
                 f.write(f'Artifacts: {", ".join(artifacts)}\n\n')
@@ -97,6 +118,13 @@ def report(
                 _plot_sample(sample_path, graph_path)
                 rel_path = graph_path.relative_to(report_path.parent)
                 f.write(f'![graph]({rel_path.as_posix()})\n\n')
+
+            history_path = task_runner.out_path / 'train_loss_history.toml'
+            if history_path.exists():
+                graph_path = task_runner.out_path / 'train_loss.svg'
+                _plot_train_loss(history_path, graph_path)
+                rel_path = graph_path.relative_to(report_path.parent)
+                f.write(f'![train_loss]({rel_path.as_posix()})\n\n')
 
             pred_path = task_runner.out_path / 'pred_0_0.npz'
             if pred_path.exists():
