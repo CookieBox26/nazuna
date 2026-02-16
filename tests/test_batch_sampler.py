@@ -12,7 +12,7 @@ class Dataset:
         self.df = df
         self.n_sample = len(df)
     def __getitem__(self, batch_idx):
-        return self.df.loc[batch_idx, :].values
+        return self.df.loc[batch_idx, :].values.copy()
     def __len__(self):
         return self.n_sample
 
