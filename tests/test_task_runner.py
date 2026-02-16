@@ -152,5 +152,5 @@ def test_run_tasks_0(tmp_path):
 
 def test_run_tasks_1(tmp_path):
     out_dir = tmp_path / 'tasks_0'
-    run_tasks(f'out_dir = "{out_dir.as_posix()}"\n' + conf_toml_str_0, skip_task_ids_='1,2')
+    run_tasks(f'out_dir = "{out_dir.as_posix()}"\n' + conf_toml_str_0, skip_task_ids_='1-2')
     assert out_dir.is_dir()

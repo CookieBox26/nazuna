@@ -1,6 +1,7 @@
 __pycache__/
 dist/
 out/
+.obsidian/
 backyard/
 _report.md
 _report_archive/

@@ -19,6 +19,10 @@ from nazuna import fix_seed, load_class, measure_time
 from nazuna.utils.optuna_helper import OptunaHelper
 from nazuna.utils.diagnoser import Diagnoser
 from nazuna.utils.report import report
+try:
+    from nazuna.utils.inspector import Inspector
+except ImportError:
+    Inspector = None
 
 
 def _to_snake_case(s):
@@ -729,7 +733,11 @@ def run_tasks(
     skip_task_ids_: str = '',
 ):
     conf = Config.create(conf_)
-    skip_task_ids = [int(i) for i in skip_task_ids_.split(',') if i != '']
+    if '-' in skip_task_ids_:
+        a, b = skip_task_ids_.split('-', 1)
+        skip_task_ids = list(range(int(a), int(b) + 1))
+    else:
+        skip_task_ids = [int(i) for i in skip_task_ids_.split(',') if i != '']
     fix_seed(conf.seed)
 
     dm = TimeSeriesDataManager(**conf.get_data_param())

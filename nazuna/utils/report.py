@@ -8,7 +8,7 @@ import toml
 
 plt.rcParams['svg.fonttype'] = 'path'  # convert text to paths for consistent rendering
 plt.rcParams['svg.hashsalt'] = ''  # to make the IDs deterministic
-plt.rcParams['font.size'] = 11
+plt.rcParams['font.size'] = 12
 
 
 def _plot_sample(sample_path: Path, graph_path: Path) -> None:
@@ -22,7 +22,7 @@ def _plot_sample(sample_path: Path, graph_path: Path) -> None:
     if all(t.endswith(":00") for t in timestamps):
         timestamps = [t[:-3] for t in timestamps]
 
-    fig, ax = plt.subplots(figsize=(8, 3))
+    fig, ax = plt.subplots(figsize=(8, 2))
     for i, col in enumerate(columns):
         ax.plot(timestamps, values[:, i], label=col)
 
@@ -47,17 +47,17 @@ def _plot_pred(pred_path: Path, graph_path: Path) -> None:
     pred_len = len(pred)
     true_all = np.concatenate([data, data_future])
 
-    fig, ax = plt.subplots(figsize=(6, 3))
+    fig, ax = plt.subplots(figsize=(8, 2))
     x_true = range(len(true_all))
     x_pred = range(seq_len, seq_len + pred_len)
-    ax.plot(x_true, true_all, label='true', marker='o', markersize=2, color='black', linewidth=1)
+    ax.plot(x_true, true_all, label='true', color='black', linewidth=1)
     if has_baseline:
         baseline = npz['baseline'][:, 0]
         ax.plot(
-            x_pred, baseline, label='baseline', marker='o', markersize=3,
+            x_pred, baseline, label='baseline',
             color='tab:gray', linestyle='dashed', linewidth=2,
         )
-    ax.plot(x_pred, pred, label='pred', marker='o', markersize=3, color='tab:blue', linewidth=2)
+    ax.plot(x_pred, pred, label='pred', color='tab:blue', linewidth=2)
     ax.axvline(x=seq_len - 1, color='tab:red', linewidth=1)
 
     ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
@@ -75,7 +75,7 @@ def _plot_train_loss(history_path: Path, graph_path: Path) -> None:
     train_loss = [e['train']['loss_per_sample'] for e in epochs]
     has_eval = 'eval' in epochs[0]
 
-    fig, ax = plt.subplots(figsize=(6, 3))
+    fig, ax = plt.subplots(figsize=(5, 3))
     ax.plot(x, train_loss, label='train', linewidth=1.5)
     if has_eval:
         eval_loss = [e['eval']['loss_per_sample'] for e in epochs]
