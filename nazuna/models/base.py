@@ -115,7 +115,7 @@ class BasicBaseModel(BaseModel):
         self.seq_len = seq_len
         self.pred_len = pred_len
         self.scaler = None
-        self.rescale_loss = False
+        self.rescale_loss = True  # False
 
     def extract_true(self, batch):
         return batch.data_future[:, :self.pred_len]

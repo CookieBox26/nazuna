@@ -150,7 +150,7 @@ class TimeSeriesDataManager:
         else:
             cols += [col for col in df.columns if col != self.colname_timestamp]
         self.cols_org = cols
-        df = df.loc[:, [self.colname_timestamp] + cols]
+        df = df.loc[:, [self.colname_timestamp] + cols].copy()
         self.n_channel = len(df.columns) - 1
         self.cols = [f'y{i}' for i in range(self.n_channel)]
         df.columns = ['timestamp'] + self.cols

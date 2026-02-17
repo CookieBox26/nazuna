@@ -178,10 +178,16 @@ class EvalTaskRunner(BaseTaskRunner):
             device=self.device,
         )
 
-    def eval(self, output_loss_per_channel=True):
+    def eval(
+        self,
+        output_loss_per_channel=True,
+        output_scaled_loss=True,
+    ):
         data_loader = self.data_loader_eval
         loss_total = 0.0
+        loss_scaled_total = 0.0
         loss_per_channel_total = None
+        loss_scaled_per_channel_total = None
         sample_saved = False
         self.model.eval()
         with torch.no_grad():
@@ -202,6 +208,30 @@ class EvalTaskRunner(BaseTaskRunner):
                     else:
                         loss_per_channel_total += batch_channel_sum
 
+                if output_scaled_loss:
+                    # batch.data: (batch_size, seq_len, n_channel)
+                    data = batch.data
+                    q2 = data.median(dim=1, keepdim=True).values
+                    q1 = data.quantile(0.25, dim=1, keepdim=True)
+                    q3 = data.quantile(0.75, dim=1, keepdim=True)
+                    iqr = q3 - q1
+                    pred_s = (pred - q2) / iqr
+                    true_s = (true - q2) / iqr
+                    if self.eval_improvement:
+                        baseline_s = (baseline - q2) / iqr
+                        loss_s = self.criterion(baseline_s, pred_s, true_s)
+                    else:
+                        loss_s = self.criterion(pred_s, true_s)
+                    loss_scaled_total += loss_s.batch_sum()
+                    if (output_loss_per_channel
+                            and loss_s.each_sample_channel is not None):
+                        batch_channel_sum_s = \
+                            loss_s.each_sample_channel.sum(dim=0)
+                        if loss_scaled_per_channel_total is None:
+                            loss_scaled_per_channel_total = batch_channel_sum_s
+                        else:
+                            loss_scaled_per_channel_total += batch_channel_sum_s
+
                 if not sample_saved:
                     save_data = {
                         'pred': pred[0].cpu().numpy(),
@@ -219,6 +249,17 @@ class EvalTaskRunner(BaseTaskRunner):
             'loss_total': loss_total,
             'loss_per_sample': loss_total / n_sample,
         }
+
+        if output_scaled_loss:
+            result['loss_scaled_total'] = loss_scaled_total
+            result['loss_scaled_per_sample'] = loss_scaled_total / n_sample
+            if loss_scaled_per_channel_total is not None:
+                loss_scaled_per_channel = (
+                    loss_scaled_per_channel_total / n_sample
+                ).cpu().tolist()
+                result['loss_scaled_per_channel'] = dict(
+                    zip(self.dm.cols, loss_scaled_per_channel),
+                )
 
         if loss_per_channel_total is not None:
             loss_per_channel = (loss_per_channel_total / n_sample).cpu().tolist()
@@ -364,7 +405,7 @@ class TrainTaskRunner(EvalTaskRunner):
                 loss_history.append(epoch_record)
                 continue
 
-            loss_eval = self.eval(output_loss_per_channel=False)
+            loss_eval = self.eval(output_loss_per_channel=False, output_scaled_loss=False)
             epoch_record['eval'] = loss_eval
             loss_history.append(epoch_record)
             loss_per_sample_eval = loss_eval['loss_per_sample']

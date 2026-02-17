@@ -7,7 +7,7 @@ and outputs predictions through linear transformation.
 
 from abc import abstractmethod
 from nazuna.models.base import BasicBaseModel
-from nazuna.criteria import TimeSeriesError
+from nazuna.scaler import IqrScaler
 import torch
 import torch.nn as nn
 import numpy as np
@@ -107,69 +107,44 @@ class BaseCircular(BasicBaseModel):
         v = self.linear(v)  # [batch, pred_len, n_channel]
         return v, {}
 
-    @abstractmethod
-    def extract_input(self, batch):
-        pass
-
-    @abstractmethod
-    def extract_target(self, batch):
-        pass
-
-    @abstractmethod
-    def predict(self, batch):
-        pass
-
-    def get_loss(self, batch, criterion) -> TimeSeriesError:
-        input_ = self.extract_input(batch)
-        target = self.extract_target(batch)
-        output, info = self(input_)
-        loss = criterion(output, target)
-        loss.info.update(info)
-        return loss
-
-    def get_loss_and_backward(self, batch, criterion) -> TimeSeriesError:
-        loss = self.get_loss(batch, criterion)
-        loss.batch_mean.backward()
-        return loss
-
-    def get_error(self, batch, criterion) -> TimeSeriesError:
-        return self.get_loss(batch, criterion)
+    def _extract_input(self, batch):
+        # Input is future timesteps, not data; no scaling needed.
+        return batch.tste_future[:, :self.pred_len]
 
 
 class Circular(BaseCircular):
-    def _setup(self, seq_len: int, pred_len: int, n_channel: int, periods: list[int]) -> None:
+    def _setup(
+        self,
+        seq_len: int,
+        pred_len: int,
+        n_channel: int,
+        periods: list[int],
+        quantile_mode_train: str,
+        quantile_mode_eval: str,
+    ) -> None:
         """
         Args:
-            seq_len: Input sequence length (not used by this model, but required for interface consistency)
+            seq_len: Input sequence length (not used by this model,
+                but required for interface consistency)
             pred_len: Prediction length
             n_channel: Number of output channels
             periods: List of periods to use (default: [2, 3, ..., 24])
+            quantile_mode_train: Source of quantiles for scaling during
+                training ('full', 'cum', or 'rolling')
+            quantile_mode_eval: Source of quantiles for scaling during
+                evaluation ('full', 'cum', 'rolling', or 'saved')
         """
         super()._setup(seq_len, pred_len, n_channel, periods)
+        self.scaler = IqrScaler(quantile_mode_train, quantile_mode_eval)
 
     def __init__(self, device, **kwargs):
         super().__init__(device, **kwargs)
         self._init_helper_and_linear(device)
         self.to(device)
 
-    def extract_input(self, batch):
-        """
-        Extract input (future timesteps) from batch.
-
-        The Circular model uses future timesteps as input, not past data.
-        """
-        return batch.tste_future[:, :self.pred_len]
-
-    def extract_target(self, batch):
-        """
-        Extract target values from batch.
-        """
-        return batch.data_future[:, :self.pred_len]
-
     def predict(self, batch):
-        """
-        Run prediction and return output.
-        """
-        input_ = self.extract_input(batch)
-        output, _ = self(input_)
-        return output
+        input_ = self._extract_input(batch)
+        output, info = self(input_)
+        if self.scaler:
+            output = self.scaler.rescale(output, batch)
+        return output, info

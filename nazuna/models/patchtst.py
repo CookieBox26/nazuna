@@ -39,26 +39,36 @@ class PatchTST(BasicBaseModel):
         pred_len: int,
         quantile_mode_train: str,
         quantile_mode_eval: str,
+        patch_len: int = 8,
+        stride: int = 4,
+        d_model: int = 32,
+        n_heads: int = 2,
+        n_layers: int = 2,
+        d_ff: int = 128,
+        dropout: float = 0.1,
     ) -> None:
         """
         Args:
             seq_len: Input sequence length (must be >= `patch_len`)
             pred_len: Prediction length
             quantile_mode: Source of quantiles for scaling ('full', 'cum', or 'rolling')
-
-        Note:
-            Fixed architecture parameters: `patch_len=8`, `stride=4`, `d_model=32`,
-            `n_heads=2`, `n_layers=2`, `d_ff=128`, `dropout=0.1`
+            patch_len: Length of each patch
+            stride: Stride for patch extraction
+            d_model: Dimension of the model
+            n_heads: Number of attention heads
+            n_layers: Number of Transformer encoder layers
+            d_ff: Dimension of the feedforward network
+            dropout: Dropout rate
         """
         super()._setup(seq_len, pred_len)
 
-        self.patch_len = 8
-        self.stride = 4
-        self.d_model = 32
-        self.n_heads = 2
-        self.n_layers = 2
-        self.d_ff = 128
-        self.dropout = 0.1
+        self.patch_len = patch_len
+        self.stride = stride
+        self.d_model = d_model
+        self.n_heads = n_heads
+        self.n_layers = n_layers
+        self.d_ff = d_ff
+        self.dropout = dropout
         self.use_layernorm_patch = True
         self.pool = 'last'  # 'last' or 'mean'
 

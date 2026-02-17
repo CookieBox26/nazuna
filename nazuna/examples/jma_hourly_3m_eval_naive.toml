@@ -1,15 +1,15 @@
-out_dir = "./out/jma_hourly_3m_eval_sa"
+out_dir = "./out/jma_hourly_3m_eval_naive"
 exist_ok = true
 
 [data]
 path = [ "jma", "weather_japan_hourly_2025-09-01_2025-12-31_27_blocks.csv",]
 colname_timestamp = "timestamp"
-seq_len = 96  # 24 * 4
+seq_len = 97  # 24 * 4 + 1
 pred_len = 24
 
 [[tasks]]
 task_type = "eval"
-name = "Eval SimpleAverage (seq_len=96)"
+name = "Eval SimpleAverage"
 data_range_eval = [ 0.8, 1.0,]
 criterion_cls_path = "nazuna.criteria.MAE"
 criterion_params = { n_channel = 27, pred_len = 24 }
@@ -18,9 +18,9 @@ model_params = { seq_len = 96, pred_len = 24, period_len = 24 }
 
 [[tasks]]
 task_type = "eval"
-name = "Eval SimpleAverage (seq_len=72)"
+name = "Eval SimpleDiffAverage"
 data_range_eval = [ 0.8, 1.0,]
 criterion_cls_path = "nazuna.criteria.MAE"
 criterion_params = { n_channel = 27, pred_len = 24 }
-model_cls_path = "nazuna.models.simple_average.SimpleAverage"
-model_params = { seq_len = 72, pred_len = 24, period_len = 24 }
+model_cls_path = "nazuna.models.simple_average.SimpleDiffAverage"
+model_params = { seq_len = 97, pred_len = 24, period_len = 24 }

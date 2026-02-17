@@ -8,7 +8,7 @@ import toml
 
 plt.rcParams['svg.fonttype'] = 'path'  # convert text to paths for consistent rendering
 plt.rcParams['svg.hashsalt'] = ''  # to make the IDs deterministic
-plt.rcParams['font.size'] = 12
+plt.rcParams['font.size'] = 13
 
 
 def _plot_sample(sample_path: Path, graph_path: Path) -> None:
@@ -133,6 +133,9 @@ def report(
                 rel_path = graph_path.relative_to(report_path.parent)
                 f.write(f'![pred]({rel_path.as_posix()})\n\n')
 
+            result = toml.loads(
+                (task_runner.out_path / 'result.toml').read_text(encoding='utf8'),
+            )
             f.write('```toml\n')
-            f.write(toml.dumps(task_runner.result))
+            f.write(toml.dumps(result))
             f.write('```\n')
