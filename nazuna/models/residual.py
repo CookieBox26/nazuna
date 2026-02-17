@@ -74,10 +74,21 @@ class ResidualModel2(ResidualModel):
 
     def _setup(
         self,
+        seq_len: int,
+        pred_len: int,
+        quantile_mode_train: str,
+        quantile_mode_eval: str,
+        naive_model_cls_path: str,
+        naive_model_params: dict,
+        neural_model_cls_path: str,
+        neural_model_params: dict,
         n_channel: int,
-        **kwargs,
     ) -> None:
-        super()._setup(**kwargs)
+        super()._setup(
+            seq_len, pred_len, quantile_mode_train, quantile_mode_eval,
+            naive_model_cls_path, naive_model_params,
+            neural_model_cls_path, neural_model_params,
+        )
         self.w_naive = nn.Parameter(torch.full((n_channel,), 0.5))
 
     def forward(self, x):
