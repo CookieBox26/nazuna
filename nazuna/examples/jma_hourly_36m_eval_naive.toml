@@ -1,30 +1,29 @@
-out_dir = "./out/jma_daily_eval_naive"
+out_dir = "./out/jma_hourly_36m_eval_naive"
 exist_ok = true
 
 [data]
-path = [ "jma", "weather_japan_daily_2025-01-01_2025-12-31_2_blocks.csv",]
-colname_timestamp = "date"
-seq_len = 29
-pred_len = 7
-white_list = [ "temp_avg_nagoya", "temp_avg_fukuoka",]
+path = [ "jma", "weather_japan_hourly_2023-01-01_2025-12-31_11_blocks.csv",]
+colname_timestamp = "timestamp"
+seq_len = 97  # 24 * 4 + 1
+pred_len = 24
 
 [[tasks]]
 task_type = "eval"
 name = "Eval SimpleAverage"
 data_range_eval = [ 0.8, 1.0,]
 criterion_cls_path = "nazuna.criteria.MAE"
-criterion_params = { n_channel = 2, pred_len = 7 }
+criterion_params = { n_channel = 11, pred_len = 24 }
 model_cls_path = "nazuna.models.simple_average.SimpleAverage"
-model_params = { seq_len = 28, pred_len = 7, period_len = 7 }
+model_params = { seq_len = 96, pred_len = 24, period_len = 24 }
 
 [[tasks]]
 task_type = "eval"
 name = "Eval SimpleDiffAverage"
 data_range_eval = [ 0.8, 1.0,]
 criterion_cls_path = "nazuna.criteria.MAE"
-criterion_params = { n_channel = 2, pred_len = 7 }
+criterion_params = { n_channel = 11, pred_len = 24 }
 model_cls_path = "nazuna.models.simple_average.SimpleDiffAverage"
-model_params = { seq_len = 29, pred_len = 7, period_len = 7 }
+model_params = { seq_len = 97, pred_len = 24, period_len = 24 }
 
 [[tasks]]
 task_type = "train"
@@ -32,15 +31,13 @@ name = "Train Circular"
 data_range_train = [ 0.0, 0.8,]
 data_range_eval = [ 0.8, 1.0,]
 criterion_cls_path = "nazuna.criteria.MAE"
-criterion_params = { n_channel = 2, pred_len = 7 }
+criterion_params = { n_channel = 11, pred_len = 24 }
 model_cls_path = "nazuna.models.circular.Circular"
-model_params = { seq_len = 29, pred_len = 7, n_channel = 2, periods = [ 1,2,7,14,28, ], quantile_mode_train = "full", quantile_mode_eval = "saved" }
+model_params = { seq_len = 97, pred_len = 24, n_channel = 11, periods = [ 1,2,3,4,6,12,24,48,96,], quantile_mode_train = "full", quantile_mode_eval = "saved" }
 batch_sampler_cls_path = "nazuna.batch_sampler.BatchSamplerShuffle"
 batch_sampler_params = { batch_size = 16 }
 optimizer_cls_path = "torch.optim.Adam"
 optimizer_params = { lr = 0.001 }
-lr_scheduler_cls_path = "torch.optim.lr_scheduler.CosineAnnealingLR"
-lr_scheduler_params = { T_max = 5 }
 n_epoch = 5
 
 [[tasks]]
@@ -48,7 +45,7 @@ task_type = "eval"
 name = "Eval Circular"
 data_range_eval = [ 0.8, 1.0,]
 criterion_cls_path = "nazuna.criteria.MAE"
-criterion_params = { n_channel = 2, pred_len = 7 }
+criterion_params = { n_channel = 11, pred_len = 24 }
 model_cls_path = "nazuna.models.circular.Circular"
-model_params = { seq_len = 29, pred_len = 7, n_channel = 2, periods = [ 1,2,7,14,28, ], quantile_mode_train = "full", quantile_mode_eval = "saved" }
+model_params = { seq_len = 97, pred_len = 24, n_channel = 11, periods = [ 1,2,3,4,6,12,24,48,96,], quantile_mode_train = "full", quantile_mode_eval = "saved" }
 model_state = { task_name = "Train Circular" }

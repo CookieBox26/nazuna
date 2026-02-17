@@ -1,35 +1,35 @@
-out_dir = "./out/jma_daily_train_savd"
+out_dir = "./out/jma_daily_train_dlinear"
 exist_ok = true
 
 [data]
 path = [ "jma", "weather_japan_daily_2025-01-01_2025-12-31_2_blocks.csv",]
 colname_timestamp = "date"
-seq_len = 28
+seq_len = 29
 pred_len = 7
 white_list = [ "temp_avg_nagoya", "temp_avg_fukuoka",]
 
 [[tasks]]
 task_type = "eval"
-name = "Eval SimpleAverage"
+name = "Eval SimpleDiffAverage"
 data_range_eval = [ 0.8, 1.0,]
 criterion_cls_path = "nazuna.criteria.MAE"
 criterion_params = { n_channel = 2, pred_len = 7 }
-model_cls_path = "nazuna.models.simple_average.SimpleAverage"
-model_params = { seq_len = 28, pred_len = 7, period_len = 7 }
+model_cls_path = "nazuna.models.simple_average.SimpleDiffAverage"
+model_params = { seq_len = 29, pred_len = 7, period_len = 7 }
 
 [[tasks]]
 task_type = "train"
-name = "Pilot SimpleAverageVariableDecay"
+name = "Pilot DLinear"
 data_range_train = [ 0.0, 0.6,]
 data_range_eval = [ 0.6, 0.8,]
 criterion_cls_path = "nazuna.criteria.MAE"
 criterion_params = { n_channel = 2, pred_len = 7 }
-model_cls_path = "nazuna.models.simple_average.SimpleAverageVariableDecay"
-model_params = { seq_len = 28, pred_len = 7, period_len = 7 }
+model_cls_path = "nazuna.models.dlinear.DLinear"
+model_params = { seq_len = 29, pred_len = 7, kernel_size = 25, bias = true, quantile_mode_train = "full", quantile_mode_eval = "saved" }
 batch_sampler_cls_path = "nazuna.batch_sampler.BatchSamplerShuffle"
 batch_sampler_params = { batch_size = 32 }
 optimizer_cls_path = "torch.optim.Adam"
-optimizer_params = { lr = 0.01 }
+optimizer_params = { lr = 0.001 }
 lr_scheduler_cls_path = "torch.optim.lr_scheduler.CosineAnnealingLR"
 lr_scheduler_params = { T_max = 20 }
 n_epoch = 20
@@ -37,38 +37,38 @@ early_stop = true
 
 [[tasks]]
 task_type = "train"
-name = "Train SimpleAverageVariableDecay"
+name = "Train DLinear"
 data_range_train = [ 0.0, 0.8,]
 criterion_cls_path = "nazuna.criteria.MAE"
 criterion_params = { n_channel = 2, pred_len = 7 }
-model_cls_path = "nazuna.models.simple_average.SimpleAverageVariableDecay"
-model_params = { seq_len = 28, pred_len = 7, period_len = 7 }
+model_cls_path = "nazuna.models.dlinear.DLinear"
+model_params = { seq_len = 29, pred_len = 7, kernel_size = 25, bias = true, quantile_mode_train = "full", quantile_mode_eval = "saved" }
 batch_sampler_cls_path = "nazuna.batch_sampler.BatchSamplerShuffle"
 batch_sampler_params = { batch_size = 32 }
 optimizer_cls_path = "torch.optim.Adam"
-optimizer_params = { lr = 0.01 }
+optimizer_params = { lr = 0.001 }
 lr_scheduler_cls_path = "torch.optim.lr_scheduler.CosineAnnealingLR"
 lr_scheduler_params = { T_max = 20 }
-n_epoch = { task_name = "Pilot SimpleAverageVariableDecay" }
+n_epoch = { task_name = "Pilot DLinear" }
 
 [[tasks]]
 task_type = "eval"
-name = "Eval SimpleAverageVariableDecay"
+name = "Eval DLinear"
 data_range_eval = [ 0.8, 1.0,]
 criterion_cls_path = "nazuna.criteria.MAE"
 criterion_params = { n_channel = 2, pred_len = 7 }
-model_cls_path = "nazuna.models.simple_average.SimpleAverageVariableDecay"
-model_params = { seq_len = 28, pred_len = 7, period_len = 7 }
-model_state = { task_name = "Train SimpleAverageVariableDecay" }
+model_cls_path = "nazuna.models.dlinear.DLinear"
+model_params = { seq_len = 29, pred_len = 7, kernel_size = 25, bias = true, quantile_mode_train = "full", quantile_mode_eval = "saved" }
+model_state = { task_name = "Train DLinear" }
 
 [[tasks]]
 task_type = "eval"
-name = "Eval SimpleAverageVariableDecay (ImprovementRate)"
+name = "Eval DLinear (ImprovementRate)"
 data_range_eval = [ 0.8, 1.0,]
 criterion_cls_path = "nazuna.criteria.ImprovementRate"
 criterion_params = { n_channel = 2, pred_len = 7, error_type = "mae" }
-baseline_model_cls_path = "nazuna.models.simple_average.SimpleAverage"
-baseline_model_params = { seq_len = 28, pred_len = 7, period_len = 7 }
-model_cls_path = "nazuna.models.simple_average.SimpleAverageVariableDecay"
-model_params = { seq_len = 28, pred_len = 7, period_len = 7 }
-model_state = { task_name = "Train SimpleAverageVariableDecay" }
+baseline_model_cls_path = "nazuna.models.simple_average.SimpleDiffAverage"
+baseline_model_params = { seq_len = 29, pred_len = 7, period_len = 7 }
+model_cls_path = "nazuna.models.dlinear.DLinear"
+model_params = { seq_len = 29, pred_len = 7, kernel_size = 25, bias = true, quantile_mode_train = "full", quantile_mode_eval = "saved" }
+model_state = { task_name = "Train DLinear" }

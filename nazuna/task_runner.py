@@ -324,6 +324,7 @@ class TrainTaskRunner(EvalTaskRunner):
     n_epoch_path: str | Path = None
     n_epoch_path_defer: bool = False
     early_stop: bool = False
+    patience: int = 5
 
     def __post_init__(self):
         super().__post_init__()
@@ -419,7 +420,7 @@ class TrainTaskRunner(EvalTaskRunner):
                 torch.save(self.model.state_dict(), self.out_path / 'model_state.pth')
             else:
                 early_stop_counter += 1
-            if (self.early_stop) and (early_stop_counter >= 5):
+            if (self.early_stop) and (early_stop_counter >= self.patience):
                 stop = True
             if stop:
                 break

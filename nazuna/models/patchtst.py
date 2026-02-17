@@ -39,13 +39,13 @@ class PatchTST(BasicBaseModel):
         pred_len: int,
         quantile_mode_train: str,
         quantile_mode_eval: str,
-        patch_len: int = 8,
-        stride: int = 4,
-        d_model: int = 32,
-        n_heads: int = 2,
-        n_layers: int = 2,
-        d_ff: int = 128,
-        dropout: float = 0.1,
+        patch_len: int = 16,
+        stride: int = 8,
+        d_model: int = 128,
+        n_heads: int = 16,
+        n_layers: int = 3,
+        d_ff: int = 256,
+        dropout: float = 0.2,
     ) -> None:
         """
         Args:
