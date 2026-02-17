@@ -237,11 +237,26 @@ class EvalTaskRunner(BaseTaskRunner):
                         'pred': pred[0].cpu().numpy(),
                         'data': batch.data[0].cpu().numpy(),
                         'data_future': batch.data_future[0].cpu().numpy(),
+                        'sample_index': np.array(i_batch * self.batch_size_eval),
+                        'timestamp': np.array(str(batch.tsta[0, -1])),
                     }
                     if baseline is not None:
                         save_data['baseline'] = baseline[0].cpu().numpy()
-                    np.savez(self.out_path / 'pred_0_0.npz', **save_data)
+                    np.savez(self.out_path / 'pred_first.npz', **save_data)
                     sample_saved = True
+
+                last_in_batch = pred.shape[0] - 1
+                last_save_data = {
+                    'pred': pred[-1].cpu().numpy(),
+                    'data': batch.data[-1].cpu().numpy(),
+                    'data_future': batch.data_future[-1].cpu().numpy(),
+                    'sample_index': np.array(i_batch * self.batch_size_eval + last_in_batch),
+                    'timestamp': np.array(str(batch.tsta[last_in_batch, -1])),
+                }
+                if baseline is not None:
+                    last_save_data['baseline'] = baseline[-1].cpu().numpy()
+
+        np.savez(self.out_path / 'pred_last.npz', **last_save_data)
 
         n_sample = data_loader.dataset.n_sample
         result = {

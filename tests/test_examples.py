@@ -9,6 +9,7 @@ from nazuna.examples import run_example
         pytest.param('jma_daily_train_dlinear'),
         pytest.param('jma_daily_train_dlinearc'),
         pytest.param('jma_daily_train_patchtst'),
+        pytest.param('jma_daily_train_residual'),
         pytest.param('jma_daily_optuna_savd'),
         pytest.param('jma_hourly_3m_diag'),
         pytest.param('jma_hourly_3m_eval_naive', marks=pytest.mark.slow),

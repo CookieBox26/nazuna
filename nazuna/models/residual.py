@@ -62,6 +62,7 @@ class ResidualModel(BasicBaseModel):
         return naive_out + neural_out, {}
 
     def predict(self, batch):
-        input_ = self.scaler.scale(batch.data[:, -self.seq_len:, :], batch)
-        output, _ = self(input_)
-        return self.scaler.rescale(output, batch)
+        input_ = self._extract_input(batch)
+        output, info = self(input_)
+        output = self.scaler.rescale(output, batch)
+        return output, info

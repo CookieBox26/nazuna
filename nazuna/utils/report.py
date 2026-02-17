@@ -37,11 +37,17 @@ def _plot_sample(sample_path: Path, graph_path: Path) -> None:
 
 def _plot_pred(pred_path: Path, graph_path: Path) -> None:
     """Plot prediction vs true (and baseline if available) for the first channel."""
-    npz = np.load(pred_path)
+    npz = np.load(pred_path, allow_pickle=True)
     data = npz['data'][:, 0]
     data_future = npz['data_future'][:, 0]
     pred = npz['pred'][:, 0]
     has_baseline = 'baseline' in npz.files
+
+    title = None
+    if 'sample_index' in npz.files:
+        sample_idx = int(npz['sample_index'])
+        ts = str(npz['timestamp'])
+        title = f'Eval sample {sample_idx} ({ts})'
 
     seq_len = len(data)
     pred_len = len(pred)
@@ -60,6 +66,8 @@ def _plot_pred(pred_path: Path, graph_path: Path) -> None:
     ax.plot(x_pred, pred, label='pred', color='tab:blue', linewidth=2)
     ax.axvline(x=seq_len - 1, color='tab:red', linewidth=1)
 
+    if title is not None:
+        ax.set_title(title, fontsize=13)
     ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
     ax.set_xlabel('step')
     ax.set_ylabel('y0')
@@ -126,12 +134,19 @@ def report(
                 rel_path = graph_path.relative_to(report_path.parent)
                 f.write(f'![train_loss]({rel_path.as_posix()})\n\n')
 
-            pred_path = task_runner.out_path / 'pred_0_0.npz'
+            pred_path = task_runner.out_path / 'pred_first.npz'
             if pred_path.exists():
-                graph_path = task_runner.out_path / 'pred_0_0.svg'
+                graph_path = task_runner.out_path / 'pred_first.svg'
                 _plot_pred(pred_path, graph_path)
                 rel_path = graph_path.relative_to(report_path.parent)
                 f.write(f'![pred]({rel_path.as_posix()})\n\n')
+
+            pred_last_path = task_runner.out_path / 'pred_last.npz'
+            if pred_last_path.exists():
+                graph_last_path = task_runner.out_path / 'pred_last.svg'
+                _plot_pred(pred_last_path, graph_last_path)
+                rel_path = graph_last_path.relative_to(report_path.parent)
+                f.write(f'![pred_last]({rel_path.as_posix()})\n\n')
 
             result = toml.loads(
                 (task_runner.out_path / 'result.toml').read_text(encoding='utf8'),
