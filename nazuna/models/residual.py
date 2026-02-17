@@ -3,6 +3,7 @@ import torch.nn as nn
 from nazuna.models.base import BasicBaseModel
 from nazuna.scaler import IqrScaler
 from nazuna import load_class
+from nazuna.criteria import TimeSeriesError
 
 
 def _make_concrete(cls):
@@ -21,7 +22,6 @@ class ResidualModel(BasicBaseModel):
 
     Both sub-models receive the same scaled input and their outputs are summed.
     """
-
     def _setup(
         self,
         seq_len: int,
@@ -71,7 +71,6 @@ class ResidualModel(BasicBaseModel):
 
 
 class ResidualModel2(ResidualModel):
-
     def _setup(
         self,
         seq_len: int,
@@ -103,4 +102,26 @@ class ResidualModel2(ResidualModel):
         # w_naive: (n_channel,) -> (1, 1, n_channel)
         w = self.w_naive.unsqueeze(0).unsqueeze(0)
         output = w * naive_out + (1 - w) * neural_out
-        return output, {}
+        return output, {'naive': naive_out}
+
+
+class ResidualModel3(ResidualModel2):
+    def get_loss_and_backward(self, batch, criterion) -> TimeSeriesError:
+        input_ = self._extract_input(batch)
+        output, info = self.forward(input_)
+        target = self.extract_true(batch)
+
+        output = self.scaler.rescale(output, batch)
+        naive = self.scaler.rescale(info['naive'], batch)
+
+        loss_model = criterion(output, target)
+        loss_naive = criterion(naive, target)
+        loss_model_sc = loss_model.each_sample_channel  # batch_size, n_channel
+        loss_naive_sc = loss_naive.each_sample_channel  # batch_size, n_channel
+        penalty_sc = torch.clamp(loss_model_sc - loss_naive_sc, min=0.0)
+
+        alpha = 2.0
+        loss_sc = loss_model_sc + alpha * penalty_sc
+        loss = loss_sc.mean()
+        loss.backward()
+        return loss_model
