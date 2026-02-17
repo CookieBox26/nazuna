@@ -1,3 +1,5 @@
+import math
+
 from nazuna.models.base import BasicBaseModel
 from nazuna.scaler import IqrScaler
 import torch
@@ -70,4 +72,58 @@ class DLinear(BasicBaseModel):
         trend_output = self.Linear_Trend(trend_init)
         x = seasonal_output + trend_output
         x = x.permute(0, 2, 1)  # to [Batch, Output length, Channel]
+        return x, {'seasonal': seasonal_output, 'trend': trend_output}
+
+
+class DLinearChannelwise(BasicBaseModel):
+    def _setup(
+        self,
+        seq_len: int,
+        pred_len: int,
+        n_channel: int,
+        kernel_size: int,
+        bias: bool,
+        quantile_mode_train: str,
+        quantile_mode_eval: str,
+        n_moving_avg: int = 1,
+    ) -> None:
+        super()._setup(seq_len, pred_len)
+        self.n_channel = n_channel
+        self.decompsition = series_decomp(kernel_size, n_moving_avg)
+
+        # [n_channel, seq_len, pred_len]
+        self.seasonal_weight = nn.Parameter(
+            torch.empty(n_channel, seq_len, pred_len)
+        )
+        self.trend_weight = nn.Parameter(
+            torch.empty(n_channel, seq_len, pred_len)
+        )
+        nn.init.kaiming_uniform_(self.seasonal_weight, a=math.sqrt(5))
+        nn.init.kaiming_uniform_(self.trend_weight, a=math.sqrt(5))
+        if bias:
+            self.seasonal_bias = nn.Parameter(torch.zeros(n_channel, pred_len))
+            self.trend_bias = nn.Parameter(torch.zeros(n_channel, pred_len))
+        else:
+            self.seasonal_bias = None
+            self.trend_bias = None
+
+        self.scaler = IqrScaler(quantile_mode_train, quantile_mode_eval)
+
+    def forward(self, x):
+        # x: [Batch, seq_len, n_channel]
+        seasonal_init, trend_init = self.decompsition(x)
+
+        # [Batch, n_channel, seq_len]
+        seasonal_init = seasonal_init.permute(0, 2, 1)
+        trend_init = trend_init.permute(0, 2, 1)
+
+        # einsum: (B, C, S) x (C, S, P) -> (B, C, P)
+        seasonal_output = torch.einsum('bcs,csp->bcp', seasonal_init, self.seasonal_weight)
+        trend_output = torch.einsum('bcs,csp->bcp', trend_init, self.trend_weight)
+        if self.seasonal_bias is not None:
+            seasonal_output = seasonal_output + self.seasonal_bias
+            trend_output = trend_output + self.trend_bias
+
+        x = seasonal_output + trend_output
+        x = x.permute(0, 2, 1)  # to [Batch, pred_len, n_channel]
         return x, {'seasonal': seasonal_output, 'trend': trend_output}
