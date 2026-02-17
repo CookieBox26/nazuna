@@ -119,3 +119,37 @@ class PatchTST(BasicBaseModel):
         yhat = yhat.view(B, C, self.pred_len)  # [B, C, H]
         yhat = yhat.transpose(1, 2)  # [B, H, C]
         return yhat, {}
+
+
+class DiffPatchTST(PatchTST):
+    def _setup(
+        self,
+        seq_len: int,
+        pred_len: int,
+        quantile_mode_train: str,
+        quantile_mode_eval: str,
+        patch_len: int = 16,
+        stride: int = 8,
+        d_model: int = 128,
+        n_heads: int = 16,
+        n_layers: int = 3,
+        d_ff: int = 256,
+        dropout: float = 0.2,
+    ) -> None:
+        # After first-order differencing, length becomes seq_len - 1.
+        diff_seq_len = seq_len - 1
+        super()._setup(
+            diff_seq_len, pred_len,
+            quantile_mode_train, quantile_mode_eval,
+            patch_len, stride, d_model, n_heads,
+            n_layers, d_ff, dropout,
+        )
+        # Restore original seq_len for _extract_input slicing.
+        self.seq_len = seq_len
+
+    def forward(self, x):  # x: [B, seq_len, C] (scaled)
+        last_val = x[:, -1:, :]  # [B, 1, C]
+        dx = x[:, 1:, :] - x[:, :-1, :]  # [B, seq_len-1, C]
+        pred_dx, info = super().forward(dx)  # [B, pred_len, C]
+        pred = last_val + torch.cumsum(pred_dx, dim=1)
+        return pred, info
