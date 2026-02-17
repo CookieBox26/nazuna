@@ -1,5 +1,5 @@
 from nazuna.data_manager import TimeSeriesDataset
-from nazuna.models.residual import ResidualModel
+from nazuna.models.residual import ResidualModel, ResidualModel2
 from nazuna.criteria import MSE
 import torch
 
@@ -76,3 +76,52 @@ def test_get_loss(device):
     )
     criterion = MSE.create(device, n_channel=3, pred_len=4)
     loss = model.get_loss(batch, criterion)
+
+
+def test_residual_model2_forward(device):
+    n_channel = 3
+    model = ResidualModel2.create(
+        device=device,
+        n_channel=n_channel,
+        seq_len=96,
+        pred_len=24,
+        quantile_mode_train='full',
+        quantile_mode_eval='saved',
+        naive_model_cls_path=(
+            'nazuna.models.simple_average.SimpleAverage'
+        ),
+        naive_model_params={
+            'seq_len': 96, 'pred_len': 24,
+            'period_len': 24, 'decay_rate': 1.0,
+        },
+        neural_model_cls_path='nazuna.models.dlinear.DLinear',
+        neural_model_params={
+            'seq_len': 96, 'pred_len': 24,
+            'kernel_size': 25, 'bias': True,
+            'quantile_mode_train': 'full',
+            'quantile_mode_eval': 'saved',
+        },
+    )
+    assert list(model.w_naive.size()) == [n_channel]
+
+    batch = torch.randn(2, 96, n_channel, device=device)
+    output, _ = model(batch)
+    assert list(output.size()) == [2, 24, n_channel]
+
+    # w_naive=1 -> output == naive_out
+    with torch.no_grad():
+        model.w_naive.fill_(1.0)
+        out_w1, _ = model(batch)
+        naive_out = model.naive_model(batch)
+        if isinstance(naive_out, tuple):
+            naive_out = naive_out[0]
+        assert torch.allclose(out_w1, naive_out)
+
+    # w_naive=0 -> output == neural_out
+    with torch.no_grad():
+        model.w_naive.fill_(0.0)
+        out_w0, _ = model(batch)
+        neural_out = model.neural_model(batch)
+        if isinstance(neural_out, tuple):
+            neural_out = neural_out[0]
+        assert torch.allclose(out_w0, neural_out)

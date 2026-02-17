@@ -1,3 +1,5 @@
+import torch
+import torch.nn as nn
 from nazuna.models.base import BasicBaseModel
 from nazuna.scaler import IqrScaler
 from nazuna import load_class
@@ -36,9 +38,9 @@ class ResidualModel(BasicBaseModel):
             seq_len: Input sequence length
             pred_len: Prediction length
             quantile_mode: Source of quantiles for scaling ('full', 'cum', or 'rolling')
-            naive_model_cls_path: Class path for the naive model (e.g., 'nazuna.models.simple_average.BaseSimpleAverage')
+            naive_model_cls_path: Class path for the naive model (e.g., 'nazuna.models.simple_average.SimpleAverage')
             naive_model_params: Parameters for the naive model
-            neural_model_cls_path: Class path for the neural model (e.g., 'nazuna.models.dlinear.BaseDLinear')
+            neural_model_cls_path: Class path for the neural model (e.g., 'nazuna.models.dlinear.DLinear')
             neural_model_params: Parameters for the neural model
         """
         super()._setup(seq_len, pred_len)
@@ -66,3 +68,28 @@ class ResidualModel(BasicBaseModel):
         output, info = self(input_)
         output = self.scaler.rescale(output, batch)
         return output, info
+
+
+class ResidualModel2(ResidualModel):
+
+    def _setup(
+        self,
+        n_channel: int,
+        **kwargs,
+    ) -> None:
+        super()._setup(**kwargs)
+        self.w_naive = nn.Parameter(torch.full((n_channel,), 0.5))
+
+    def forward(self, x):
+        naive_out = self.naive_model(x)
+        if isinstance(naive_out, tuple):
+            naive_out = naive_out[0]
+
+        neural_out = self.neural_model(x)
+        if isinstance(neural_out, tuple):
+            neural_out = neural_out[0]
+
+        # w_naive: (n_channel,) -> (1, 1, n_channel)
+        w = self.w_naive.unsqueeze(0).unsqueeze(0)
+        output = w * naive_out + (1 - w) * neural_out
+        return output, {}
