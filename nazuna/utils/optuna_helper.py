@@ -26,7 +26,7 @@ class OptunaHelper:
                   - ['log_uniform', low, high]: Log-uniform float
                   - ['uniform', low, high]: Uniform float
                   - ['int', low, high]: Integer
-                  - ['categorical', choices]: Categorical
+                  - ['categorical', type, choices]: Categorical
 
         Returns:
             Suggested parameter value.
@@ -48,7 +48,13 @@ class OptunaHelper:
                 name, int(spec[1]), int(spec[2]),
             )
         elif method == 'categorical':
-            return trial.suggest_categorical(name, spec[1])
+            type_ = spec[1]
+            choices = spec[2].split(',')
+            if type_ == 'int':
+                choices = [int(c) for c in choices]
+            if type_ == 'float':
+                choices = [float(c) for c in choices]
+            return trial.suggest_categorical(name, choices)
         else:
             raise ValueError(f'Unknown search space method: {method}')
 

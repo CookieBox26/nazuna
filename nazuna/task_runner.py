@@ -556,92 +556,140 @@ class OptunaTaskRunner(BaseTaskRunner):
         self._best_trial_number = None
 
     def _create_objective(self):
+        fail_value = (
+            float('inf') if self.direction == 'minimize'
+            else float('-inf')
+        )
+
         def objective(trial):
-            model_params, optimizer_params, batch_sampler_params = \
-                OptunaHelper.build_params_for_trial(
-                    trial,
-                    self.search_space,
-                    self.model_params,
-                    self.optimizer_params,
-                    self.batch_sampler_params,
+            try:
+                return self._run_trial(trial)
+            except Exception as e:
+                print(
+                    f'[Optuna] Trial {trial.number} failed: '
+                    f'{type(e).__name__}: {e}'
                 )
-
-            losses = []
-            best_model_state_this_trial = None
-            best_loss_this_trial = float('inf')
-
-            for i_fold, data_range in enumerate(self.data_ranges):
-                data_range_train = data_range['train']
-                data_range_eval = data_range['eval']
-
-                runner = TrainTaskRunner(
-                    dm=self.dm,
-                    device=self.device,
-                    name=f'Trial {trial.number} Fold {i_fold}',
-                    out_dir=self.out_path / f'trial_{trial.number}' / f'fold_{i_fold}',
-                    exist_ok=self.exist_ok,
-                    data_range_train=data_range_train,
-                    data_range_eval=data_range_eval,
-                    data_offset_train=self.data_offset_train,
-                    data_rolling_window_train=self.data_rolling_window_train,
-                    data_offset_eval=self.data_offset_eval,
-                    data_rolling_window_eval=self.data_rolling_window_eval,
-                    batch_size_eval=self.batch_size_eval,
-                    criterion_cls_path=self.criterion_cls_path,
-                    criterion_params=self.criterion_params,
-                    model_cls_path=self.model_cls_path,
-                    model_params=model_params,
-                    batch_sampler_cls_path=self.batch_sampler_cls_path,
-                    batch_sampler_params=batch_sampler_params,
-                    optimizer_cls_path=self.optimizer_cls_path,
-                    optimizer_params=optimizer_params,
-                    lr_scheduler_cls_path=self.lr_scheduler_cls_path,
-                    lr_scheduler_params=self.lr_scheduler_params,
-                    n_epoch=self.n_epoch,
-                    early_stop=self.early_stop,
-                )
-                runner.out_path.mkdir(parents=True, exist_ok=True)
-                runner._run()
-                fold_loss = runner.result.get(
-                    'loss_per_sample_eval_best', float('inf'),
-                )
-                losses.append(fold_loss)
-
-                if fold_loss < best_loss_this_trial:
-                    best_loss_this_trial = fold_loss
-                    best_model_state_this_trial = copy.deepcopy(runner.model.state_dict())
-
-            mean_loss = sum(losses) / len(losses)
-
-            if self._best_model_state is None or mean_loss < self.result.get('best_value', float('inf')):
-                self._best_model_state = best_model_state_this_trial
-                self._best_trial_number = trial.number
-
-            return mean_loss
+                self._n_failed += 1
+                return fail_value
 
         return objective
 
+    def _run_trial(self, trial):
+        model_params, optimizer_params, batch_sampler_params = \
+            OptunaHelper.build_params_for_trial(
+                trial,
+                self.search_space,
+                self.model_params,
+                self.optimizer_params,
+                self.batch_sampler_params,
+            )
+
+        losses = []
+        best_model_state_this_trial = None
+        best_loss_this_trial = float('inf')
+
+        for i_fold, data_range in enumerate(self.data_ranges):
+            data_range_train = data_range['train']
+            data_range_eval = data_range['eval']
+
+            runner = TrainTaskRunner(
+                dm=self.dm,
+                device=self.device,
+                name=f'Trial {trial.number} Fold {i_fold}',
+                out_dir=(
+                    self.out_path
+                    / f'trial_{trial.number}'
+                    / f'fold_{i_fold}'
+                ),
+                exist_ok=self.exist_ok,
+                data_range_train=data_range_train,
+                data_range_eval=data_range_eval,
+                data_offset_train=self.data_offset_train,
+                data_rolling_window_train=self.data_rolling_window_train,
+                data_offset_eval=self.data_offset_eval,
+                data_rolling_window_eval=self.data_rolling_window_eval,
+                batch_size_eval=self.batch_size_eval,
+                criterion_cls_path=self.criterion_cls_path,
+                criterion_params=self.criterion_params,
+                model_cls_path=self.model_cls_path,
+                model_params=model_params,
+                batch_sampler_cls_path=self.batch_sampler_cls_path,
+                batch_sampler_params=batch_sampler_params,
+                optimizer_cls_path=self.optimizer_cls_path,
+                optimizer_params=optimizer_params,
+                lr_scheduler_cls_path=self.lr_scheduler_cls_path,
+                lr_scheduler_params=self.lr_scheduler_params,
+                n_epoch=self.n_epoch,
+                early_stop=self.early_stop,
+            )
+            runner.out_path.mkdir(parents=True, exist_ok=True)
+            runner._run()
+            fold_loss = runner.result.get(
+                'loss_per_sample_eval_best', float('inf'),
+            )
+            losses.append(fold_loss)
+
+            if fold_loss < best_loss_this_trial:
+                best_loss_this_trial = fold_loss
+                best_model_state_this_trial = copy.deepcopy(
+                    runner.model.state_dict(),
+                )
+
+        mean_loss = sum(losses) / len(losses)
+
+        if (self._best_model_state is None
+                or mean_loss < self.result.get(
+                    'best_value', float('inf'),
+                )):
+            self._best_model_state = best_model_state_this_trial
+            self._best_trial_number = trial.number
+
+        return mean_loss
+
     def _run(self):
+        self._n_failed = 0
+
         study = optuna.create_study(direction=self.direction)
         study.optimize(self._create_objective(), n_trials=self.n_trials)
 
-        self.result['best_trial_number'] = study.best_trial.number
-        self.result['best_value'] = study.best_value
-        self.result['best_params'] = study.best_params
-        self.result['n_trials'] = len(study.trials)
+        n_total = len(study.trials)
+        n_completed = n_total - self._n_failed
+
+        trial_summary = (
+            f'{n_total} trials: '
+            f'{n_completed} completed, {self._n_failed} failed'
+        )
+        (self.out_path / 'trial_summary.txt').write_text(
+            trial_summary + '\n', newline='\n', encoding='utf8',
+        )
+        print(f'[Optuna] {trial_summary}')
+
+        self.result['n_trials'] = n_total
+        self.result['n_completed'] = n_completed
+        self.result['n_failed'] = self._n_failed
+
+        if n_completed > 0:
+            self.result['best_trial_number'] = study.best_trial.number
+            self.result['best_value'] = study.best_value
+            self.result['best_params'] = study.best_params
 
         trials_history = []
         for t in study.trials:
-            trials_history.append({
+            record = {
                 'number': t.number,
-                'value': t.value,
                 'params': t.params,
                 'state': t.state.name,
-            })
+            }
+            if t.value is not None:
+                record['value'] = t.value
+            trials_history.append(record)
         self.result['trials'] = trials_history
 
         if self._best_model_state is not None:
-            torch.save(self._best_model_state, self.out_path / 'best_model_state.pth')
+            torch.save(
+                self._best_model_state,
+                self.out_path / 'best_model_state.pth',
+            )
 
         with open(self.out_path / 'study.pkl', 'wb') as f:
             pickle.dump(study, f)
