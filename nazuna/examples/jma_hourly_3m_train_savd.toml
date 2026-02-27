@@ -1,77 +1,94 @@
 out_dir = "./out/jma_hourly_3m_train_savd"
 exist_ok = true
 
+# =============== data ===============
 [data]
 path = [ "jma", "weather_japan_hourly_2025-09-01_2025-12-31_27_blocks.csv",]
 colname_timestamp = "timestamp"
 seq_len = 96  # 24 * 4
 pred_len = 24
 
+# =============== definitions ===============
+[definitions.MAE]
+cls_path = "nazuna.criteria.MAE"
+params = { n_channel = 27, pred_len = 24, tolerance = 0.05 }
+
+[definitions.ImprovementRate]
+cls_path = "nazuna.criteria.ImprovementRate"
+params = { n_channel = 27, pred_len = 24, tolerance = 0.05, error_type = "mae" }
+
+[definitions.SimpleAverage]
+cls_path = "nazuna.models.simple_average.SimpleAverage"
+params = { seq_len = 96, pred_len = 24, period_len = 24 }
+
+[definitions.SimpleAverageVariableDecay]
+cls_path = "nazuna.models.simple_average.SimpleAverageVariableDecay"
+params = { seq_len = 96, pred_len = 24, period_len = 24 }
+
+[definitions.SimpleAverageVariableDecayChannelwise]
+cls_path = "nazuna.models.simple_average.SimpleAverageVariableDecayChannelwise"
+params = { seq_len = 96, pred_len = 24, period_len = 24, n_channel = 27 }
+
+[definitions.BatchSamplerShuffle]
+cls_path = "nazuna.batch_sampler.BatchSamplerShuffle"
+params = { batch_size = 32 }
+
+# =============== tasks ===============
 [[tasks]]
 task_type = "eval"
 name = "Eval SimpleAverage"
 data_range_eval = [ 0.8, 1.0,]
-criterion_cls_path = "nazuna.criteria.MAE"
-criterion_params = { n_channel = 27, pred_len = 24, tolerance = 0.05 }
-model_cls_path = "nazuna.models.simple_average.SimpleAverage"
-model_params = { seq_len = 96, pred_len = 24, period_len = 24 }
+criterion = "MAE"
+model = "SimpleAverage"
 
 [[tasks]]
 task_type = "train"
 name = "Train SimpleAverageVariableDecay"
 data_range_train = [ 0.0, 0.8,]
 data_range_eval = [ 0.8, 1.0,]
-criterion_cls_path = "nazuna.criteria.MAE"
-criterion_params = { n_channel = 27, pred_len = 24, tolerance = 0.05 }
-model_cls_path = "nazuna.models.simple_average.SimpleAverageVariableDecay"
-model_params = { seq_len = 96, pred_len = 24, period_len = 24 }
-batch_sampler_cls_path = "nazuna.batch_sampler.BatchSamplerShuffle"
-batch_sampler_params = { batch_size = 32 }
-optimizer_cls_path = "torch.optim.Adam"
-optimizer_params = { lr = 0.0001 }
-lr_scheduler_cls_path = "torch.optim.lr_scheduler.CosineAnnealingLR"
-lr_scheduler_params = { T_max = 20 }
+criterion = "MAE"
+model = "SimpleAverageVariableDecay"
+batch_sampler = "BatchSamplerShuffle"
 n_epoch = 20
 early_stop = true
+[tasks.optimizer]
+cls_path = "torch.optim.Adam"
+params = { lr = 0.0001 }
+[tasks.lr_scheduler]
+cls_path = "torch.optim.lr_scheduler.CosineAnnealingLR"
+params = { T_max = 20 }
 
 [[tasks]]
 task_type = "train"
 name = "Train SimpleAverageVariableDecayChannelwise"
 data_range_train = [ 0.0, 0.8,]
 data_range_eval = [ 0.8, 1.0,]
-criterion_cls_path = "nazuna.criteria.MAE"
-criterion_params = { n_channel = 27, pred_len = 24, tolerance = 0.05 }
-model_cls_path = "nazuna.models.simple_average.SimpleAverageVariableDecayChannelwise"
-model_params = { seq_len = 96, pred_len = 24, period_len = 24, n_channel = 27 }
-batch_sampler_cls_path = "nazuna.batch_sampler.BatchSamplerShuffle"
-batch_sampler_params = { batch_size = 32 }
-optimizer_cls_path = "torch.optim.Adam"
-optimizer_params = { lr = 0.0001 }
-lr_scheduler_cls_path = "torch.optim.lr_scheduler.CosineAnnealingLR"
-lr_scheduler_params = { T_max = 20 }
+criterion = "MAE"
+model = "SimpleAverageVariableDecayChannelwise"
+batch_sampler = "BatchSamplerShuffle"
 n_epoch = 20
 early_stop = true
+[tasks.optimizer]
+cls_path = "torch.optim.Adam"
+params = { lr = 0.0001 }
+[tasks.lr_scheduler]
+cls_path = "torch.optim.lr_scheduler.CosineAnnealingLR"
+params = { T_max = 20 }
 
 [[tasks]]
 task_type = "eval"
 name = "Eval SimpleAverageVariableDecay (ImprovementRate)"
 data_range_eval = [ 0.8, 1.0,]
-criterion_cls_path = "nazuna.criteria.ImprovementRate"
-criterion_params = { n_channel = 27, pred_len = 24, tolerance = 0.05, error_type = "mae" }
-baseline_model_cls_path = "nazuna.models.simple_average.SimpleAverage"
-baseline_model_params = { seq_len = 96, pred_len = 24, period_len = 24 }
-model_cls_path = "nazuna.models.simple_average.SimpleAverageVariableDecay"
-model_params = { seq_len = 96, pred_len = 24, period_len = 24 }
+criterion = "ImprovementRate"
+baseline_model = "SimpleAverage"
+model = "SimpleAverageVariableDecay"
 model_state = { task_name = "Train SimpleAverageVariableDecay" }
 
 [[tasks]]
 task_type = "eval"
 name = "Eval SimpleAverageVariableDecayChannelwise (ImprovementRate)"
 data_range_eval = [ 0.8, 1.0,]
-criterion_cls_path = "nazuna.criteria.ImprovementRate"
-criterion_params = { n_channel = 27, pred_len = 24, tolerance = 0.05, error_type = "mae" }
-baseline_model_cls_path = "nazuna.models.simple_average.SimpleAverage"
-baseline_model_params = { seq_len = 96, pred_len = 24, period_len = 24 }
-model_cls_path = "nazuna.models.simple_average.SimpleAverageVariableDecayChannelwise"
-model_params = { seq_len = 96, pred_len = 24, period_len = 24, n_channel = 27 }
+criterion = "ImprovementRate"
+baseline_model = "SimpleAverage"
+model = "SimpleAverageVariableDecayChannelwise"
 model_state = { task_name = "Train SimpleAverageVariableDecayChannelwise" }

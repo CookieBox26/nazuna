@@ -104,7 +104,8 @@ class ResidualModel2(ResidualModel):
         n_channel: int,
     ) -> None:
         super()._setup(
-            seq_len, pred_len, quantile_mode_train, quantile_mode_eval,
+            seq_len, pred_len,
+            quantile_mode_train, quantile_mode_eval,
             naive_model_cls_path, naive_model_params,
             neural_model_cls_path, neural_model_params,
         )

@@ -1,4 +1,5 @@
 from nazuna.task_runner import (
+    Config,
     EvalTaskRunner,
     TrainTaskRunner,
     OptunaTaskRunner,
@@ -10,10 +11,14 @@ def test_eval_task_runner(tmp_path, get_data_manager):
     dm = get_data_manager()
     conf_task = {
         'data_range_eval': (0.8, 1.0),
-        'criterion_cls_path': 'nazuna.criteria.MAE',
-        'criterion_params': {'n_channel': 2, 'pred_len': 7},
-        'model_cls_path': 'nazuna.models.simple_average.SimpleAverage',
-        'model_params': {'seq_len': 28, 'pred_len': 7, 'period_len': 7},
+        'criterion': {
+            'cls_path': 'nazuna.criteria.MAE',
+            'params': {'n_channel': 2, 'pred_len': 7},
+        },
+        'model': {
+            'cls_path': 'nazuna.models.simple_average.SimpleAverage',
+            'params': {'seq_len': 28, 'pred_len': 7, 'period_len': 7},
+        },
     }
     runner = EvalTaskRunner(dm=dm, name='Task 0', out_dir=tmp_path / 'task_0', **conf_task)
     runner.run()
@@ -25,17 +30,27 @@ def test_train_task_runner(tmp_path, get_data_manager):
     dm = get_data_manager()
     conf_task = {
         'data_range_eval': (0.6, 0.8),
-        'criterion_cls_path': 'nazuna.criteria.MSE',
-        'criterion_params': {'n_channel': 2, 'pred_len': 7},
-        'model_cls_path': 'nazuna.models.simple_average.SimpleAverageVariableDecay',
-        'model_params': {'seq_len': 28, 'pred_len': 7, 'period_len': 7},
+        'criterion': {
+            'cls_path': 'nazuna.criteria.MSE',
+            'params': {'n_channel': 2, 'pred_len': 7},
+        },
+        'model': {
+            'cls_path': 'nazuna.models.simple_average.SimpleAverageVariableDecay',
+            'params': {'seq_len': 28, 'pred_len': 7, 'period_len': 7},
+        },
         'data_range_train': (0.0, 0.6),
-        'batch_sampler_cls_path': 'nazuna.batch_sampler.BatchSamplerShuffle',
-        'batch_sampler_params': {'batch_size': 32},
-        'optimizer_cls_path': 'torch.optim.Adam',
-        'optimizer_params': {'lr': 0.01},
-        'lr_scheduler_cls_path': 'torch.optim.lr_scheduler.CosineAnnealingLR',
-        'lr_scheduler_params': {'T_max': 10},
+        'batch_sampler': {
+            'cls_path': 'nazuna.batch_sampler.BatchSamplerShuffle',
+            'params': {'batch_size': 32},
+        },
+        'optimizer': {
+            'cls_path': 'torch.optim.Adam',
+            'params': {'lr': 0.01},
+        },
+        'lr_scheduler': {
+            'cls_path': 'torch.optim.lr_scheduler.CosineAnnealingLR',
+            'params': {'T_max': 10},
+        },
         'n_epoch': 2,
     }
     runner = TrainTaskRunner(dm=dm, name='Task 0', out_dir=tmp_path / 'task_0', **conf_task)
@@ -56,26 +71,28 @@ def test_optuna_task_runner(tmp_path, get_data_manager):
             {'train': (0.0, 0.6), 'eval': (0.6, 0.8)},
             {'train': (0.0, 0.8), 'eval': (0.8, 1.0)},
         ],
-        criterion_cls_path='nazuna.criteria.MSE',
-        criterion_params={'n_channel': 2, 'pred_len': 7},
-        model_cls_path=(
-            'nazuna.models.simple_average'
-            '.SimpleAverageVariableDecay'
-        ),
-        model_params={
-            'seq_len': 28, 'pred_len': 7, 'period_len': 7,
+        criterion={
+            'cls_path': 'nazuna.criteria.MSE',
+            'params': {'n_channel': 2, 'pred_len': 7},
         },
-        batch_sampler_cls_path=(
-            'nazuna.batch_sampler.BatchSamplerShuffle'
-        ),
-        batch_sampler_params={'batch_size': 16},
-        optimizer_cls_path='torch.optim.Adam',
-        optimizer_params={'lr': 0.01},
+        model={
+            'cls_path': 'nazuna.models.simple_average.SimpleAverageVariableDecay',
+            'params': {'seq_len': 28, 'pred_len': 7, 'period_len': 7},
+        },
+        batch_sampler={
+            'cls_path': 'nazuna.batch_sampler.BatchSamplerShuffle',
+            'params': {'batch_size': 16},
+        },
+        optimizer={
+            'cls_path': 'torch.optim.Adam',
+            'params': {'lr': 0.01},
+        },
         n_epoch=2,
     )
     runner.run()
 
     assert runner.result_path.is_file()
+
     assert runner.out_path.is_dir()
     assert (runner.out_path / 'best_model_state.pth').is_file()
     assert (runner.out_path / 'study.pkl').is_file()
@@ -107,21 +124,22 @@ def test_optuna_task_runner_with_failures(
         data_ranges=[
             {'train': (0.0, 0.6), 'eval': (0.6, 0.8)},
         ],
-        criterion_cls_path='nazuna.criteria.MSE',
-        criterion_params={'n_channel': 2, 'pred_len': 7},
-        model_cls_path=(
-            'nazuna.models.simple_average'
-            '.SimpleAverageVariableDecay'
-        ),
-        model_params={
-            'seq_len': 28, 'pred_len': 7, 'period_len': 7,
+        criterion={
+            'cls_path': 'nazuna.criteria.MSE',
+            'params': {'n_channel': 2, 'pred_len': 7},
         },
-        batch_sampler_cls_path=(
-            'nazuna.batch_sampler.BatchSamplerShuffle'
-        ),
-        batch_sampler_params={'batch_size': 16},
-        optimizer_cls_path='torch.optim.Adam',
-        optimizer_params={'lr': 0.01},
+        model={
+            'cls_path': 'nazuna.models.simple_average.SimpleAverageVariableDecay',
+            'params': {'seq_len': 28, 'pred_len': 7, 'period_len': 7},
+        },
+        batch_sampler={
+            'cls_path': 'nazuna.batch_sampler.BatchSamplerShuffle',
+            'params': {'batch_size': 16},
+        },
+        optimizer={
+            'cls_path': 'torch.optim.Adam',
+            'params': {'lr': 0.01},
+        },
         n_epoch=1,
     )
 
@@ -167,26 +185,19 @@ white_list = [ "temp_avg_nagoya", "temp_avg_fukuoka",]
 task_type = "eval"
 name = "Eval"
 data_range_eval = [ 0.8, 1.0,]
-criterion_cls_path = "nazuna.criteria.MSE"
-criterion_params = { n_channel = 2, pred_len = 7 }
-model_cls_path = "nazuna.models.simple_average.SimpleAverage"
-model_params = { seq_len = 28, pred_len = 7, period_len = 7 }
+criterion = { cls_path = "nazuna.criteria.MSE", params = { n_channel = 2, pred_len = 7 } }
+model = { cls_path = "nazuna.models.simple_average.SimpleAverage", params = { seq_len = 28, pred_len = 7, period_len = 7 } }
 
 [[tasks]]
 task_type = "train"
 name = "Pilot"
 data_range_train = [ 0.0, 0.6,]
 data_range_eval = [ 0.6, 0.8,]
-criterion_cls_path = "nazuna.criteria.MSE"
-criterion_params = { n_channel = 2, pred_len = 7 }
-model_cls_path = "nazuna.models.simple_average.SimpleAverageVariableDecay"
-model_params = { seq_len = 28, pred_len = 7, period_len = 7 }
-batch_sampler_cls_path = "nazuna.batch_sampler.BatchSamplerShuffle"
-batch_sampler_params = { batch_size = 16 }
-optimizer_cls_path = "torch.optim.Adam"
-optimizer_params = { lr = 0.001 }
-lr_scheduler_cls_path = "torch.optim.lr_scheduler.CosineAnnealingLR"
-lr_scheduler_params = { T_max = 10 }
+criterion = { cls_path = "nazuna.criteria.MSE", params = { n_channel = 2, pred_len = 7 } }
+model = { cls_path = "nazuna.models.simple_average.SimpleAverageVariableDecay", params = { seq_len = 28, pred_len = 7, period_len = 7 } }
+batch_sampler = { cls_path = "nazuna.batch_sampler.BatchSamplerShuffle", params = { batch_size = 16 } }
+optimizer = { cls_path = "torch.optim.Adam", params = { lr = 0.001 } }
+lr_scheduler = { cls_path = "torch.optim.lr_scheduler.CosineAnnealingLR", params = { T_max = 10 } }
 n_epoch = 10
 early_stop = true
 
@@ -194,16 +205,11 @@ early_stop = true
 task_type = "train"
 name = "Train"
 data_range_train = [ 0.0, 0.8,]
-criterion_cls_path = "nazuna.criteria.MSE"
-criterion_params = { n_channel = 2, pred_len = 7 }
-model_cls_path = "nazuna.models.simple_average.SimpleAverageVariableDecay"
-model_params = { seq_len = 28, pred_len = 7, period_len = 7 }
-batch_sampler_cls_path = "nazuna.batch_sampler.BatchSamplerShuffle"
-batch_sampler_params = { batch_size = 16 }
-optimizer_cls_path = "torch.optim.Adam"
-optimizer_params = { lr = 0.001 }
-lr_scheduler_cls_path = "torch.optim.lr_scheduler.CosineAnnealingLR"
-lr_scheduler_params = { T_max = 10 }
+criterion = { cls_path = "nazuna.criteria.MSE", params = { n_channel = 2, pred_len = 7 } }
+model = { cls_path = "nazuna.models.simple_average.SimpleAverageVariableDecay", params = { seq_len = 28, pred_len = 7, period_len = 7 } }
+batch_sampler = { cls_path = "nazuna.batch_sampler.BatchSamplerShuffle", params = { batch_size = 16 } }
+optimizer = { cls_path = "torch.optim.Adam", params = { lr = 0.001 } }
+lr_scheduler = { cls_path = "torch.optim.lr_scheduler.CosineAnnealingLR", params = { T_max = 10 } }
 n_epoch = { task_name = "Pilot" }
 '''
 
@@ -219,3 +225,92 @@ def test_run_tasks_1(tmp_path):
     out_dir = tmp_path / 'tasks_0'
     run_tasks(f'out_dir = "{out_dir.as_posix()}"\n' + conf_toml_str_0, skip_task_ids_='1-2')
     assert out_dir.is_dir()
+
+
+conf_toml_str_definitions = '''
+exist_ok = true
+
+[data]
+path = [ "jma", "weather_japan_daily_2025-01-01_2025-12-31_2_blocks.csv",]
+colname_timestamp = "date"
+seq_len = 28
+pred_len = 7
+white_list = [ "temp_avg_nagoya", "temp_avg_fukuoka",]
+
+[definitions.MSE]
+cls_path = "nazuna.criteria.MSE"
+params = { n_channel = 2, pred_len = 7 }
+
+[definitions.SimpleAverage]
+cls_path = "nazuna.models.simple_average.SimpleAverage"
+[definitions.SimpleAverage.params]
+seq_len = 28
+pred_len = 7
+period_len = 7
+
+[[tasks]]
+task_type = "eval"
+name = "Eval"
+data_range_eval = [ 0.8, 1.0,]
+criterion = "MSE"
+model = "SimpleAverage"
+'''
+
+
+def test_config_definitions(tmp_path):
+    out_dir = tmp_path / 'tasks_def'
+    run_tasks(
+        f'out_dir = "{out_dir.as_posix()}"\n'
+        + conf_toml_str_definitions,
+    )
+    assert out_dir.is_dir()
+    assert (out_dir / 'eval' / 'result.toml').is_file()
+
+
+def test_config_definitions_resolve(tmp_path):
+    conf = Config(
+        out_dir=tmp_path / 'test_resolve',
+        exist_ok=True,
+        data={
+            'path': [
+                'jma',
+                'weather_japan_daily_2025-01-01_2025-12-31'
+                '_2_blocks.csv',
+            ],
+            'colname_timestamp': 'date',
+            'seq_len': 28,
+            'pred_len': 7,
+            'white_list': [
+                'temp_avg_nagoya', 'temp_avg_fukuoka',
+            ],
+        },
+        definitions={
+            'MAE': {
+                'cls_path': 'nazuna.criteria.MAE',
+                'params': {'n_channel': 2, 'pred_len': 7},
+            },
+            'SimpleAverage': {
+                'cls_path': 'nazuna.models.simple_average.SimpleAverage',
+                'params': {
+                    'seq_len': 28,
+                    'pred_len': 7,
+                    'period_len': 7,
+                },
+            },
+        },
+        tasks=[
+            {
+                'task_type': 'eval',
+                'data_range_eval': [0.8, 1.0],
+                'criterion': 'MAE',
+                'model': 'SimpleAverage',
+            },
+        ],
+    )
+    _, params = conf.get_task_runner(0)
+    assert isinstance(params['criterion'], dict)
+    assert params['criterion']['cls_path'] == 'nazuna.criteria.MAE'
+    assert params['criterion']['params']['n_channel'] == 2
+    assert isinstance(params['model'], dict)
+    assert params['model']['cls_path'] == 'nazuna.models.simple_average.SimpleAverage'
+    assert params['model']['params']['seq_len'] == 28

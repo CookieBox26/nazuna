@@ -25,11 +25,6 @@ except ImportError:
     Inspector = None
 
 
-def _to_snake_case(s):
-    s = s.translate(str.maketrans('()=', '___'))
-    return '_'.join(s.lower().split())
-
-
 def _get_timestamp():
     return datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
 
@@ -115,30 +110,22 @@ class EvalTaskRunner(BaseTaskRunner):
         data_rolling_window_eval (int = 4): Rolling window size for computing quartiles for scaling
             (unused if quartile-based rolling-window scaling is disabled).
         batch_size_eval (int = 32): Batch size for evaluation.
-        criterion_cls_path (str = None): Class path for the criterion (Ex. 'nazuna.criteria.MAELoss')
-            **(required)**.
-        criterion_params (dict = None): Parameters for the criterion **(required)**.
-        baseline_model_cls_path (str = None): Class path for the baseline model.
+        criterion (dict = None): Criterion configuration **(required)**.
+            Must have 'cls_path' (str) and 'params' (dict) keys.
+        baseline_model (dict = None): Baseline model configuration.
+            Must have 'cls_path' (str) and 'params' (dict) keys.
             Required only when the criterion requires a baseline.
-        baseline_model_params (dict = None): Parameters for the baseline model.
-        model_cls_path (str = None): Class path for the model
-            (Ex. 'nazuna.models.simple_average.SimpleAverage') **(required)**.
-        model_params (dict = None): Parameters for the model **(required)**.
+        model (dict = None): Model configuration **(required)**.
+            Must have 'cls_path' (str) and 'params' (dict) keys.
         model_state_path (str | PathLike | IO[bytes] = None): Path to the model state file.
     """
     data_range_eval: tuple[float, float] | None = None
     data_offset_eval: int = 0
     data_rolling_window_eval: int = 4
     batch_size_eval: int = 32
-
-    criterion_cls_path: str = None
-    criterion_params: dict = None
-
-    baseline_model_cls_path: str = None
-    baseline_model_params: dict = None
-
-    model_cls_path: str = None
-    model_params: dict = None
+    criterion: dict = None
+    baseline_model: dict = None
+    model: dict = None
     model_state_path: str | os.PathLike[str] | IO[bytes] = None
 
     def __post_init__(self):
@@ -147,15 +134,18 @@ class EvalTaskRunner(BaseTaskRunner):
         if type(self) is EvalTaskRunner:
             assert self.data_range_eval is not None
 
-        self.criterion_cls = load_class(self.criterion_cls_path)
+        self.criterion_cls = load_class(self.criterion['cls_path'])
+        self.criterion_params = self.criterion['params']
         _validate_params(self.criterion_cls._setup, self.criterion_params)
 
         self.eval_improvement = issubclass(self.criterion_cls, BaseImprovement)
         if self.eval_improvement:
-            self.baseline_model_cls = load_class(self.baseline_model_cls_path)
+            self.baseline_model_cls = load_class(self.baseline_model['cls_path'])
+            self.baseline_model_params = self.baseline_model['params']
             _validate_params(self.baseline_model_cls._setup, self.baseline_model_params)
 
-        self.model_cls = load_class(self.model_cls_path)
+        self.model_cls = load_class(self.model['cls_path'])
+        self.model_params = self.model['params']
         _validate_params(self.model_cls._setup, self.model_params)
 
         criterion_n_channel = self.criterion_params.get('n_channel', None)
@@ -309,15 +299,12 @@ class TrainTaskRunner(EvalTaskRunner):
         data_offset_train (int = 0): Offset for training data.
         data_rolling_window_train (int = 4): Rolling window size for computing quartiles for scaling
             (unused if quartile-based rolling-window scaling is disabled).
-        batch_sampler_cls_path (str = ''): Class path for the batch sampler
-            (Ex. 'nazuna.batch_sampler.BatchSamplerShuffle') **(required)**.
-        batch_sampler_params (dict = None): Parameters for the batch sampler **(required)**.
-        optimizer_cls_path (str = ''): Class path for the optimizer
-            (Ex. 'torch.optim.Adam') **(required)**.
-        optimizer_params (dict = None): Parameters for the optimizer **(required)**.
-        lr_scheduler_cls_path (str = ''): Class path for the learning rate scheduler
-            (Ex. 'torch.optim.lr_scheduler.CosineAnnealingLR'). Optional.
-        lr_scheduler_params (dict = None): Parameters for the learning rate scheduler.
+        batch_sampler (dict = None): Batch sampler configuration **(required)**.
+            Must have 'cls_path' (str) and 'params' (dict) keys.
+        optimizer (dict = None): Optimizer configuration **(required)**.
+            Must have 'cls_path' (str) and 'params' (dict) keys.
+        lr_scheduler (dict = None): Learning rate scheduler configuration. Optional.
+            Must have 'cls_path' (str) and 'params' (dict) keys.
         n_epoch (int = 0): Number of training epochs **(required)**.
         early_stop (bool = False): Whether to enable early stopping.
             Stops training if evaluation loss does not improve for 5 consecutive epochs.
@@ -326,14 +313,9 @@ class TrainTaskRunner(EvalTaskRunner):
     data_offset_train: int = 0
     data_rolling_window_train: int = 4
 
-    batch_sampler_cls_path: str = None
-    batch_sampler_params: dict = None
-
-    optimizer_cls_path: str = None
-    optimizer_params: dict = None
-
-    lr_scheduler_cls_path: str = None
-    lr_scheduler_params: dict = None
+    batch_sampler: dict = None
+    optimizer: dict = None
+    lr_scheduler: dict = None
 
     n_epoch: int = 0
     n_epoch_path: str | Path = None
@@ -344,11 +326,16 @@ class TrainTaskRunner(EvalTaskRunner):
     def __post_init__(self):
         super().__post_init__()
         assert self.data_range_train is not None
-        self.batch_sampler_cls = load_class(self.batch_sampler_cls_path)
-        self.optimizer_cls = load_class(self.optimizer_cls_path)
+        self.batch_sampler_cls = load_class(self.batch_sampler['cls_path'])
+        self.batch_sampler_params = self.batch_sampler['params']
+
+        self.optimizer_cls = load_class(self.optimizer['cls_path'])
+        self.optimizer_params = self.optimizer['params']
         self.lr_scheduler_cls = None
-        if self.lr_scheduler_cls_path:
-            self.lr_scheduler_cls = load_class(self.lr_scheduler_cls_path)
+        if self.lr_scheduler:
+            self.lr_scheduler_cls = load_class(self.lr_scheduler['cls_path'])
+            self.lr_scheduler_params = self.lr_scheduler['params']
+
         if self.n_epoch_path is None:
             assert self.n_epoch > 0
         else:
@@ -493,17 +480,16 @@ class OptunaTaskRunner(BaseTaskRunner):
         data_offset_eval (int = 0): Offset for evaluation data.
         data_rolling_window_eval (int = 4): Rolling window size for evaluation data.
         batch_size_eval (int = 32): Batch size for evaluation.
-        criterion_cls_path (str): Class path for the criterion **(required)**.
-        criterion_params (dict = None): Parameters for the criterion.
-        model_cls_path (str = ''): Class path for the model **(required)**.
-        model_params (dict = None): Base parameters for the model.
-            Search space parameters will be merged into this.
-        batch_sampler_cls_path (str = ''): Class path for the batch sampler **(required)**.
-        batch_sampler_params (dict = None): Base parameters for the batch sampler.
-        optimizer_cls_path (str = ''): Class path for the optimizer **(required)**.
-        optimizer_params (dict = None): Base parameters for the optimizer.
-        lr_scheduler_cls_path (str = ''): Class path for the learning rate scheduler. Optional.
-        lr_scheduler_params (dict = None): Parameters for the learning rate scheduler.
+        criterion (dict = None): Criterion configuration **(required)**.
+            Must have 'cls_path' (str) and 'params' (dict) keys.
+        model (dict = None): Model configuration **(required)**.
+            Must have 'cls_path' (str) and 'params' (dict) keys.
+        batch_sampler (dict = None): Batch sampler configuration **(required)**.
+            Must have 'cls_path' (str) and 'params' (dict) keys.
+        optimizer (dict = None): Optimizer configuration **(required)**.
+            Must have 'cls_path' (str) and 'params' (dict) keys.
+        lr_scheduler (dict = None): Learning rate scheduler configuration. Optional.
+            Must have 'cls_path' (str) and 'params' (dict) keys.
         n_epoch (int = 0): Number of training epochs per trial **(required)**.
         early_stop (bool = False): Whether to enable early stopping within each trial.
     """
@@ -518,20 +504,11 @@ class OptunaTaskRunner(BaseTaskRunner):
     data_rolling_window_eval: int = 4
     batch_size_eval: int = 32
 
-    criterion_cls_path: str = 'nazuna.criteria.MAE'
-    criterion_params: dict = None
-
-    model_cls_path: str = ''
-    model_params: dict = None
-
-    batch_sampler_cls_path: str = ''
-    batch_sampler_params: dict = None
-
-    optimizer_cls_path: str = ''
-    optimizer_params: dict = None
-
-    lr_scheduler_cls_path: str = ''
-    lr_scheduler_params: dict = None
+    criterion: dict = None
+    model: dict = None
+    batch_sampler: dict = None
+    optimizer: dict = None
+    lr_scheduler: dict = None
 
     n_epoch: int = 0
     early_stop: bool = False
@@ -544,13 +521,18 @@ class OptunaTaskRunner(BaseTaskRunner):
         assert self.n_trials > 0, 'n_trials must be positive'
         assert self.n_epoch > 0, 'n_epoch must be positive'
 
-        self.criterion_cls = load_class(self.criterion_cls_path)
-        self.model_cls = load_class(self.model_cls_path)
-        self.batch_sampler_cls = load_class(self.batch_sampler_cls_path)
-        self.optimizer_cls = load_class(self.optimizer_cls_path)
-        self.lr_scheduler_cls = None
-        if self.lr_scheduler_cls_path:
-            self.lr_scheduler_cls = load_class(self.lr_scheduler_cls_path)
+        self.criterion_cls = load_class(self.criterion['cls_path'])
+        self.criterion_params = self.criterion['params']
+        self.model_cls_path = self.model['cls_path']
+        self.model_params = self.model['params']
+        self.batch_sampler_cls_path = self.batch_sampler['cls_path']
+        self.batch_sampler_params = self.batch_sampler['params']
+        self.optimizer_cls_path = self.optimizer['cls_path']
+        self.optimizer_params = self.optimizer['params']
+        self.lr_scheduler_cls_path = None
+        if self.lr_scheduler:
+            self.lr_scheduler_cls_path = self.lr_scheduler['cls_path']
+            self.lr_scheduler_params = self.lr_scheduler['params']
 
         self._best_model_state = None
         self._best_trial_number = None
@@ -596,11 +578,7 @@ class OptunaTaskRunner(BaseTaskRunner):
                 dm=self.dm,
                 device=self.device,
                 name=f'Trial {trial.number} Fold {i_fold}',
-                out_dir=(
-                    self.out_path
-                    / f'trial_{trial.number}'
-                    / f'fold_{i_fold}'
-                ),
+                out_dir=(self.out_path / f'trial_{trial.number}' / f'fold_{i_fold}'),
                 exist_ok=self.exist_ok,
                 data_range_train=data_range_train,
                 data_range_eval=data_range_eval,
@@ -609,38 +587,34 @@ class OptunaTaskRunner(BaseTaskRunner):
                 data_offset_eval=self.data_offset_eval,
                 data_rolling_window_eval=self.data_rolling_window_eval,
                 batch_size_eval=self.batch_size_eval,
-                criterion_cls_path=self.criterion_cls_path,
-                criterion_params=self.criterion_params,
-                model_cls_path=self.model_cls_path,
-                model_params=model_params,
-                batch_sampler_cls_path=self.batch_sampler_cls_path,
-                batch_sampler_params=batch_sampler_params,
-                optimizer_cls_path=self.optimizer_cls_path,
-                optimizer_params=optimizer_params,
-                lr_scheduler_cls_path=self.lr_scheduler_cls_path,
-                lr_scheduler_params=self.lr_scheduler_params,
+                criterion=self.criterion,
+                model={'cls_path': self.model_cls_path, 'params': model_params},
+                batch_sampler={'cls_path': self.batch_sampler_cls_path, 'params': batch_sampler_params},
+                optimizer={'cls_path': self.optimizer_cls_path, 'params': optimizer_params},
+                lr_scheduler=(
+                    {
+                        'cls_path': self.lr_scheduler_cls_path,
+                        'params': self.lr_scheduler_params,
+                    } if self.lr_scheduler_cls_path else None
+                ),
                 n_epoch=self.n_epoch,
                 early_stop=self.early_stop,
             )
             runner.out_path.mkdir(parents=True, exist_ok=True)
             runner._run()
-            fold_loss = runner.result.get(
-                'loss_per_sample_eval_best', float('inf'),
-            )
+            fold_loss = runner.result.get('loss_per_sample_eval_best', float('inf'))
             losses.append(fold_loss)
 
             if fold_loss < best_loss_this_trial:
                 best_loss_this_trial = fold_loss
-                best_model_state_this_trial = copy.deepcopy(
-                    runner.model.state_dict(),
-                )
+                best_model_state_this_trial = copy.deepcopy(runner.model.state_dict())
 
         mean_loss = sum(losses) / len(losses)
 
-        if (self._best_model_state is None
-                or mean_loss < self.result.get(
-                    'best_value', float('inf'),
-                )):
+        if (
+            self._best_model_state is None
+            or mean_loss < self.result.get('best_value', float('inf'))
+        ):
             self._best_model_state = best_model_state_this_trial
             self._best_trial_number = trial.number
 
@@ -748,7 +722,13 @@ class Config:
     exist_ok: bool = False
     data: dict = None
     device: str = ''
+    definitions: dict = None
     tasks: list[dict] = None
+
+    @classmethod
+    def _to_snake(cls, s):
+        s = s.translate(str.maketrans('()=', '___'))
+        return '_'.join(s.lower().split())
 
     def __post_init__(self):
         self.out_dir = self.out_dir or f'out/{_get_timestamp()}/'
@@ -764,7 +744,7 @@ class Config:
             if self.tasks[i_task]['name'] in self.out_paths:
                 raise ValueError(f'Duplicate task name: {self.tasks[i_task]["name"]}')
             self.tasks[i_task].setdefault(
-                'out_dir', (self.out_path / _to_snake_case(self.tasks[i_task]['name'])).as_posix(),
+                'out_dir', (self.out_path / Config._to_snake(self.tasks[i_task]['name'])).as_posix(),
             )
             self.out_paths[self.tasks[i_task]['name']] = Path(self.tasks[i_task]['out_dir'])
 
@@ -789,6 +769,13 @@ class Config:
                     self.out_paths[params['n_epoch']['task_name']] / 'result.toml'
                 params['n_epoch_path_defer'] = True
                 del params['n_epoch']
+        for target in [
+            'criterion', 'baseline_model', 'model',
+            'batch_sampler', 'optimizer', 'lr_scheduler',
+        ]:
+            if target in params and isinstance(params[target], str):
+                d = self.definitions[params[target]]
+                params[target] = {'cls_path': d['cls_path'], 'params': copy.deepcopy(d['params'])}
         if 'model_state' in params:
             params['model_state_path'] = \
                 self.out_paths[params['model_state']['task_name']] / 'model_state.pth'
@@ -817,15 +804,27 @@ class Config:
         raise ValueError('Cannot cast to Config')
 
     def to_toml_str(self):
-        toml_str = toml.dumps({
+        header = {
             'out_dir': self.out_dir,
             'exist_ok': self.exist_ok,
-            'data': self.data,
             'device': self.device,
-        })
-        toml_str += '\n'
-        toml_str += toml.dumps({'tasks': self.tasks})
-        toml_str = toml_str.replace('[[tasks]]', '\n\n[[tasks]]')
+        }
+        toml_str = toml.dumps(header) + '\n'
+
+        toml_str += '# =============== data ===============\n'
+        toml_str += toml.dumps({'data': self.data}) + '\n'
+
+        if self.definitions:
+            toml_str += '# =============== definitions ===============\n'
+            for k, v in self.definitions.items():
+                s = toml.dumps({'definitions': {k: v}}).replace('\n\n', '\n')
+                toml_str += s + '\n'
+
+        toml_str += '# =============== tasks ===============\n'
+        for i_task, task in enumerate(self.tasks):
+            toml_str += f'# ------------- task {i_task} -------------\n'
+            s = toml.dumps({'tasks': [task]}).replace('\n\n', '\n')
+            toml_str += s + '\n'
         return toml_str
 
     def to_toml_path(self):
