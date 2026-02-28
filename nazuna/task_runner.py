@@ -73,22 +73,35 @@ class BaseTaskRunner(ABC):
     exist_ok: bool = False
 
     def __post_init__(self):
-        self.device = self.device or str(torch.device('cuda' if torch.cuda.is_available() else 'cpu'))
+        if not self.device:
+            self.device = str(torch.device('cuda' if torch.cuda.is_available() else 'cpu'))
         self.out_path = Path(self.out_dir or f'out/{_get_timestamp()}/task_0/').expanduser()
         if (not self.exist_ok) and self.out_path.exists():
             raise FileExistsError(f'Already exists: {self.out_path.as_posix()}')
+        self.log_path = self.out_path / 'log.txt'
+        if self.log_path.exists():
+            self.log_path.unlink()
         self.result = {}
 
     @abstractmethod
     def _run(self):
         pass
 
+    def _log(self, message):
+        timestamp = datetime.datetime.now().strftime('%Y/%m/%d %H:%M:%S')
+        cls_name = type(self).__name__
+        line = f'{timestamp} [{cls_name}] {message}\n'
+        with self.log_path.open('a', newline='\n', encoding='utf8') as f:
+            f.write(line)
+
     def run(self):
         if self.result:
             raise RuntimeError('Running TaskRunner more than once is not supported.')
         self.out_path.mkdir(parents=True, exist_ok=self.exist_ok)
+        self._log('Started')
         with measure_time(self.result):
             self._run()
+        self._log('Finished')
         self.result_path = self.out_path / 'result.toml'
         self.result_path.write_text(toml.dumps(self.result), newline='\n', encoding='utf8')
         elapsed = self.result['elapsed']
@@ -394,6 +407,7 @@ class TrainTaskRunner(EvalTaskRunner):
 
         loss_history = []
         for i_epoch in range(self.n_epoch):
+            self._log(f'Epoch {i_epoch} started')
             print(f'----- Epoch {i_epoch} -----')
             epoch_record = {'i_epoch': i_epoch}
 
@@ -564,6 +578,7 @@ class OptunaTaskRunner(BaseTaskRunner):
         return objective
 
     def _run_trial(self, trial):
+        self._log(f'Trial {trial.number} started')
         model_params, optimizer_params, batch_sampler_params = \
             OptunaHelper.build_params_for_trial(
                 trial,
