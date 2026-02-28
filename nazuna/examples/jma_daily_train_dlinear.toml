@@ -52,6 +52,7 @@ data_range_eval = [ 0.6, 0.8,]
 criterion = "MAE"
 model = "DLinear"
 batch_sampler = "BatchSamplerShuffle"
+inspector_params = { delta_scale = 0.001 }
 n_epoch = 20
 early_stop = true
 [tasks.optimizer]

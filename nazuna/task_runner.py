@@ -19,10 +19,7 @@ from nazuna import fix_seed, load_class, measure_time
 from nazuna.utils.optuna_helper import OptunaHelper
 from nazuna.utils.diagnoser import Diagnoser
 from nazuna.utils.report import report
-try:
-    from nazuna.utils.inspector import Inspector
-except ImportError:
-    Inspector = None
+from nazuna.utils.inspector import Inspector
 
 
 def _get_timestamp():
@@ -281,8 +278,7 @@ class EvalTaskRunner(BaseTaskRunner):
             )
         self.model = self.model_cls.create(self.device, self.model_state_path, **self.model_params)
         loss_eval = self.eval()
-        torch.save(self.model.state_dict(), self.out_path / 'model_state.pth')  # for debugging
-
+        # torch.save(self.model.state_dict(), self.out_path / 'model_state.pth')  # for debugging
         self.result['cols_org'] = dict(zip(self.dm.cols, self.dm.cols_org))
         self.result['data_range_eval'] = self.data_loader_eval.dataset.info
         self.result.update(loss_eval)
@@ -322,6 +318,8 @@ class TrainTaskRunner(EvalTaskRunner):
     n_epoch_path_defer: bool = False
     early_stop: bool = False
     patience: int = 5
+
+    inspector_params: dict = None
 
     def __post_init__(self):
         super().__post_init__()
@@ -409,6 +407,15 @@ class TrainTaskRunner(EvalTaskRunner):
                 continue
 
             loss_eval = self.eval(output_loss_per_channel=False, output_scaled_loss=False)
+            if self.inspector_params is not None and Inspector is not None:
+                inspected = Inspector.inspect(
+                    model=self.model,
+                    criterion=self.criterion,
+                    batches=self.data_loader_eval,
+                    **self.inspector_params,
+                )
+                loss_eval.update(inspected)
+
             epoch_record['eval'] = loss_eval
             loss_history.append(epoch_record)
             loss_per_sample_eval = loss_eval['loss_per_sample']
