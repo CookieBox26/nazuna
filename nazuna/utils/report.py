@@ -96,6 +96,21 @@ def _plot_train_loss(history_path: Path, graph_path: Path) -> None:
     plt.close(fig)
 
 
+def _plot_sensitivity(history_path: Path, graph_path: Path) -> None:
+    history = toml.loads(history_path.read_text(encoding='utf8'))
+    epochs = history['epochs']
+    x = [e['i_epoch'] for e in epochs]
+    sensitivity = [e['eval']['sensitivity'] for e in epochs]
+
+    fig, ax = plt.subplots(figsize=(5, 3))
+    ax.plot(x, sensitivity, linewidth=1.5)
+    ax.set_xlabel('epoch')
+    ax.set_ylabel('sensitivity')
+    ax.grid(True, linestyle='--', linewidth=0.5)
+    fig.savefig(graph_path, format='svg', bbox_inches='tight')
+    plt.close(fig)
+
+
 def report(
     report_path: Path,
     conf_toml_str: str,
@@ -133,6 +148,25 @@ def report(
                 _plot_train_loss(history_path, graph_path)
                 rel_path = graph_path.relative_to(report_path.parent)
                 f.write(f'![train_loss]({rel_path.as_posix()})\n\n')
+
+                history = toml.loads(
+                    history_path.read_text(encoding='utf8'),
+                )
+                has_sensitivity = (
+                    'eval' in history['epochs'][0]
+                    and 'sensitivity' in history['epochs'][0]['eval']
+                )
+                if has_sensitivity:
+                    sens_graph_path = (
+                        task_runner.out_path / 'sensitivity.svg'
+                    )
+                    _plot_sensitivity(history_path, sens_graph_path)
+                    rel_path = sens_graph_path.relative_to(
+                        report_path.parent,
+                    )
+                    f.write(
+                        f'![sensitivity]({rel_path.as_posix()})\n\n'
+                    )
 
             pred_path = task_runner.out_path / 'pred_first.npz'
             if pred_path.exists():
