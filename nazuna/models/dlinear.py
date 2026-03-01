@@ -63,6 +63,16 @@ class DLinear(BasicBaseModel):
         self.Linear_Seasonal = nn.Linear(self.seq_len, self.pred_len, bias=bias)
         self.Linear_Trend = nn.Linear(self.seq_len, self.pred_len, bias=bias)
         self.scaler = IqrScaler(quantile_mode_train, quantile_mode_eval)
+        self._init_weights()
+
+    def _init_weights(self):
+        val = 1.0 / self.seq_len
+        self.Linear_Seasonal.weight = nn.Parameter(
+            torch.ones(self.pred_len, self.seq_len) * val
+        )
+        self.Linear_Trend.weight = nn.Parameter(
+            torch.ones(self.pred_len, self.seq_len) * val
+        )
 
     def forward(self, x):
         seasonal_init, trend_init = self.decompsition(x)
@@ -108,6 +118,12 @@ class DLinearChannelwise(BasicBaseModel):
             self.trend_bias = None
 
         self.scaler = IqrScaler(quantile_mode_train, quantile_mode_eval)
+        self._init_weights()
+
+    def _init_weights(self):
+        val = 1.0 / self.seq_len
+        self.seasonal_weight.data.fill_(val)
+        self.trend_weight.data.fill_(val)
 
     def forward(self, x):
         # x: [Batch, seq_len, n_channel]
