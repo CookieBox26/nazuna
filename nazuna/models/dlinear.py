@@ -7,6 +7,14 @@ import torch.nn as nn
 
 
 class series_decomp(nn.Module):
+    """Moving average based series decomposition.
+
+    Pads the input by repeating edge values, then applies average pooling.
+    For odd kernel_size, pads ``(kernel_size - 1) // 2`` steps on each side.
+    For even kernel_size, pads ``kernel_size // 2`` steps on the front and
+    ``(kernel_size - 1) // 2`` steps on the end (one extra step at the front).
+    """
+
     def __init__(self, kernel_size, n_moving_avg=1):
         super().__init__()
         self.kernel_size = kernel_size
@@ -14,8 +22,10 @@ class series_decomp(nn.Module):
         self.avg = nn.AvgPool1d(kernel_size=kernel_size, stride=1, padding=0)
 
     def moving_avg(self, x):
-        front = x[:, 0:1, :].repeat(1, (self.kernel_size - 1) // 2, 1)
-        end = x[:, -1:, :].repeat(1, (self.kernel_size - 1) // 2, 1)
+        pad_len_front = self.kernel_size // 2
+        pad_len_end = (self.kernel_size - 1) // 2
+        front = x[:, 0:1, :].repeat(1, pad_len_front, 1)
+        end = x[:, -1:, :].repeat(1, pad_len_end, 1)
         x = torch.cat([front, x, end], dim=1)
         x = self.avg(x.permute(0, 2, 1))
         x = x.permute(0, 2, 1)
