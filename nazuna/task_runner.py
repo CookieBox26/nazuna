@@ -425,7 +425,7 @@ class TrainTaskRunner(EvalTaskRunner):
                 inspected = Inspector.inspect(
                     model=self.model,
                     criterion=self.criterion,
-                    batches=self.data_loader_eval,
+                    batches=self.data_loader_train,
                     **self.inspector_params,
                 )
                 loss_eval.update(inspected)
