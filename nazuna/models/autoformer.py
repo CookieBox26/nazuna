@@ -7,9 +7,10 @@ import torch.nn.functional as F
 
 
 class SeriesDecomp(nn.Module):
-    def __init__(self, kernel_size):
+    def __init__(self, kernel_size, n_moving_avg=1):
         super().__init__()
         self.kernel_size = kernel_size
+        self.n_moving_avg = n_moving_avg
         self.avg = nn.AvgPool1d(
             kernel_size=kernel_size, stride=1, padding=0
         )
@@ -25,7 +26,9 @@ class SeriesDecomp(nn.Module):
         return x
 
     def forward(self, x):
-        trend = self.moving_avg(x)
+        trend = x
+        for _ in range(self.n_moving_avg):
+            trend = self.moving_avg(trend)
         seasonal = x - trend
         return seasonal, trend
 
@@ -96,15 +99,16 @@ class AutoformerBlock(nn.Module):
         n_heads: int,
         d_ff: int,
         decomp_kernel: int,
+        n_moving_avg: int = 1,
         dropout: float = 0.1,
     ):
         super().__init__()
-        self.decomp1 = SeriesDecomp(decomp_kernel)
+        self.decomp1 = SeriesDecomp(decomp_kernel, n_moving_avg)
         self.ac = AutoCorrelation(d_model, n_heads, dropout=dropout)
         self.dropout = nn.Dropout(dropout)
         self.norm1 = nn.LayerNorm(d_model)
 
-        self.decomp2 = SeriesDecomp(decomp_kernel)
+        self.decomp2 = SeriesDecomp(decomp_kernel, n_moving_avg)
         self.ff = nn.Sequential(
             nn.Linear(d_model, d_ff),
             nn.GELU(),
@@ -138,6 +142,7 @@ class Autoformer(BasicBaseModel):
         d_ff: int = 256,
         e_layers: int = 3,
         decomp_kernel: int = 25,
+        n_moving_avg: int = 1,
         dropout: float = 0.1,
     ) -> None:
         super()._setup(seq_len, pred_len)
@@ -145,7 +150,8 @@ class Autoformer(BasicBaseModel):
         self.in_proj = nn.Linear(1, d_model)
         self.blocks = nn.ModuleList([
             AutoformerBlock(
-                d_model, n_heads, d_ff, decomp_kernel, dropout
+                d_model, n_heads, d_ff,
+                decomp_kernel, n_moving_avg, dropout,
             )
             for _ in range(e_layers)
         ])
