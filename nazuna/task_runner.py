@@ -374,7 +374,10 @@ class TrainTaskRunner(EvalTaskRunner):
             device=self.device,
         )
 
-    def train(self):
+    def save_model(self, filename):
+        torch.save(self.model.state_dict(), self.out_path / filename)
+
+    def train(self, i_epoch=-1):  # i_epoch is used for saving the model.
         data_loader = self.data_loader_train
         loss_total = 0.0
         self.model.train()
@@ -382,7 +385,13 @@ class TrainTaskRunner(EvalTaskRunner):
             self.optimizer.zero_grad()
             loss = self.model.get_loss_and_backward(batch, self.criterion)
             loss_total += loss.batch_sum()
+            if self.save_model_state_every_epoch and (i_epoch == 0):
+                self.save_model('model_state_ini.pth')
             self.optimizer.step()
+
+        if self.save_model_state_every_epoch and (i_epoch > -1):
+            self.save_model(f'model_state_{i_epoch}.pth')
+
         return {
             'n_sample': data_loader.dataset.n_sample,
             'loss_total': loss_total,
@@ -413,25 +422,13 @@ class TrainTaskRunner(EvalTaskRunner):
         self.result['cols_org'] = dict(zip(self.dm.cols, self.dm.cols_org))
         self.result['data_range_train'] = self.data_loader_train.dataset.info
 
-        if self.save_model_state_every_epoch:
-            torch.save(
-                self.model.state_dict(),
-                self.out_path / 'model_state_ini.pth',
-            )
-
         loss_history = []
         for i_epoch in range(self.n_epoch):
             self._log(f'Epoch {i_epoch} started')
             print(f'----- Epoch {i_epoch} -----')
             epoch_record = {'i_epoch': i_epoch}
 
-            loss_train = self.train()
-
-            if self.save_model_state_every_epoch:
-                torch.save(
-                    self.model.state_dict(),
-                    self.out_path / f'model_state_{i_epoch}.pth',
-                )
+            loss_train = self.train(i_epoch)
             epoch_record['train'] = loss_train
 
             if self.lr_scheduler is not None:
@@ -460,7 +457,7 @@ class TrainTaskRunner(EvalTaskRunner):
                 self.result['i_epoch_best'] = i_epoch
                 self.result['n_sample_eval'] = self.data_loader_eval.dataset.n_sample
                 self.result['loss_per_sample_eval_best'] = loss_per_sample_eval_best
-                torch.save(self.model.state_dict(), self.out_path / 'model_state.pth')
+                self.save_model('model_state.pth')
             else:
                 early_stop_counter += 1
             if (self.early_stop) and (early_stop_counter >= self.patience):

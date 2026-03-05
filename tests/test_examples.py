@@ -8,6 +8,7 @@ from nazuna.examples import run_example
         pytest.param('jma_daily_train_savd'),
         pytest.param('jma_daily_train_dlinear'),
         pytest.param('jma_daily_train_dlinearc'),
+        pytest.param('jma_daily_train_dlinearc_inspect'),
         pytest.param('jma_daily_train_patchtst'),
         pytest.param('jma_daily_train_autoformer'),
         pytest.param('jma_daily_train_residual'),
