@@ -19,6 +19,7 @@ class Inspector:
             raise ValueError('No trainable parameters found.')
 
         w0 = parameters_to_vector(params).detach().clone()
+        generator = torch.Generator(device=w0.device).manual_seed(0)
 
         loss_0 = 0.0
         n_sample = 0
@@ -32,7 +33,10 @@ class Inspector:
 
         max_ratio = 0.0
         for _ in range(num_directions):
-            delta = torch.randn_like(w0)
+            delta = torch.randn(
+                w0.shape, generator=generator,
+                device=w0.device, dtype=w0.dtype,
+            )
             delta = delta / delta.norm() * delta_scale
             vector_to_parameters(w0 + delta, params)
 

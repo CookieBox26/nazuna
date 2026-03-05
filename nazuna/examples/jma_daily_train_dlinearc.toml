@@ -55,6 +55,7 @@ model = "DLinearChannelwise"
 batch_sampler = "BatchSamplerShuffle"
 n_epoch = 20
 early_stop = true
+save_model_state_every_epoch = true
 [tasks.optimizer]
 cls_path = "torch.optim.Adam"
 params = { lr = 0.001 }

@@ -137,6 +137,7 @@ class EvalTaskRunner(BaseTaskRunner):
     baseline_model: dict = None
     model: dict = None
     model_state_path: str | os.PathLike[str] | IO[bytes] = None
+    inspector_params: dict = None
 
     def __post_init__(self):
         super().__post_init__()
@@ -291,7 +292,14 @@ class EvalTaskRunner(BaseTaskRunner):
             )
         self.model = self.model_cls.create(self.device, self.model_state_path, **self.model_params)
         loss_eval = self.eval()
-        # torch.save(self.model.state_dict(), self.out_path / 'model_state.pth')  # for debugging
+        if self.inspector_params is not None:
+            inspected = Inspector.inspect(
+                model=self.model,
+                criterion=self.criterion,
+                batches=self.data_loader_eval,
+                **self.inspector_params,
+            )
+            loss_eval.update(inspected)
         self.result['cols_org'] = dict(zip(self.dm.cols, self.dm.cols_org))
         self.result['data_range_eval'] = self.data_loader_eval.dataset.info
         self.result.update(loss_eval)
@@ -332,7 +340,7 @@ class TrainTaskRunner(EvalTaskRunner):
     early_stop: bool = False
     patience: int = 5
 
-    inspector_params: dict = None
+    save_model_state_every_epoch: bool = False
 
     def __post_init__(self):
         super().__post_init__()
@@ -405,6 +413,12 @@ class TrainTaskRunner(EvalTaskRunner):
         self.result['cols_org'] = dict(zip(self.dm.cols, self.dm.cols_org))
         self.result['data_range_train'] = self.data_loader_train.dataset.info
 
+        if self.save_model_state_every_epoch:
+            torch.save(
+                self.model.state_dict(),
+                self.out_path / 'model_state_ini.pth',
+            )
+
         loss_history = []
         for i_epoch in range(self.n_epoch):
             self._log(f'Epoch {i_epoch} started')
@@ -412,6 +426,12 @@ class TrainTaskRunner(EvalTaskRunner):
             epoch_record = {'i_epoch': i_epoch}
 
             loss_train = self.train()
+
+            if self.save_model_state_every_epoch:
+                torch.save(
+                    self.model.state_dict(),
+                    self.out_path / f'model_state_{i_epoch}.pth',
+                )
             epoch_record['train'] = loss_train
 
             if self.lr_scheduler is not None:
@@ -421,11 +441,11 @@ class TrainTaskRunner(EvalTaskRunner):
                 continue
 
             loss_eval = self.eval(output_loss_per_channel=False, output_scaled_loss=False)
-            if self.inspector_params is not None and Inspector is not None:
+            if self.inspector_params is not None:
                 inspected = Inspector.inspect(
                     model=self.model,
                     criterion=self.criterion,
-                    batches=self.data_loader_train,
+                    batches=self.data_loader_eval,
                     **self.inspector_params,
                 )
                 loss_eval.update(inspected)
