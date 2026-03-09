@@ -2,6 +2,13 @@ from nazuna.data_manager import TimeSeriesDataManager
 from nazuna.datasets import get_path
 import pytest
 import torch
+import sys
+
+
+def pytest_configure(config):
+    # macOS has a stricter path length limit than Linux/Windows
+    if sys.platform == "darwin":
+        config.option.basetemp = "/tmp/pytest"
 
 
 @pytest.fixture(scope='session')
