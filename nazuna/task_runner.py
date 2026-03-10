@@ -836,10 +836,13 @@ class Config:
             return source
         if isinstance(source, dict):
             return cls(**source)
+        try:
+            if isinstance(source, str):
+                return cls.from_toml_str(source)
+        except toml.TomlDecodeError:
+            pass
         if Path(source).is_file():
             return cls.from_toml_path(source)
-        if isinstance(source, str):
-            return cls.from_toml_str(source)
         raise ValueError('Cannot cast to Config')
 
     def to_toml_str(self):
