@@ -20,6 +20,7 @@ from nazuna.utils.optuna_helper import OptunaHelper
 from nazuna.utils.diagnoser import Diagnoser
 from nazuna.utils.report import report
 from nazuna.utils.inspector import Inspector
+from nazuna.utils import as_path_if_length_safe
 
 
 def _get_timestamp():
@@ -828,21 +829,25 @@ class Config:
 
     @classmethod
     def from_toml_path(cls, toml_path: str | Path):
-        return cls.from_toml_str(Path(toml_path).read_text(encoding='utf8'))
+        p = toml_path
+        if isinstance(p, str):
+            p = Path(p)
+        return cls.from_toml_str(p.read_text(encoding='utf8'))
 
     @classmethod
     def create(cls, source):
-        if type(source) is cls:
+        if isinstance(source, cls):
             return source
         if isinstance(source, dict):
             return cls(**source)
-        try:
-            if isinstance(source, str):
-                return cls.from_toml_str(source)
-        except toml.TomlDecodeError:
-            pass
-        if Path(source).is_file():
+        if isinstance(source, Path):
             return cls.from_toml_path(source)
+        if isinstance(source, str):
+            s = source.strip()
+            p = as_path_if_length_safe(s)
+            if isinstance(p, Path):
+                return cls.from_toml_path(p)
+            return cls.from_toml_str(s)
         raise ValueError('Cannot cast to Config')
 
     def to_toml_str(self):
