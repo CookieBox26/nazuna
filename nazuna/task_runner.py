@@ -67,12 +67,14 @@ class BaseTaskRunner(ABC):
         out_dir (str | Path = ''): Output path for this task's artifacts.
             Defaults to 'out/YYYYmmdd-HHMMSS/task_0/' if not specified.
         exist_ok (bool = False): Whether to allow the output path to already exist.
+        seed (int = 0): Random seed for reproducibility.
     """
     dm: TimeSeriesDataManager
     device: str = None
     name: str = None
     out_dir: str | Path = None
     exist_ok: bool = False
+    seed: int = 0
 
     def __post_init__(self):
         if not self.device:
@@ -102,6 +104,7 @@ class BaseTaskRunner(ABC):
         self.out_path.mkdir(parents=True, exist_ok=self.exist_ok)
         self._log('Started')
         with measure_time(self.result):
+            fix_seed(self.seed)
             self._run()
         self._log('Finished')
         self.result_path = self.out_path / 'result.toml'
@@ -723,7 +726,6 @@ class Config:
     Class that holds a series of task settings.
 
     Attributes:
-        seed (int = 0): Random seed for reproducibility.
         out_dir (str | Path = ''): Output path for the series of tasks.
             Outputs config.toml and report.md here.
             Defaults to 'out/YYYYmmdd-HHMMSS/' if not specified.
@@ -758,7 +760,6 @@ class Config:
         - If a task name is not specified, it defaults to 'Task i' (0-indexed sequential number).
         - Duplicate task names are not allowed and will raise an error.
     """
-    seed: int = 0
     out_dir: str | Path = ''
     exist_ok: bool = False
     data: dict = None
@@ -890,7 +891,6 @@ def run_tasks(
         skip_task_ids = list(range(int(a), int(b) + 1))
     else:
         skip_task_ids = [int(i) for i in skip_task_ids_.split(',') if i != '']
-    fix_seed(conf.seed)
 
     dm = TimeSeriesDataManager(**conf.get_data_param())
     task_runners = []
