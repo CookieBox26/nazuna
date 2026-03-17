@@ -1,4 +1,4 @@
-from nazuna import load_class
+from nazuna.utils import load_class
 import math
 import pytest
 

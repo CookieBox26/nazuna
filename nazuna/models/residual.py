@@ -2,8 +2,8 @@ import torch
 import torch.nn as nn
 from nazuna.models.base import BasicBaseModel
 from nazuna.scaler import IqrScaler
-from nazuna import load_class
 from nazuna.criteria import TimeSeriesError
+from nazuna.utils import load_class
 
 
 def _make_concrete(cls):
