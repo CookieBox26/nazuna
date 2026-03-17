@@ -1,0 +1,97 @@
+out_dir = "./out/jma_daily_train_itransformer"
+exist_ok = true
+
+# =============== data ===============
+[data]
+path = [ "jma", "weather_japan_daily_2025-01-01_2025-12-31_2_blocks.csv",]
+colname_timestamp = "date"
+seq_len = 29
+pred_len = 7
+white_list = [ "temp_avg_nagoya", "temp_avg_fukuoka",]
+
+# =============== definitions ===============
+[definitions.MAE]
+cls_path = "nazuna.criteria.MAE"
+params = { n_channel = 2, pred_len = 7 }
+
+[definitions.ImprovementRate]
+cls_path = "nazuna.criteria.ImprovementRate"
+params = { n_channel = 2, pred_len = 7, error_type = "mae" }
+
+[definitions.SimpleDiffAverage]
+cls_path = "nazuna.models.simple_average.SimpleDiffAverage"
+params = { seq_len = 29, pred_len = 7, period_len = 7 }
+
+[definitions.iTransformer]
+cls_path = "nazuna.models.itransformer.iTransformer"
+[definitions.iTransformer.params]
+seq_len = 29
+pred_len = 7
+d_model = 32
+n_heads = 4
+d_ff = 64
+e_layers = 2
+dropout = 0.1
+quantile_mode_train = "full"
+quantile_mode_eval = "saved"
+
+[definitions.BatchSamplerShuffle]
+cls_path = "nazuna.batch_sampler.BatchSamplerShuffle"
+params = { batch_size = 32 }
+
+# =============== tasks ===============
+[[tasks]]
+task_type = "eval"
+name = "Eval SimpleDiffAverage"
+data_range_eval = [ 0.8, 1.0,]
+criterion = "MAE"
+model = "SimpleDiffAverage"
+
+[[tasks]]
+task_type = "train"
+name = "Pilot iTransformer"
+data_range_train = [ 0.0, 0.6,]
+data_range_eval = [ 0.6, 0.8,]
+criterion = "MAE"
+model = "iTransformer"
+batch_sampler = "BatchSamplerShuffle"
+n_epoch = 20
+early_stop = true
+[tasks.optimizer]
+cls_path = "torch.optim.Adam"
+params = { lr = 0.001 }
+[tasks.lr_scheduler]
+cls_path = "torch.optim.lr_scheduler.CosineAnnealingLR"
+params = { T_max = 20 }
+
+[[tasks]]
+task_type = "train"
+name = "Train iTransformer"
+data_range_train = [ 0.0, 0.8,]
+criterion = "MAE"
+model = "iTransformer"
+batch_sampler = "BatchSamplerShuffle"
+n_epoch = { task_name = "Pilot iTransformer" }
+[tasks.optimizer]
+cls_path = "torch.optim.Adam"
+params = { lr = 0.001 }
+[tasks.lr_scheduler]
+cls_path = "torch.optim.lr_scheduler.CosineAnnealingLR"
+params = { T_max = 20 }
+
+[[tasks]]
+task_type = "eval"
+name = "Eval iTransformer"
+data_range_eval = [ 0.8, 1.0,]
+criterion = "MAE"
+model = "iTransformer"
+model_state = { task_name = "Train iTransformer" }
+
+[[tasks]]
+task_type = "eval"
+name = "Eval iTransformer (ImprovementRate)"
+data_range_eval = [ 0.8, 1.0,]
+criterion = "ImprovementRate"
+baseline_model = "SimpleDiffAverage"
+model = "iTransformer"
+model_state = { task_name = "Train iTransformer" }
