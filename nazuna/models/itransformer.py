@@ -1,5 +1,6 @@
 from nazuna.models.base import BasicBaseModel
 from nazuna.scaler import IqrScaler
+import torch
 import torch.nn as nn
 
 
@@ -62,3 +63,34 @@ class iTransformer(BasicBaseModel):
         yhat = self.head(h)  # [B, C, pred_len]
         yhat = yhat.transpose(1, 2)  # [B, pred_len, C]
         return yhat, {}
+
+
+class DiffiTransformer(iTransformer):
+    def _setup(
+        self,
+        seq_len: int,
+        pred_len: int,
+        quantile_mode_train: str,
+        quantile_mode_eval: str,
+        d_model: int = 128,
+        n_heads: int = 4,
+        d_ff: int = 256,
+        e_layers: int = 3,
+        dropout: float = 0.1,
+    ) -> None:
+        # After first-order differencing, length becomes seq_len - 1.
+        diff_seq_len = seq_len - 1
+        super()._setup(
+            diff_seq_len, pred_len,
+            quantile_mode_train, quantile_mode_eval,
+            d_model, n_heads, d_ff, e_layers, dropout,
+        )
+        # Restore original seq_len for _extract_input slicing.
+        self.seq_len = seq_len
+
+    def forward(self, x):  # x: [B, seq_len, C] (scaled)
+        last_val = x[:, -1:, :]  # [B, 1, C]
+        dx = x[:, 1:, :] - x[:, :-1, :]  # [B, seq_len-1, C]
+        pred_dx, info = super().forward(dx)  # [B, pred_len, C]
+        pred = last_val + torch.cumsum(pred_dx, dim=1)
+        return pred, info

@@ -95,6 +95,37 @@ class DLinear(BasicBaseModel):
         return x, {'seasonal': seasonal_output, 'trend': trend_output}
 
 
+class NLinear(BasicBaseModel):
+    def _setup(
+        self,
+        seq_len: int,
+        pred_len: int,
+        bias: bool,
+        quantile_mode_train: str,
+        quantile_mode_eval: str,
+    ) -> None:
+        super()._setup(seq_len, pred_len)
+        self.Linear = nn.Linear(self.seq_len, self.pred_len, bias=bias)
+        self.scaler = IqrScaler(quantile_mode_train, quantile_mode_eval)
+        self._init_weights()
+
+    def _init_weights(self):
+        val = 1.0 / self.seq_len
+        self.Linear.weight = nn.Parameter(
+            torch.ones(self.pred_len, self.seq_len) * val
+        )
+
+    def forward(self, x):
+        # x: [B, L, C]
+        x_last = x[:, -1:, :]  # [B, 1, C]
+        x = x - x_last
+        x = x.permute(0, 2, 1)  # [B, C, L]
+        x = self.Linear(x)  # [B, C, T]
+        x = x.permute(0, 2, 1)  # [B, T, C]
+        x = x + x_last
+        return x, {}
+
+
 class DLinearChannelwise(BasicBaseModel):
     def _setup(
         self,
