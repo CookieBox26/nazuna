@@ -42,6 +42,9 @@ docs = [
     "mkdocstrings-python",
 ]
 
+[project.scripts]
+nazuna = 'nazuna.__main__:main'
+
 [project.urls]
 GitHub = "https://github.com/CookieBox26/nazuna"
 Documentation = "https://nazuna.readthedocs.io/en/latest/"

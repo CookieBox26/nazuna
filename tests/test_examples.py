@@ -1,5 +1,6 @@
+from nazuna.task_runner import run_tasks
+import nazuna.examples
 import pytest
-from nazuna.examples import run_example
 
 
 @pytest.mark.parametrize(
@@ -22,4 +23,5 @@ from nazuna.examples import run_example
     ],
 )
 def test_examples(identifier):
-    run_example(identifier)
+    conf_toml_path = nazuna.examples.get_conf_toml_path(identifier)
+    run_tasks(conf_toml_path)

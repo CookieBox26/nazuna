@@ -1,15 +1,21 @@
 from nazuna.task_runner import run_tasks
+import nazuna.examples
 import argparse
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('config', type=str, help='Path to a TOML config file')
-    parser.add_argument('-s', '--skip_task_ids', type=str, default='')
+    parser.add_argument('conf', type=str)
+    parser.add_argument('--skip_task_ids', type=str, default='')
+    parser.add_argument('--example', action='store_true')
     args = parser.parse_args()
 
+    conf = args.conf
+    if args.example:
+        conf = nazuna.examples.get_conf_toml_path(conf)
+
     run_tasks(
-        args.config,
+        conf,
         args.skip_task_ids,
     )
 
