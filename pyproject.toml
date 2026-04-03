@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling"]
+requires = [ "hatchling",]
 build-backend = "hatchling.build"
 
 [project]
@@ -7,36 +7,39 @@ name = "nazuna"
 version = "0.0.1"
 description = "Utility functions for time-series data analysis"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.13"
 authors = [
-  { name = "CookieBox26", email = "cookie-box@cookie-box.info" },
+    { name = "CookieBox26", email = "cookie-box@cookie-box.info" },
 ]
 dependencies = [
-  "toml",
-  "numpy",
-  "pandas",
-  "matplotlib",
-  "statsmodels",
-  "optuna",
+    "toml==0.10.2",
+    "numpy==2.4.1",
+    "pandas==2.3.3",
+    "matplotlib==3.10.8",
+    "statsmodels==0.14.6",
+    "optuna==4.7.0",
 ]
 classifiers = [
-  "Programming Language :: Python :: 3",
-  "License :: OSI Approved :: MIT License",
-  "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
 ]
 
 [project.optional-dependencies]
 torch-cpu = [
-  "torch>=2.0.0",
+    "torch==2.10.0",
+]
+torch-cu126 = [
+    "torch==2.9.1+cu126",
 ]
 test = [
-  "pytest",
-  "ruff",
+    "pytest",
+    "ruff",
 ]
 docs = [
-  "mkdocs",
-  "mkdocs-material",
-  "mkdocstrings-python",
+    "mkdocs",
+    "mkdocs-material",
+    "mkdocstrings-python",
 ]
 
 [project.urls]
@@ -44,13 +47,28 @@ GitHub = "https://github.com/CookieBox26/nazuna"
 Documentation = "https://nazuna.readthedocs.io/en/latest/"
 
 [tool.hatch.build.targets.wheel]
-artifacts = ["nazuna/datasets/**/*.csv"]
-
-[tool.ruff.lint]
-select = ["F401"]
+artifacts = [ "nazuna/datasets/**/*.csv",]
 
 [tool.pytest.ini_options]
 addopts = "-q -m 'not slow'"
-markers = [
-  "slow: time-consuming tests"
+markers = [ "slow: time-consuming tests",]
+filterwarnings = [
+  "ignore:.*The NVIDIA driver on your system is too old.*:UserWarning",
 ]
+
+[tool.ruff.lint]
+select = [ "F401",]
+
+[tool.uv]
+conflicts = [
+    [
+        { extra = "torch-cpu" },
+        { extra = "torch-cu126" },
+    ],
+]
+sources = { "torch" = [
+    { extra = "torch-cu126", index = "idx_torch-cu126" },
+] }
+[[tool.uv.index]]
+name = "idx_torch-cu126"
+url = "https://download.pytorch.org/whl/cu126"

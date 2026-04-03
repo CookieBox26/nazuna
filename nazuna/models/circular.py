@@ -4,8 +4,6 @@ Time series prediction model using periodic sin/cos features.
 Takes timesteps as input, generates sin/cos waveforms with multiple periods as features,
 and outputs predictions through linear transformation.
 """
-
-from abc import abstractmethod
 from nazuna.models.base import BasicBaseModel
 from nazuna.scaler import IqrScaler
 import torch

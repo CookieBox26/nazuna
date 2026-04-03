@@ -68,14 +68,21 @@ python -m nazuna ./out/traffic_eval_sa/config.toml
 ### Development Guide (for Developers)
 
 ```bash
-pip install -e '.[test,docs]'  #  install the package in editable mode
+uv sync --extra torch-cpu --extra test --extra docs  # CPU
+uv sync --extra torch-cu126 --extra test --extra docs  # CUDA 12.6
+
 # make some changes to the code in ./nazuna/
 # implement tests in ./tests/
-ruff check  # lint check
-pytest  # run tests locally
-# pytest -m ""  # run all tests, including slow ones
+
+# lint check
+uv run ruff check
+
+# run tests locally
+uv run pytest
+uv run pytest -m ""  # run all tests, including slow ones
+
 # update documentation in ./docs/
 mkdocs serve --livereload  # preview documentation locally
-# update the version in ./pyproject.toml
+
 # commit changes
 ```

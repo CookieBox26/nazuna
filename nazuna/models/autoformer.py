@@ -3,7 +3,6 @@ from nazuna.models.base import BasicBaseModel
 from nazuna.scaler import IqrScaler
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 
 class SeriesDecomp(nn.Module):
