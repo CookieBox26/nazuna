@@ -1,6 +1,7 @@
 from nazuna.data_manager import TimeSeriesDataset
 from nazuna.models.autoformer import Autoformer, DiffAutoformer
 from nazuna.criteria import MSE
+import numpy as np
 import torch
 
 
@@ -11,13 +12,14 @@ def test_forward(device):
         pred_len=4,
         quantile_mode_train='full',
         quantile_mode_eval='saved',
+        c_in=3,
         d_model=32,
         n_heads=4,
         d_ff=64,
         e_layers=2,
         decomp_kernel=3,
     )
-    batch = torch.tensor([[
+    x = torch.tensor([[
         [10., 10., 10.],
         [20., 20., 20.],
         [30., 30., 30.],
@@ -35,7 +37,8 @@ def test_forward(device):
         [30., 30., 30.],
         [40., 40., 40.],
     ]], device=device)
-    output, _ = model(batch)
+    x_mark = torch.zeros(1, 16, 4, device=device)
+    output, _ = model((x, x_mark))
     assert list(output.size()) == [1, 4, 3]
 
 
@@ -46,14 +49,16 @@ def test_get_loss(device):
         pred_len=4,
         quantile_mode_train='full',
         quantile_mode_eval='saved',
+        c_in=3,
         d_model=32,
         n_heads=4,
         d_ff=64,
         e_layers=2,
         decomp_kernel=3,
     )
+    tsta = np.array([[np.datetime64('2025-01-01') + np.timedelta64(i, 'D') for i in range(16)]])
     batch = TimeSeriesDataset.TimeSeriesBatch(
-        tsta=None,
+        tsta=tsta,
         tste=None,
         data=torch.tensor([[
             [10., 10., 10.],
@@ -100,13 +105,14 @@ def test_diff_autoformer_forward(device):
         pred_len=4,
         quantile_mode_train='full',
         quantile_mode_eval='saved',
+        c_in=3,
         d_model=32,
         n_heads=4,
         d_ff=64,
         e_layers=2,
         decomp_kernel=3,
     )
-    batch = torch.tensor([[
+    x = torch.tensor([[
         [10., 10., 10.],
         [20., 20., 20.],
         [30., 30., 30.],
@@ -125,7 +131,8 @@ def test_diff_autoformer_forward(device):
         [40., 40., 40.],
         [50., 50., 50.],
     ]], device=device)
-    output, _ = model(batch)
+    x_mark = torch.zeros(1, 17, 4, device=device)
+    output, _ = model((x, x_mark))
     assert list(output.size()) == [1, 4, 3]
 
 
@@ -136,14 +143,16 @@ def test_diff_autoformer_get_loss(device):
         pred_len=4,
         quantile_mode_train='full',
         quantile_mode_eval='saved',
+        c_in=3,
         d_model=32,
         n_heads=4,
         d_ff=64,
         e_layers=2,
         decomp_kernel=3,
     )
+    tsta = np.array([[np.datetime64('2025-01-01') + np.timedelta64(i, 'D') for i in range(17)]])
     batch = TimeSeriesDataset.TimeSeriesBatch(
-        tsta=None,
+        tsta=tsta,
         tste=None,
         data=torch.tensor([[
             [10., 10., 10.],

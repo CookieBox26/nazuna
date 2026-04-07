@@ -1,8 +1,46 @@
 import math
 from nazuna.models.base import BasicBaseModel
 from nazuna.scaler import IqrScaler
+import numpy as np
+import pandas as pd
 import torch
 import torch.nn as nn
+
+
+class TimeFeatureEmbedding(nn.Module):
+    # Number of time features per `freq` setting.
+    # 'h': hour, weekday, day, dayofyear
+    # 't': minute, hour, weekday, day, dayofyear
+    FREQ_MAP = {'h': 4, 't': 5}
+
+    def __init__(self, d_model: int, freq: str = 'h'):
+        super().__init__()
+        if freq not in self.FREQ_MAP:
+            raise ValueError(f"Unsupported freq '{freq}'. Use one of {list(self.FREQ_MAP)}.")
+        self.freq = freq
+        self.embed = nn.Linear(self.FREQ_MAP[freq], d_model, bias=False)
+
+    def forward(self, x_mark):
+        # x_mark: [B, L, d_inp]
+        return self.embed(x_mark)
+
+    @staticmethod
+    def build_features(tsta: np.ndarray, freq: str, device) -> torch.Tensor:
+        # tsta: numpy array of timestamps with shape [B, L]
+        # Returns float tensor [B, L, d_inp] normalized to [-0.5, 0.5].
+        flat = pd.DatetimeIndex(np.asarray(tsta).reshape(-1))
+        hour = flat.hour.values.astype(np.float32) / 23.0 - 0.5
+        weekday = flat.dayofweek.values.astype(np.float32) / 6.0 - 0.5
+        day = (flat.day.values.astype(np.float32) - 1.0) / 30.0 - 0.5
+        dayofyear = (flat.dayofyear.values.astype(np.float32) - 1.0) / 364.0 - 0.5
+        feats = [hour, weekday, day, dayofyear]
+        if freq == 't':
+            minute = flat.minute.values.astype(np.float32) / 59.0 - 0.5
+            feats = [minute] + feats
+        arr = np.stack(feats, axis=-1)  # [B*L, d_inp]
+        b, l = np.asarray(tsta).shape
+        arr = arr.reshape(b, l, -1)
+        return torch.tensor(arr, dtype=torch.float32, device=device)
 
 
 class SeriesDecomp(nn.Module):
@@ -136,6 +174,7 @@ class Autoformer(BasicBaseModel):
         pred_len: int,
         quantile_mode_train: str,
         quantile_mode_eval: str,
+        c_in: int,
         d_model: int = 128,
         n_heads: int = 4,
         d_ff: int = 256,
@@ -143,10 +182,15 @@ class Autoformer(BasicBaseModel):
         decomp_kernel: int = 25,
         n_moving_avg: int = 1,
         dropout: float = 0.1,
+        freq: str = 'h',
     ) -> None:
         super()._setup(seq_len, pred_len)
 
-        self.in_proj = nn.Linear(1, d_model)
+        self.c_in = c_in
+        self.d_model = d_model
+        self.freq = freq
+        self.in_proj = nn.Linear(c_in, d_model)
+        self.time_embed = TimeFeatureEmbedding(d_model, freq=freq)
         self.blocks = nn.ModuleList([
             AutoformerBlock(
                 d_model, n_heads, d_ff,
@@ -154,22 +198,25 @@ class Autoformer(BasicBaseModel):
             )
             for _ in range(e_layers)
         ])
-        self.head = nn.Linear(d_model, pred_len)
+        self.head = nn.Linear(d_model, pred_len * c_in)
         self.scaler = IqrScaler(quantile_mode_train, quantile_mode_eval)
 
-    def forward(self, x):
-        # x: [B, L, C] (channel-independent)
+    def _extract_input(self, batch):
+        x = super()._extract_input(batch)
+        tsta = batch.tsta[:, -self.seq_len:]
+        x_mark = TimeFeatureEmbedding.build_features(tsta, self.freq, x.device)
+        return x, x_mark
+
+    def forward(self, input_):
+        x, x_mark = input_
         B, L, C = x.shape
-        # Treat each channel independently: [B*C, L, 1]
-        x = x.transpose(1, 2).reshape(B * C, L, 1)
-        h = self.in_proj(x)  # [B*C, L, d_model]
+        h = self.in_proj(x)
+        h = h + self.time_embed(x_mark)
         for blk in self.blocks:
             h = blk(h)
-        # Pool last pred_len tokens and project
-        token = h[:, -1, :]  # [B*C, d_model]
-        yhat = self.head(token)  # [B*C, pred_len]
-        yhat = yhat.view(B, C, self.pred_len)  # [B, C, pred_len]
-        yhat = yhat.transpose(1, 2)  # [B, pred_len, C]
+        token = h[:, -1, :]  # [B, d_model]
+        yhat = self.head(token)  # [B, pred_len * C]
+        yhat = yhat.view(B, self.pred_len, C)
         return yhat, {}
 
 
@@ -180,6 +227,7 @@ class DiffAutoformer(Autoformer):
         pred_len: int,
         quantile_mode_train: str,
         quantile_mode_eval: str,
+        c_in: int,
         d_model: int = 128,
         n_heads: int = 4,
         d_ff: int = 256,
@@ -187,21 +235,25 @@ class DiffAutoformer(Autoformer):
         decomp_kernel: int = 25,
         n_moving_avg: int = 1,
         dropout: float = 0.1,
+        freq: str = 'h',
     ) -> None:
         # After first-order differencing, length becomes seq_len - 1.
         diff_seq_len = seq_len - 1
         super()._setup(
             diff_seq_len, pred_len,
             quantile_mode_train, quantile_mode_eval,
-            d_model, n_heads, d_ff,
+            c_in, d_model, n_heads, d_ff,
             e_layers, decomp_kernel, n_moving_avg, dropout,
+            freq,
         )
         # Restore original seq_len for _extract_input slicing.
         self.seq_len = seq_len
 
-    def forward(self, x):  # x: [B, seq_len, C] (scaled)
+    def forward(self, input_):
+        x, x_mark = input_
+        dx_mark = x_mark[:, 1:, :]
+        sub_input = (x[:, 1:, :] - x[:, :-1, :], dx_mark)
         last_val = x[:, -1:, :]  # [B, 1, C]
-        dx = x[:, 1:, :] - x[:, :-1, :]  # [B, seq_len-1, C]
-        pred_dx, info = super().forward(dx)  # [B, pred_len, C]
+        pred_dx, info = super().forward(sub_input)
         pred = last_val + torch.cumsum(pred_dx, dim=1)
         return pred, info

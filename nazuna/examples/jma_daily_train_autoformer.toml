@@ -27,6 +27,8 @@ cls_path = "nazuna.models.autoformer.Autoformer"
 [definitions.Autoformer.params]
 seq_len = 29
 pred_len = 7
+c_in = 2
+freq = "h"
 d_model = 32
 n_heads = 4
 d_ff = 64
