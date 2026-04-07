@@ -37,8 +37,9 @@ def test_forward(device):
         [30., 30., 30.],
         [40., 40., 40.],
     ]], device=device)
-    x_mark = torch.zeros(1, 16, 4, device=device)
-    output, _ = model((x, x_mark))
+    x_mark_enc = torch.zeros(1, 16, 4, device=device)
+    x_mark_dec = torch.zeros(1, 16 // 2 + 4, 4, device=device)
+    output, _ = model((x, x_mark_enc, x_mark_dec))
     assert list(output.size()) == [1, 4, 3]
 
 
@@ -57,6 +58,9 @@ def test_get_loss(device):
         decomp_kernel=3,
     )
     tsta = np.array([[np.datetime64('2025-01-01') + np.timedelta64(i, 'D') for i in range(16)]])
+    tsta_future = np.array(
+        [[np.datetime64('2025-01-17') + np.timedelta64(i, 'D') for i in range(4)]]
+    )
     batch = TimeSeriesDataset.TimeSeriesBatch(
         tsta=tsta,
         tste=None,
@@ -78,7 +82,7 @@ def test_get_loss(device):
             [30., 30., 30.],
             [40., 40., 40.],
         ]], device=device),
-        tsta_future=None,
+        tsta_future=tsta_future,
         tste_future=None,
         data_future=torch.tensor([[
             [50., 50., 50.],
@@ -131,8 +135,10 @@ def test_diff_autoformer_forward(device):
         [40., 40., 40.],
         [50., 50., 50.],
     ]], device=device)
-    x_mark = torch.zeros(1, 17, 4, device=device)
-    output, _ = model((x, x_mark))
+    x_mark_enc = torch.zeros(1, 17, 4, device=device)
+    # DiffAutoformer differences the input: effective encoder length is 16.
+    x_mark_dec = torch.zeros(1, 16 // 2 + 4, 4, device=device)
+    output, _ = model((x, x_mark_enc, x_mark_dec))
     assert list(output.size()) == [1, 4, 3]
 
 
@@ -151,6 +157,9 @@ def test_diff_autoformer_get_loss(device):
         decomp_kernel=3,
     )
     tsta = np.array([[np.datetime64('2025-01-01') + np.timedelta64(i, 'D') for i in range(17)]])
+    tsta_future = np.array(
+        [[np.datetime64('2025-01-18') + np.timedelta64(i, 'D') for i in range(4)]]
+    )
     batch = TimeSeriesDataset.TimeSeriesBatch(
         tsta=tsta,
         tste=None,
@@ -173,7 +182,7 @@ def test_diff_autoformer_get_loss(device):
             [40., 40., 40.],
             [50., 50., 50.],
         ]], device=device),
-        tsta_future=None,
+        tsta_future=tsta_future,
         tste_future=None,
         data_future=torch.tensor([[
             [60., 60., 60.],
