@@ -70,3 +70,11 @@ uv run mkdocs serve --livereload  # preview documentation locally
 
 # commit changes
 ```
+
+
+### References
+The linked page is my notes in Japanese.
+- [Haixu Wu, Jiehui Xu, Jianmin Wang, Mingsheng Long. Autoformer: Decomposition Transformers with Auto-Correlation for Long-Term Series Forecasting. Advances in Neural Information Processing Systems (NeurIPS 2021), vol. 34, 2021.](https://cookiebox26.github.io/cookipedia/articles/haixu_wu_et_al_2021.html)
+- [Ailing Zeng, Muxi Chen, Lei Zhang, Qiang Xu. Are transformers effective for time series forecasting? Proceedings of the AAAI Conference on Artificial Intelligence (AAAI 2023), vol. 37, pp. 11121-11128, 2023.](https://cookiebox26.github.io/cookipedia/articles/ailing_zeng_et_al_2023.html)
+- [Yuqi Nie, Nam H. Nguyen, Phanwadee Sinthong, Jayant Kalagnanam. A time series is worth 64 words: Long-term forecasting with transformers. International Conference on Learning Representations (ICLR), 2023.](https://cookiebox26.github.io/cookipedia/articles/yuqi_nie_et_al_2023.html)
+- [Yong Liu, Tengge Hu, Haoran Zhang, Haixu Wu, Shiyu Wang, Lintao Ma, Mingsheng Long. iTransformer: Inverted Transformers Are Effective for Time Series Forecasting. Proceedings of the 12th International Conference on Learning Representations (ICLR 2024), 2024.](https://cookiebox26.github.io/cookipedia/articles/yong_liu_et_al_2024.html)
