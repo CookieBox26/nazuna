@@ -2,25 +2,48 @@ from nazuna.models.base import BasicBaseModel
 from nazuna.scaler import IqrScaler
 import torch
 import torch.nn as nn
-import math
-
 
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model, max_len=5000, dropout=0.0):
         super().__init__()
         self.dropout = nn.Dropout(dropout)
-        pe = torch.zeros(max_len, d_model)
-        pos = torch.arange(0, max_len).unsqueeze(1).float()
-        div = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
-        pe[:, 0::2] = torch.sin(pos * div)
-        pe[:, 1::2] = torch.cos(pos * div)
-        pe = pe - pe.mean()
-        pe = pe / (pe.std() * 10)
-        self.register_buffer('pe', pe)  # [max_len, d_model]
+        self.pe = nn.Parameter(
+            torch.zeros(max_len, d_model)
+        )  # [max_len, d_model]
 
     def forward(self, x):  # x: [B, S, D]
         s = x.size(1)
         return self.dropout(x + self.pe[:s].unsqueeze(0))
+
+
+class TSTEncoderLayer(nn.Module):
+    def __init__(self, d_model, n_heads, d_ff, dropout=0.1):
+        super().__init__()
+        self.self_attn = nn.MultiheadAttention(
+            d_model, n_heads,
+            dropout=dropout, batch_first=True,
+        )
+        self.dropout_attn = nn.Dropout(dropout)
+        self.norm_attn = nn.BatchNorm1d(d_model)
+
+        self.ff = nn.Sequential(
+            nn.Linear(d_model, d_ff),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(d_ff, d_model),
+            nn.Dropout(dropout),
+        )
+        self.norm_ff = nn.BatchNorm1d(d_model)
+
+    def forward(self, x):  # x: [B, S, D]
+        attn_out, _ = self.self_attn(x, x, x)
+        x = x + self.dropout_attn(attn_out)
+        # BatchNorm1d expects [B, D, S]
+        x = self.norm_attn(x.transpose(1, 2)).transpose(1, 2)
+
+        x = x + self.ff(x)
+        x = self.norm_ff(x.transpose(1, 2)).transpose(1, 2)
+        return x
 
 
 class PatchTST(BasicBaseModel):
@@ -37,8 +60,6 @@ class PatchTST(BasicBaseModel):
         self,
         seq_len: int,
         pred_len: int,
-        quantile_mode_train: str,
-        quantile_mode_eval: str,
         patch_len: int = 16,
         stride: int = 8,
         d_model: int = 128,
@@ -46,15 +67,15 @@ class PatchTST(BasicBaseModel):
         n_layers: int = 3,
         d_ff: int = 256,
         dropout: float = 0.2,
-        patch_norm: bool = False,
         revin: bool = True,
         revin_eps: float = 1e-5,
+        quantile_mode_train: str | None = None,
+        quantile_mode_eval: str | None = None,
     ) -> None:
         """
         Args:
             seq_len: Input sequence length (must be >= `patch_len`)
             pred_len: Prediction length
-            quantile_mode: Source of quantiles for scaling ('full', 'cum', or 'rolling')
             patch_len: Length of each patch
             stride: Stride for patch extraction
             d_model: Dimension of the model
@@ -62,11 +83,17 @@ class PatchTST(BasicBaseModel):
             n_layers: Number of Transformer encoder layers
             d_ff: Dimension of the feedforward network
             dropout: Dropout rate
-            patch_norm: Whether to apply LayerNorm to patches
             revin: Whether to apply RevIN (instance normalization)
             revin_eps: Epsilon for RevIN std computation
+            quantile_mode_train: IqrScaler mode for training (None to disable)
+            quantile_mode_eval: IqrScaler mode for evaluation (None to disable)
         """
         super()._setup(seq_len, pred_len)
+
+        if quantile_mode_train is not None:
+            self.scaler = IqrScaler(
+                quantile_mode_train, quantile_mode_eval,
+            )
 
         self.patch_len = patch_len
         self.stride = stride
@@ -75,7 +102,6 @@ class PatchTST(BasicBaseModel):
         self.n_layers = n_layers
         self.d_ff = d_ff
         self.dropout = dropout
-        self.use_patch_norm = patch_norm
         self.use_revin = revin
         self.revin_eps = revin_eps
         self.pool = 'last'  # 'last' or 'mean'
@@ -86,11 +112,6 @@ class PatchTST(BasicBaseModel):
         )
 
         self.patch_proj = nn.Linear(self.patch_len, self.d_model)
-        self.patch_norm_layer = (
-            nn.LayerNorm(self.patch_len)
-            if self.use_patch_norm
-            else nn.Identity()
-        )
 
         self.pos = PositionalEncoding(
             self.d_model,
@@ -98,22 +119,14 @@ class PatchTST(BasicBaseModel):
             dropout=self.dropout,
         )
 
-        enc_layer = nn.TransformerEncoderLayer(
-            d_model=self.d_model,
-            nhead=self.n_heads,
-            dim_feedforward=self.d_ff,
-            dropout=self.dropout,
-            batch_first=True,
-            norm_first=False,
-            activation='gelu',
-        )
-        self.encoder = nn.TransformerEncoder(
-            enc_layer,
-            num_layers=self.n_layers,
-            enable_nested_tensor=False,
-        )
+        self.encoder = nn.Sequential(*[
+            TSTEncoderLayer(
+                self.d_model, self.n_heads,
+                self.d_ff, self.dropout,
+            )
+            for _ in range(self.n_layers)
+        ])
         self.head = nn.Linear(self.d_model, self.pred_len)
-        self.scaler = IqrScaler(quantile_mode_train, quantile_mode_eval)
 
     def _patchify(self, x):  # x: [B, L, C] -> [B, C, P, patch_len]
         x = x.transpose(1, 2)  # [B, C, L]
@@ -126,15 +139,11 @@ class PatchTST(BasicBaseModel):
         if self.use_revin:
             # x: [B, L, C]
             ri_mean = x.mean(dim=1, keepdim=True)  # [B, 1, C]
-            ri_std = (
-                x.std(dim=1, keepdim=True) + self.revin_eps
-            )  # [B, 1, C]
+            ri_std = (x.std(dim=1, keepdim=True) + self.revin_eps)  # [B, 1, C]
             x = (x - ri_mean) / ri_std
 
         patches = self._patchify(x)  # [B, C, P, pl]
         P = patches.size(2)
-        patches = self.patch_norm_layer(patches)  # [B, C, P, pl]
-
         z = patches.reshape(B * C, P, self.patch_len)  # [B*C, P, pl]
         z = self.patch_proj(z)  # [B*C, P, D]
         z = self.pos(z)  # [B*C, P, D]
@@ -161,8 +170,6 @@ class DiffPatchTST(PatchTST):
         self,
         seq_len: int,
         pred_len: int,
-        quantile_mode_train: str,
-        quantile_mode_eval: str,
         patch_len: int = 16,
         stride: int = 8,
         d_model: int = 128,
@@ -170,18 +177,19 @@ class DiffPatchTST(PatchTST):
         n_layers: int = 3,
         d_ff: int = 256,
         dropout: float = 0.2,
-        patch_norm: bool = False,
         revin: bool = True,
         revin_eps: float = 1e-5,
+        quantile_mode_train: str | None = None,
+        quantile_mode_eval: str | None = None,
     ) -> None:
         # After first-order differencing, length becomes seq_len - 1.
         diff_seq_len = seq_len - 1
         super()._setup(
             diff_seq_len, pred_len,
-            quantile_mode_train, quantile_mode_eval,
             patch_len, stride, d_model, n_heads,
             n_layers, d_ff, dropout,
-            patch_norm, revin, revin_eps,
+            revin, revin_eps,
+            quantile_mode_train, quantile_mode_eval,
         )
         # Restore original seq_len for _extract_input slicing.
         self.seq_len = seq_len

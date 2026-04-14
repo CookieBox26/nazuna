@@ -27,8 +27,6 @@ cls_path = "nazuna.models.patchtst.PatchTST"
 [definitions.PatchTST.params]
 seq_len = 29
 pred_len = 7
-quantile_mode_train = "full"
-quantile_mode_eval = "saved"
 
 [definitions.BatchSamplerShuffle]
 cls_path = "nazuna.batch_sampler.BatchSamplerShuffle"
