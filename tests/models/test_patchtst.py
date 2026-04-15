@@ -4,61 +4,29 @@ from nazuna.criteria import MSE
 import torch
 
 
-def test_forward(device):
+def test_forward(device, dummy_data):
     model = PatchTST.create(
         device=device,
         seq_len=16,
         pred_len=4,
+        c_in=3,
     )
-    batch = torch.tensor([[
-        [10., 10., 10.],
-        [20., 20., 20.],
-        [30., 30., 30.],
-        [40., 40., 40.],
-        [10., 10., 10.],
-        [20., 20., 20.],
-        [30., 30., 30.],
-        [40., 40., 40.],
-        [10., 10., 10.],
-        [20., 20., 20.],
-        [30., 30., 30.],
-        [40., 40., 40.],
-        [10., 10., 10.],
-        [20., 20., 20.],
-        [30., 30., 30.],
-        [40., 40., 40.],
-    ]], device=device)
+    batch = dummy_data((1, 16, 3))
     output, _ = model(batch)
     assert list(output.size()) == [1, 4, 3]
 
 
-def test_get_loss(device):
+def test_get_loss(device, dummy_data):
     model = PatchTST.create(
         device=device,
         seq_len=16,
         pred_len=4,
+        c_in=3,
     )
     batch = TimeSeriesDataset.TimeSeriesBatch(
         tsta=None,
         tste=None,
-        data=torch.tensor([[
-            [10., 10., 10.],
-            [20., 20., 20.],
-            [30., 30., 30.],
-            [40., 40., 40.],
-            [10., 10., 10.],
-            [20., 20., 20.],
-            [30., 30., 30.],
-            [40., 40., 40.],
-            [10., 10., 10.],
-            [20., 20., 20.],
-            [30., 30., 30.],
-            [40., 40., 40.],
-            [10., 10., 10.],
-            [20., 20., 20.],
-            [30., 30., 30.],
-            [40., 40., 40.],
-        ]], device=device),
+        data=dummy_data((1, 16, 3)),
         tsta_future=None,
         tste_future=None,
         data_future=torch.tensor([[
@@ -79,6 +47,7 @@ def test_diff_patchtst_forward(device):
         device=device,
         seq_len=17,
         pred_len=4,
+        c_in=3,
     )
     batch = torch.tensor([[
         [10., 10., 10.],
@@ -108,6 +77,7 @@ def test_diff_patchtst_get_loss(device):
         device=device,
         seq_len=17,
         pred_len=4,
+        c_in=3,
     )
     batch = TimeSeriesDataset.TimeSeriesBatch(
         tsta=None,

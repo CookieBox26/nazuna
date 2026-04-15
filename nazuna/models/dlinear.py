@@ -1,42 +1,8 @@
-import math
-
-from nazuna.models.base import BasicBaseModel
+from nazuna.models._base import BasicBaseModel
+from nazuna.models.common import SeriesDecomp
 from nazuna.scaler import IqrScaler
 import torch
-import torch.nn as nn
-
-
-class series_decomp(nn.Module):
-    """Moving average based series decomposition.
-
-    Pads the input by repeating edge values, then applies average pooling.
-    For odd kernel_size, pads ``(kernel_size - 1) // 2`` steps on each side.
-    For even kernel_size, pads ``kernel_size // 2`` steps on the front and
-    ``(kernel_size - 1) // 2`` steps on the end (one extra step at the front).
-    """
-
-    def __init__(self, kernel_size, n_moving_avg=1):
-        super().__init__()
-        self.kernel_size = kernel_size
-        self.n_moving_avg = n_moving_avg
-        self.avg = nn.AvgPool1d(kernel_size=kernel_size, stride=1, padding=0)
-
-    def moving_avg(self, x):
-        pad_len_front = self.kernel_size // 2
-        pad_len_end = (self.kernel_size - 1) // 2
-        front = x[:, 0:1, :].repeat(1, pad_len_front, 1)
-        end = x[:, -1:, :].repeat(1, pad_len_end, 1)
-        x = torch.cat([front, x, end], dim=1)
-        x = self.avg(x.permute(0, 2, 1))
-        x = x.permute(0, 2, 1)
-        return x
-
-    def forward(self, x):
-        moving_mean = x
-        for _ in range(self.n_moving_avg):
-            moving_mean = self.moving_avg(moving_mean)
-        res = x - moving_mean
-        return res, moving_mean
+import math
 
 
 class DLinear(BasicBaseModel):
@@ -69,18 +35,18 @@ class DLinear(BasicBaseModel):
             n_moving_avg: Number of times to apply moving average
         """
         super()._setup(seq_len, pred_len)
-        self.decompsition = series_decomp(kernel_size, n_moving_avg)
-        self.Linear_Seasonal = nn.Linear(self.seq_len, self.pred_len, bias=bias)
-        self.Linear_Trend = nn.Linear(self.seq_len, self.pred_len, bias=bias)
+        self.decompsition = SeriesDecomp(kernel_size, n_moving_avg)
+        self.Linear_Seasonal = torch.nn.Linear(self.seq_len, self.pred_len, bias=bias)
+        self.Linear_Trend = torch.nn.Linear(self.seq_len, self.pred_len, bias=bias)
         self.scaler = IqrScaler(quantile_mode_train, quantile_mode_eval)
         self._init_weights()
 
     def _init_weights(self):
         val = 1.0 / self.seq_len
-        self.Linear_Seasonal.weight = nn.Parameter(
+        self.Linear_Seasonal.weight = torch.nn.Parameter(
             torch.ones(self.pred_len, self.seq_len) * val
         )
-        self.Linear_Trend.weight = nn.Parameter(
+        self.Linear_Trend.weight = torch.nn.Parameter(
             torch.ones(self.pred_len, self.seq_len) * val
         )
 
@@ -105,13 +71,13 @@ class NLinear(BasicBaseModel):
         quantile_mode_eval: str,
     ) -> None:
         super()._setup(seq_len, pred_len)
-        self.Linear = nn.Linear(self.seq_len, self.pred_len, bias=bias)
+        self.Linear = torch.nn.Linear(self.seq_len, self.pred_len, bias=bias)
         self.scaler = IqrScaler(quantile_mode_train, quantile_mode_eval)
         self._init_weights()
 
     def _init_weights(self):
         val = 1.0 / self.seq_len
-        self.Linear.weight = nn.Parameter(
+        self.Linear.weight = torch.nn.Parameter(
             torch.ones(self.pred_len, self.seq_len) * val
         )
 
@@ -140,20 +106,20 @@ class DLinearChannelwise(BasicBaseModel):
     ) -> None:
         super()._setup(seq_len, pred_len)
         self.n_channel = n_channel
-        self.decompsition = series_decomp(kernel_size, n_moving_avg)
+        self.decompsition = SeriesDecomp(kernel_size, n_moving_avg)
 
         # [n_channel, seq_len, pred_len]
-        self.seasonal_weight = nn.Parameter(
+        self.seasonal_weight = torch.nn.Parameter(
             torch.empty(n_channel, seq_len, pred_len)
         )
-        self.trend_weight = nn.Parameter(
+        self.trend_weight = torch.nn.Parameter(
             torch.empty(n_channel, seq_len, pred_len)
         )
-        nn.init.kaiming_uniform_(self.seasonal_weight, a=math.sqrt(5))
-        nn.init.kaiming_uniform_(self.trend_weight, a=math.sqrt(5))
+        torch.nn.init.kaiming_uniform_(self.seasonal_weight, a=math.sqrt(5))
+        torch.nn.init.kaiming_uniform_(self.trend_weight, a=math.sqrt(5))
         if bias:
-            self.seasonal_bias = nn.Parameter(torch.zeros(n_channel, pred_len))
-            self.trend_bias = nn.Parameter(torch.zeros(n_channel, pred_len))
+            self.seasonal_bias = torch.nn.Parameter(torch.zeros(n_channel, pred_len))
+            self.trend_bias = torch.nn.Parameter(torch.zeros(n_channel, pred_len))
         else:
             self.seasonal_bias = None
             self.trend_bias = None

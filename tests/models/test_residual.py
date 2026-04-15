@@ -24,7 +24,7 @@ def test_forward(device):
     assert list(output.size()) == [2, 24, 3]
 
 
-def test_get_loss(device):
+def test_get_loss(device, dummy_data):
     model = ResidualModel.create(
         device=device,
         seq_len=16,
@@ -42,24 +42,7 @@ def test_get_loss(device):
     batch = TimeSeriesDataset.TimeSeriesBatch(
         tsta=None,
         tste=None,
-        data=torch.tensor([[
-            [10., 10., 10.],
-            [20., 20., 20.],
-            [30., 30., 30.],
-            [40., 40., 40.],
-            [10., 10., 10.],
-            [20., 20., 20.],
-            [30., 30., 30.],
-            [40., 40., 40.],
-            [10., 10., 10.],
-            [20., 20., 20.],
-            [30., 30., 30.],
-            [40., 40., 40.],
-            [10., 10., 10.],
-            [20., 20., 20.],
-            [30., 30., 30.],
-            [40., 40., 40.],
-        ]], device=device),
+        data=dummy_data((1, 16, 3)),
         tsta_future=None,
         tste_future=None,
         data_future=torch.tensor([[
@@ -127,28 +110,11 @@ def test_residual_model2_forward(device):
         assert torch.allclose(out_w0, neural_out)
 
 
-def _make_batch_for_residual3(device, n_channel=3):
+def _make_batch_for_residual3(device, dummy_data, n_channel=3):
     return TimeSeriesDataset.TimeSeriesBatch(
         tsta=None,
         tste=None,
-        data=torch.tensor([[
-            [10., 10., 10.],
-            [20., 20., 20.],
-            [30., 30., 30.],
-            [40., 40., 40.],
-            [10., 10., 10.],
-            [20., 20., 20.],
-            [30., 30., 30.],
-            [40., 40., 40.],
-            [10., 10., 10.],
-            [20., 20., 20.],
-            [30., 30., 30.],
-            [40., 40., 40.],
-            [10., 10., 10.],
-            [20., 20., 20.],
-            [30., 30., 30.],
-            [40., 40., 40.],
-        ]], device=device),
+        data=dummy_data((1, 16, 3)),
         tsta_future=None,
         tste_future=None,
         data_future=torch.tensor([[
@@ -199,18 +165,18 @@ def test_residual_model3_forward(device):
     assert 'naive' in info
 
 
-def test_residual_model3_predict(device):
+def test_residual_model3_predict(device, dummy_data):
     n_channel = 3
     model = _create_residual_model3(device, n_channel)
-    batch = _make_batch_for_residual3(device, n_channel)
+    batch = _make_batch_for_residual3(device, dummy_data, n_channel)
     output, info = model.predict(batch)
     assert list(output.size()) == [1, 4, n_channel]
 
 
-def test_residual_model3_get_loss_and_backward(device):
+def test_residual_model3_get_loss_and_backward(device, dummy_data):
     n_channel = 3
     model = _create_residual_model3(device, n_channel)
-    batch = _make_batch_for_residual3(device, n_channel)
+    batch = _make_batch_for_residual3(device, dummy_data, n_channel)
     criterion = MSE.create(device, n_channel=n_channel, pred_len=4)
     loss = model.get_loss_and_backward(batch, criterion)
     assert loss.batch_mean.item() >= 0

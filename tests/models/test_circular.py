@@ -32,7 +32,7 @@ def _make_quantiles(device):
     return {'full': torch.stack([q1, q2, q3], dim=1)}
 
 
-def test_get_loss(device):
+def test_get_loss(device, dummy_data):
     model = Circular.create(
         device=device,
         seq_len=4,
@@ -47,12 +47,7 @@ def test_get_loss(device):
         tste=torch.tensor(
             [[0, 1, 2, 3]], dtype=torch.float32, device=device
         ),
-        data=torch.tensor([[
-            [10., 10., 10.],
-            [20., 20., 20.],
-            [30., 30., 30.],
-            [40., 40., 40.],
-        ]], device=device),
+        data=dummy_data((1, 4, 3)),
         tsta_future=None,
         tste_future=torch.tensor(
             [[4, 5, 6, 7]], dtype=torch.float32, device=device

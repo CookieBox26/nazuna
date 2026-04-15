@@ -1,81 +1,19 @@
-import math
-from nazuna.models.base import BasicBaseModel
+from nazuna.models._base import BasicBaseModel
+from nazuna.models.common import TimeFeatureEmbedding, SeriesDecomp
 from nazuna.scaler import IqrScaler
 import numpy as np
-import pandas as pd
 import torch
-import torch.nn as nn
+import math
 
 
-class TimeFeatureEmbedding(nn.Module):
-    # Number of time features per `freq` setting.
-    # 'h': hour, weekday, day, dayofyear
-    # 't': minute, hour, weekday, day, dayofyear
-    FREQ_MAP = {'h': 4, 't': 5}
-
-    def __init__(self, d_model: int, freq: str = 'h'):
-        super().__init__()
-        if freq not in self.FREQ_MAP:
-            raise ValueError(f"Unsupported freq '{freq}'. Use one of {list(self.FREQ_MAP)}.")
-        self.freq = freq
-        self.embed = nn.Linear(self.FREQ_MAP[freq], d_model, bias=False)
-
-    def forward(self, x_mark):
-        return self.embed(x_mark)
-
-    @staticmethod
-    def build_features(tsta: np.ndarray, freq: str, device) -> torch.Tensor:
-        # tsta: numpy array of timestamps with shape [B, L]
-        # Returns float tensor [B, L, d_inp] normalized to [-0.5, 0.5].
-        flat = pd.DatetimeIndex(np.asarray(tsta).reshape(-1))
-        hour = flat.hour.values.astype(np.float32) / 23.0 - 0.5
-        weekday = flat.dayofweek.values.astype(np.float32) / 6.0 - 0.5
-        day = (flat.day.values.astype(np.float32) - 1.0) / 30.0 - 0.5
-        dayofyear = (flat.dayofyear.values.astype(np.float32) - 1.0) / 364.0 - 0.5
-        feats = [hour, weekday, day, dayofyear]
-        if freq == 't':
-            minute = flat.minute.values.astype(np.float32) / 59.0 - 0.5
-            feats = [minute] + feats
-        arr = np.stack(feats, axis=-1)
-        b, l = np.asarray(tsta).shape
-        arr = arr.reshape(b, l, -1)
-        return torch.tensor(arr, dtype=torch.float32, device=device)
-
-
-class SeriesDecomp(nn.Module):
-    def __init__(self, kernel_size, n_moving_avg=1):
-        super().__init__()
-        self.kernel_size = kernel_size
-        self.n_moving_avg = n_moving_avg
-        self.avg = nn.AvgPool1d(
-            kernel_size=kernel_size, stride=1, padding=0
-        )
-
-    def moving_avg(self, x):
-        pad_front = self.kernel_size // 2
-        pad_end = (self.kernel_size - 1) // 2
-        front = x[:, 0:1, :].repeat(1, pad_front, 1)
-        end = x[:, -1:, :].repeat(1, pad_end, 1)
-        x = torch.cat([front, x, end], dim=1)
-        x = self.avg(x.permute(0, 2, 1))
-        x = x.permute(0, 2, 1)
-        return x
-
-    def forward(self, x):
-        trend = x
-        for _ in range(self.n_moving_avg):
-            trend = self.moving_avg(trend)
-        seasonal = x - trend
-        return seasonal, trend
-
-
-class AutoCorrelation(nn.Module):
+class AutoCorrelationLayer(torch.nn.Module):
     def __init__(
         self,
         d_model: int,
         n_heads: int,
         topk_factor: float = 1.0,
         dropout: float = 0.0,
+        independent_heads: bool = False,  # Not in the original implementation
     ):
         super().__init__()
         assert d_model % n_heads == 0
@@ -83,73 +21,106 @@ class AutoCorrelation(nn.Module):
         self.n_heads = n_heads
         self.d_head = d_model // n_heads
         self.topk_factor = topk_factor
+        self.independent_heads = independent_heads
 
-        self.q_proj = nn.Linear(d_model, d_model)
-        self.k_proj = nn.Linear(d_model, d_model)
-        self.v_proj = nn.Linear(d_model, d_model)
-        self.out_proj = nn.Linear(d_model, d_model)
-        self.dropout = nn.Dropout(dropout)
+        self.q_proj = torch.nn.Linear(d_model, d_model)
+        self.k_proj = torch.nn.Linear(d_model, d_model)
+        self.v_proj = torch.nn.Linear(d_model, d_model)
+        self.out_proj = torch.nn.Linear(d_model, d_model)
+        self.dropout = torch.nn.Dropout(dropout)
+
+    def _lagged_aggregation(self, b, mean_corr, topk, v, l):
+        # mean_corr: [B, L] or [B, H, L]
+        # weights, delay: [B, topk] or [B, H, topk]
+        weights, delay = torch.topk(mean_corr, topk, dim=-1)
+        w = torch.softmax(weights, dim=-1)
+        v_rep = torch.cat([v, v], dim=2)  # [B, H, 2L, d_head]
+        init_index = (
+            torch.arange(l, device=v.device).view(1, 1, l, 1)
+            .expand(b, self.n_heads, l, self.d_head)
+        )
+        agg = torch.zeros_like(v)
+        for i in range(topk):
+            idx = init_index + delay[..., i].view(b, -1, 1, 1).expand(
+                b, self.n_heads, l, self.d_head
+            )
+            shifted = v_rep.gather(dim=2, index=idx)
+            agg = agg + shifted * w[..., i].view(b, -1, 1, 1)
+        return agg
+
+    def _autocorrelation(self, q, k, v, l):
+        b = q.shape[0]
+        qf = torch.fft.rfft(q, dim=2)
+        kf = torch.fft.rfft(k, dim=2)
+        corr = torch.fft.irfft(qf * torch.conj(kf), n=l, dim=2)
+        topk = max(1, int(self.topk_factor * math.log(l + 1)))
+
+        if self.independent_heads:
+            # Not in the original implementation: per-head independent lag selection.
+            mean_corr = corr.mean(dim=-1)  # [B, H, L]
+            if self.training:
+                index = torch.topk(mean_corr.mean(dim=0), topk, dim=-1)[1]  # [H, topk]
+                weights = torch.stack([
+                    mean_corr[:, h, index[h, i]]
+                    for h in range(self.n_heads)
+                    for i in range(topk)
+                ], dim=-1).view(b, self.n_heads, topk)
+                w = torch.softmax(weights, dim=-1)
+                agg = torch.zeros_like(v)
+                for h in range(self.n_heads):
+                    for i in range(topk):
+                        shifted = torch.roll(v[:, h, :, :], -int(index[h, i]), dims=1)
+                        agg[:, h, :, :] = agg[:, h, :, :] + shifted * w[:, h, i].view(b, 1, 1)
+            else:
+                agg = self._lagged_aggregation(b, mean_corr, topk, v, l)
+        else:
+            mean_corr = corr.mean(dim=1).mean(dim=-1)  # [B, L]
+            if self.training:
+                index = torch.topk(mean_corr.mean(dim=0), topk, dim=-1)[1]  # [topk]
+                weights = torch.stack(
+                    [mean_corr[:, index[i]] for i in range(topk)], dim=-1
+                )  # [B, topk]
+                w = torch.softmax(weights, dim=-1)
+                agg = torch.zeros_like(v)
+                for i in range(topk):
+                    shifted = torch.roll(v, -int(index[i]), dims=2)
+                    agg = agg + shifted * w[:, i].view(b, 1, 1, 1)
+            else:
+                agg = self._lagged_aggregation(b, mean_corr, topk, v, l)
+        return agg
 
     def _reshape_heads(self, x):
         # [B, L, D] -> [B, H, L, d_head]
         b, l, _ = x.shape
         return x.view(b, l, self.n_heads, self.d_head).transpose(1, 2)
 
-    def forward(self, q_in, k_in, v_in, causal: bool = False):
+    def forward(self, q_in, k_in, v_in):
         # q_in: [B, Lq, D]; k_in, v_in: [B, Lk, D].
         # When Lq != Lk, align lengths by zero-padding or truncating k/v to Lq
         # (official Autoformer behavior for cross-correlation).
         b, lq, _ = q_in.shape
         lk = k_in.shape[1]
         if lk < lq:
-            pad = torch.zeros(b, lq - lk, self.d_model, device=k_in.device, dtype=k_in.dtype)
+            pad = torch.zeros(
+                b, lq - lk, self.d_model,
+                device=k_in.device, dtype=k_in.dtype,
+            )
             k_in = torch.cat([k_in, pad], dim=1)
             v_in = torch.cat([v_in, pad], dim=1)
         elif lk > lq:
             k_in = k_in[:, :lq, :]
             v_in = v_in[:, :lq, :]
         l = lq
-
         q = self._reshape_heads(self.q_proj(q_in))
         k = self._reshape_heads(self.k_proj(k_in))
         v = self._reshape_heads(self.v_proj(v_in))
-
-        qf = torch.fft.rfft(q, dim=2)
-        kf = torch.fft.rfft(k, dim=2)
-        corr = torch.fft.irfft(qf * torch.conj(kf), n=l, dim=2)
-        corr = corr.mean(dim=-1)  # [B, H, L]
-
-        if causal:
-            # Disallow positive lags that would reach into future positions.
-            # lag index i corresponds to a circular shift by i steps; in the
-            # decoder self-attention we mask out lags that mix future into past.
-            mask = torch.full_like(corr, float('-inf'))
-            # Keep lag 0 only (each position attends to itself) for strict causality
-            # at the correlation-selection stage. The top-k then degenerates to lag 0.
-            mask[..., 0] = 0.0
-            corr = corr + mask
-
-        topk = max(1, int(self.topk_factor * math.log(l + 1)))
-        vals, lags = torch.topk(corr, k=topk, dim=-1)
-        w = torch.softmax(vals, dim=-1)
-
-        agg = torch.zeros_like(v)
-        for i in range(topk):
-            lag = lags[..., i]  # [B, H]
-            idx = (
-                torch.arange(l, device=q_in.device)[None, None, :]
-                - lag[..., None]
-            ) % l
-            idx = idx.unsqueeze(-1).expand(-1, -1, -1, self.d_head)
-            shifted = v.gather(dim=2, index=idx)
-            agg = agg + shifted * w[..., i].unsqueeze(-1).unsqueeze(-1)
-
+        agg = self._autocorrelation(q, k, v, l)
         agg = self.dropout(agg)
         agg = agg.transpose(1, 2).contiguous().view(b, l, self.d_model)
         return self.out_proj(agg)
 
 
-class EncoderLayer(nn.Module):
+class EncoderLayer(torch.nn.Module):
     def __init__(
         self,
         d_model: int,
@@ -158,17 +129,22 @@ class EncoderLayer(nn.Module):
         decomp_kernel: int,
         n_moving_avg: int = 1,
         dropout: float = 0.1,
+        topk_factor: float = 1.0,
+        independent_heads: bool = False,  # Not in the original implementation
     ):
         super().__init__()
-        self.ac = AutoCorrelation(d_model, n_heads, dropout=dropout)
-        self.dropout = nn.Dropout(dropout)
+        self.ac = AutoCorrelationLayer(
+            d_model, n_heads, topk_factor=topk_factor, dropout=dropout,
+            independent_heads=independent_heads,
+        )
+        self.dropout = torch.nn.Dropout(dropout)
         self.decomp1 = SeriesDecomp(decomp_kernel, n_moving_avg)
-        self.ff = nn.Sequential(
-            nn.Linear(d_model, d_ff),
-            nn.GELU(),
-            nn.Dropout(dropout),
-            nn.Linear(d_ff, d_model),
-            nn.Dropout(dropout),
+        self.ff = torch.nn.Sequential(
+            torch.nn.Linear(d_model, d_ff),
+            torch.nn.GELU(),
+            torch.nn.Dropout(dropout),
+            torch.nn.Linear(d_ff, d_model),
+            torch.nn.Dropout(dropout),
         )
         self.decomp2 = SeriesDecomp(decomp_kernel, n_moving_avg)
 
@@ -180,7 +156,7 @@ class EncoderLayer(nn.Module):
         return x
 
 
-class DecoderLayer(nn.Module):
+class DecoderLayer(torch.nn.Module):
     def __init__(
         self,
         d_model: int,
@@ -190,22 +166,30 @@ class DecoderLayer(nn.Module):
         decomp_kernel: int,
         n_moving_avg: int = 1,
         dropout: float = 0.1,
+        topk_factor: float = 1.0,
+        independent_heads: bool = False,  # Not in the original implementation
     ):
         super().__init__()
-        self.self_ac = AutoCorrelation(d_model, n_heads, dropout=dropout)
-        self.cross_ac = AutoCorrelation(d_model, n_heads, dropout=dropout)
-        self.dropout = nn.Dropout(dropout)
+        self.self_ac = AutoCorrelationLayer(
+            d_model, n_heads, topk_factor=topk_factor, dropout=dropout,
+            independent_heads=independent_heads,
+        )
+        self.cross_ac = AutoCorrelationLayer(
+            d_model, n_heads, topk_factor=topk_factor, dropout=dropout,
+            independent_heads=independent_heads,
+        )
+        self.dropout = torch.nn.Dropout(dropout)
         self.decomp1 = SeriesDecomp(decomp_kernel, n_moving_avg)
         self.decomp2 = SeriesDecomp(decomp_kernel, n_moving_avg)
         self.decomp3 = SeriesDecomp(decomp_kernel, n_moving_avg)
-        self.ff = nn.Sequential(
-            nn.Linear(d_model, d_ff),
-            nn.GELU(),
-            nn.Dropout(dropout),
-            nn.Linear(d_ff, d_model),
-            nn.Dropout(dropout),
+        self.ff = torch.nn.Sequential(
+            torch.nn.Linear(d_model, d_ff),
+            torch.nn.GELU(),
+            torch.nn.Dropout(dropout),
+            torch.nn.Linear(d_ff, d_model),
+            torch.nn.Dropout(dropout),
         )
-        self.trend_proj = nn.Conv1d(
+        self.trend_proj = torch.nn.Conv1d(
             in_channels=d_model,
             out_channels=c_out,
             kernel_size=3,
@@ -216,7 +200,7 @@ class DecoderLayer(nn.Module):
         )
 
     def forward(self, x, cross):
-        y = self.dropout(self.self_ac(x, x, x, causal=True))
+        y = self.dropout(self.self_ac(x, x, x))
         x, trend1 = self.decomp1(x + y)
         y = self.dropout(self.cross_ac(x, cross, cross))
         x, trend2 = self.decomp2(x + y)
@@ -227,84 +211,85 @@ class DecoderLayer(nn.Module):
         return x, residual_trend
 
 
-class ZeroMeanLayerNorm(nn.Module):
+class ZeroMeanLayerNorm(torch.nn.Module):
     def __init__(self, d_model: int):
         super().__init__()
-        self.norm = nn.LayerNorm(d_model)
+        self.norm = torch.nn.LayerNorm(d_model)
 
     def forward(self, x):
         x = self.norm(x)
-        bias = x.mean(dim=1, keepdim=True)
-        return x - bias
+        return x - x.mean(dim=1, keepdim=True)
 
 
 class Autoformer(BasicBaseModel):
+    def _get_seq_len_for_model(self, seq_len):
+        return seq_len
+
     def _setup(
-        self,
-        seq_len: int,
-        pred_len: int,
-        quantile_mode_train: str,
-        quantile_mode_eval: str,
-        c_in: int,
-        d_model: int = 128,
-        n_heads: int = 4,
-        d_ff: int = 256,
-        e_layers: int = 3,
-        d_layers: int = 1,
-        label_len: int = None,
-        decomp_kernel: int = 25,
-        n_moving_avg: int = 1,
-        dropout: float = 0.1,
-        freq: str = 'h',
+        self, seq_len: int, pred_len: int, c_in: int, label_len: int = None,
+        freq: str = 'Hour', e_layers: int = 2, d_layers: int = 1,
+        d_model: int = 64, n_heads: int = 4, d_ff: int = 256,
+        decomp_kernel: int = 25, n_moving_avg: int = 1, dropout: float = 0.1,
+        topk_factor: float = 1.0,
+        dropout_enc: float = 0.0,  # Not in the original implementation
+        dropout_dec: float = 0.0,  # Not in the original implementation
+        independent_heads: bool = False,  # Not in the original implementation
+        quantile_mode_train: str | None = None,
+        quantile_mode_eval: str | None = None,
     ) -> None:
         super()._setup(seq_len, pred_len)
+        seq_len_for_model = self._get_seq_len_for_model(seq_len)
 
         self.c_in = c_in
         self.c_out = c_in
         self.d_model = d_model
         self.freq = freq
-        self.label_len = label_len if label_len is not None else seq_len // 2
+        self.label_len = label_len
+        if self.label_len is None:
+            self.label_len = seq_len_for_model // 2
 
-        self.enc_in_proj = nn.Linear(c_in, d_model)
-        self.dec_in_proj = nn.Linear(c_in, d_model)
-        self.enc_time_embed = TimeFeatureEmbedding(d_model, freq=freq)
-        self.dec_time_embed = TimeFeatureEmbedding(d_model, freq=freq)
-
+        self.enc_in_proj = torch.nn.Linear(c_in, d_model)
+        self.dec_in_proj = torch.nn.Linear(c_in, d_model)
+        self.enc_tfe = TimeFeatureEmbedding(d_model, freq=freq)
+        self.dec_tfe = TimeFeatureEmbedding(d_model, freq=freq)
         self.enc_decomp = SeriesDecomp(decomp_kernel, n_moving_avg)
+        self.dropout_enc = torch.nn.Dropout(dropout_enc)
+        self.dropout_dec = torch.nn.Dropout(dropout_dec)
 
-        self.encoder_layers = nn.ModuleList([
-            EncoderLayer(d_model, n_heads, d_ff, decomp_kernel, n_moving_avg, dropout)
-            for _ in range(e_layers)
+        self.encoder_layers = torch.nn.ModuleList([
+            EncoderLayer(
+                d_model, n_heads, d_ff, decomp_kernel, n_moving_avg, dropout,
+                topk_factor=topk_factor,
+                independent_heads=independent_heads,
+            ) for _ in range(e_layers)
         ])
-        self.decoder_layers = nn.ModuleList([
+        self.decoder_layers = torch.nn.ModuleList([
             DecoderLayer(
                 d_model, n_heads, d_ff, self.c_out,
                 decomp_kernel, n_moving_avg, dropout,
-            )
-            for _ in range(d_layers)
+                topk_factor=topk_factor,
+                independent_heads=independent_heads,
+            ) for _ in range(d_layers)
         ])
         self.final_norm = ZeroMeanLayerNorm(d_model)
-        self.seasonal_proj = nn.Linear(d_model, self.c_out)
-        self.scaler = IqrScaler(quantile_mode_train, quantile_mode_eval)
+        self.seasonal_proj = torch.nn.Linear(d_model, self.c_out)
+
+        if quantile_mode_train is not None:
+            self.scaler = IqrScaler(quantile_mode_train, quantile_mode_eval)
 
     def _build_marks(self, batch, device):
         # Build encoder/decoder time-feature tensors from batch timestamps.
-        tsta_past = np.asarray(batch.tsta[:, -self.seq_len:])
-        b, _ = tsta_past.shape
-        if batch.tsta_future is not None:
-            tsta_future = np.asarray(batch.tsta_future[:, :self.pred_len])
-        else:
-            # Extrapolate future timestamps assuming uniform spacing.
-            last = tsta_past[:, -1:]
-            step = tsta_past[:, -1:] - tsta_past[:, -2:-1]
-            offsets = np.arange(1, self.pred_len + 1).reshape(1, -1)
-            tsta_future = last + step * offsets
-        tsta_dec = np.concatenate(
-            [tsta_past[:, -self.label_len:], tsta_future], axis=1
+        tsta = np.asarray(batch.tsta[:, -self.seq_len:])
+        tsta_dec = np.concatenate([
+            tsta[:, -self.label_len:],
+            np.asarray(batch.tsta_future[:, :self.pred_len]),
+        ], axis=1)
+        x_mark_enc = self.enc_tfe.get_feats(tsta)
+        x_mark_dec = self.dec_tfe.get_feats(tsta_dec)
+        return (
+             torch.tensor(x_mark_enc, dtype=torch.float32, device=device),
+             torch.tensor(x_mark_dec, dtype=torch.float32, device=device),
         )
-        x_mark_enc = TimeFeatureEmbedding.build_features(tsta_past, self.freq, device)
-        x_mark_dec = TimeFeatureEmbedding.build_features(tsta_dec, self.freq, device)
-        return x_mark_enc, x_mark_dec
 
     def _extract_input(self, batch):
         x = super()._extract_input(batch)
@@ -314,25 +299,26 @@ class Autoformer(BasicBaseModel):
     def forward(self, input_):
         x_enc, x_mark_enc, x_mark_dec = input_
         B, L, C = x_enc.shape
+        dtype = x_enc.dtype
 
         # Decoder input initialization (in raw-channel space for trend).
-        mean = x_enc.mean(dim=1, keepdim=True).repeat(1, self.pred_len, 1)
-        zeros = torch.zeros(
-            B, self.pred_len, C, device=x_enc.device, dtype=x_enc.dtype
-        )
         seasonal_init, trend_init = self.enc_decomp(x_enc)
-        seasonal_init = torch.cat(
-            [seasonal_init[:, -self.label_len:, :], zeros], dim=1
-        )
-        trend_init = torch.cat(
-            [trend_init[:, -self.label_len:, :], mean], dim=1
-        )
+        seasonal_init = torch.cat([
+            seasonal_init[:, -self.label_len:, :],
+            torch.zeros(B, self.pred_len, C, device=self.device, dtype=dtype),
+        ], dim=1)
+        trend_init = torch.cat([
+            trend_init[:, -self.label_len:, :],
+            x_enc.mean(dim=1, keepdim=True).repeat(1, self.pred_len, 1),
+        ], dim=1)
 
-        enc_h = self.enc_in_proj(x_enc) + self.enc_time_embed(x_mark_enc)
+        enc_h = self.enc_in_proj(x_enc) + self.enc_tfe(x_mark_enc)
+        enc_h = self.dropout_enc(enc_h)
         for layer in self.encoder_layers:
             enc_h = layer(enc_h)
 
-        dec_h = self.dec_in_proj(seasonal_init) + self.dec_time_embed(x_mark_dec)
+        dec_h = self.dec_in_proj(seasonal_init) + self.dec_tfe(x_mark_dec)
+        dec_h = self.dropout_dec(dec_h)
         trend = trend_init
         for layer in self.decoder_layers:
             dec_h, residual_trend = layer(dec_h, enc_h)
@@ -345,37 +331,8 @@ class Autoformer(BasicBaseModel):
 
 
 class DiffAutoformer(Autoformer):
-    def _setup(
-        self,
-        seq_len: int,
-        pred_len: int,
-        quantile_mode_train: str,
-        quantile_mode_eval: str,
-        c_in: int,
-        d_model: int = 128,
-        n_heads: int = 4,
-        d_ff: int = 256,
-        e_layers: int = 3,
-        d_layers: int = 1,
-        label_len: int = None,
-        decomp_kernel: int = 25,
-        n_moving_avg: int = 1,
-        dropout: float = 0.1,
-        freq: str = 'h',
-    ) -> None:
-        diff_seq_len = seq_len - 1
-        diff_label_len = (
-            label_len if label_len is not None else diff_seq_len // 2
-        )
-        super()._setup(
-            diff_seq_len, pred_len,
-            quantile_mode_train, quantile_mode_eval,
-            c_in, d_model, n_heads, d_ff,
-            e_layers, d_layers, diff_label_len,
-            decomp_kernel, n_moving_avg, dropout, freq,
-        )
-        # Restore original seq_len for _extract_input slicing.
-        self.seq_len = seq_len
+    def _get_seq_len_for_model(self, seq_len):
+        return seq_len - 1
 
     def forward(self, input_):
         x, x_mark_enc, x_mark_dec = input_

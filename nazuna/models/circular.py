@@ -1,10 +1,4 @@
-"""
-Time series prediction model using periodic sin/cos features.
-
-Takes timesteps as input, generates sin/cos waveforms with multiple periods as features,
-and outputs predictions through linear transformation.
-"""
-from nazuna.models.base import BasicBaseModel
+from nazuna.models._base import BasicBaseModel
 from nazuna.scaler import IqrScaler
 import torch
 import torch.nn as nn
@@ -76,7 +70,10 @@ class CircularHelper:
 
 class BaseCircular(BasicBaseModel):
     """
-    Base model for time series prediction using periodic sin/cos features.
+    Time series prediction model using periodic sin/cos features.
+
+    Takes timesteps as input, generates sin/cos waveforms with multiple periods as features,
+    and outputs predictions through linear transformation.
     """
 
     def _setup(self, seq_len, pred_len, n_channel, periods):

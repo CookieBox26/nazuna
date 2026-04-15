@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from nazuna.models.base import BasicBaseModel
+from nazuna.models._base import BasicBaseModel
 from nazuna.scaler import IqrScaler
 from nazuna.criteria import TimeSeriesError
 from nazuna.utils import load_class

@@ -4,7 +4,7 @@ from nazuna.criteria import MSE
 import torch
 
 
-def test_forward(device):
+def test_forward(device, dummy_data):
     model = NBEATS.create(
         device=device,
         seq_len=16,
@@ -12,29 +12,12 @@ def test_forward(device):
         quantile_mode_train='full',
         quantile_mode_eval='saved',
     )
-    batch = torch.tensor([[
-        [10., 10., 10.],
-        [20., 20., 20.],
-        [30., 30., 30.],
-        [40., 40., 40.],
-        [10., 10., 10.],
-        [20., 20., 20.],
-        [30., 30., 30.],
-        [40., 40., 40.],
-        [10., 10., 10.],
-        [20., 20., 20.],
-        [30., 30., 30.],
-        [40., 40., 40.],
-        [10., 10., 10.],
-        [20., 20., 20.],
-        [30., 30., 30.],
-        [40., 40., 40.],
-    ]], device=device)
+    batch = dummy_data((1, 16, 3))
     output, _ = model(batch)
     assert list(output.size()) == [1, 4, 3]
 
 
-def test_get_loss(device):
+def test_get_loss(device, dummy_data):
     model = NBEATS.create(
         device=device,
         seq_len=16,
@@ -45,24 +28,7 @@ def test_get_loss(device):
     batch = TimeSeriesDataset.TimeSeriesBatch(
         tsta=None,
         tste=None,
-        data=torch.tensor([[
-            [10., 10., 10.],
-            [20., 20., 20.],
-            [30., 30., 30.],
-            [40., 40., 40.],
-            [10., 10., 10.],
-            [20., 20., 20.],
-            [30., 30., 30.],
-            [40., 40., 40.],
-            [10., 10., 10.],
-            [20., 20., 20.],
-            [30., 30., 30.],
-            [40., 40., 40.],
-            [10., 10., 10.],
-            [20., 20., 20.],
-            [30., 30., 30.],
-            [40., 40., 40.],
-        ]], device=device),
+        data=dummy_data((1, 16, 3)),
         tsta_future=None,
         tste_future=None,
         data_future=torch.tensor([[

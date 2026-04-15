@@ -28,15 +28,13 @@ cls_path = "nazuna.models.autoformer.Autoformer"
 seq_len = 29
 pred_len = 7
 c_in = 2
-freq = "h"
+freq = "Day"
 d_model = 32
 n_heads = 4
 d_ff = 64
 e_layers = 2
 decomp_kernel = 13
 dropout = 0.1
-quantile_mode_train = "full"
-quantile_mode_eval = "saved"
 
 [definitions.BatchSamplerShuffle]
 cls_path = "nazuna.batch_sampler.BatchSamplerShuffle"

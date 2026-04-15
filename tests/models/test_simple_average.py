@@ -5,7 +5,7 @@ from nazuna.models.simple_average import (
 import torch
 
 
-def test_simple_average(device):
+def test_simple_average(device, dummy_data):
     model = SimpleAverage.create(
         device=device,
         seq_len=4,
@@ -13,12 +13,7 @@ def test_simple_average(device):
         period_len=2,
     )
 
-    x = torch.tensor([[  # A batch with 3 roads and 4 steps
-        [10., 10., 10.],
-        [20., 20., 20.],
-        [30., 30., 30.],
-        [40., 40., 40.],
-    ]], device=model.device)
+    x = dummy_data((1, 4, 3))
     expected = torch.tensor([[
         [20., 20., 20.],
         [30., 30., 30.],
@@ -81,7 +76,7 @@ def test_simple_diff_average(device):
     assert torch.allclose(output2, expected2)
 
 
-def test_simple_average_variable_decay(device):
+def test_simple_average_variable_decay(device, dummy_data):
     model = SimpleAverageVariableDecay.create(
         device=device,
         seq_len=4,
@@ -95,12 +90,7 @@ def test_simple_average_variable_decay(device):
     optimizer = torch.optim.SGD(model.parameters(), lr=0.01)
     optimizer.zero_grad()
 
-    x = torch.tensor([[  # A batch with 3 roads and 4 steps
-        [10., 10., 10.],
-        [20., 20., 20.],
-        [30., 30., 30.],
-        [40., 40., 40.],
-    ]], device=model.device)
+    x = dummy_data((1, 4, 3))
     true = torch.tensor([[
         [20., 20., 20.],
         [30., 30., 30.],
@@ -119,7 +109,7 @@ def test_simple_average_variable_decay(device):
     assert not torch.allclose(before, after)
 
 
-def test_simple_average_variable_decay_channelwise(device):
+def test_simple_average_variable_decay_channelwise(device, dummy_data):
     n_channel = 3
     model = SimpleAverageVariableDecayChannelwise.create(
         device=device,
@@ -136,12 +126,7 @@ def test_simple_average_variable_decay_channelwise(device):
     optimizer = torch.optim.SGD(model.parameters(), lr=0.01)
     optimizer.zero_grad()
 
-    x = torch.tensor([[  # A batch with 3 channels and 4 steps
-        [10., 10., 10.],
-        [20., 20., 20.],
-        [30., 30., 30.],
-        [40., 40., 40.],
-    ]], device=model.device)
+    x = dummy_data((1, 4, 3))
     true = torch.tensor([[
         [20., 20., 20.],
         [30., 30., 30.],

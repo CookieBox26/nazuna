@@ -1,4 +1,4 @@
-from nazuna.models.base import BasicBaseModel
+from nazuna.models._base import BasicBaseModel
 from nazuna.scaler import IqrScaler
 import torch
 import torch.nn as nn
@@ -17,22 +17,26 @@ class iTransformer(BasicBaseModel):
           [Paper](https://arxiv.org/abs/2310.06625) |
           [GitHub](https://github.com/thuml/iTransformer)
     """
+    def _get_seq_len_for_model(self, seq_len):
+        return seq_len
+
     def _setup(
         self,
         seq_len: int,
         pred_len: int,
-        quantile_mode_train: str,
-        quantile_mode_eval: str,
         d_model: int = 128,
         n_heads: int = 4,
         d_ff: int = 256,
         e_layers: int = 3,
         dropout: float = 0.1,
+        quantile_mode_train: str | None = None,
+        quantile_mode_eval: str | None = None,
     ) -> None:
         super()._setup(seq_len, pred_len)
+        seq_len_for_model = self._get_seq_len_for_model(seq_len)
 
         # Embed each variate's full time series into d_model.
-        self.embed = nn.Linear(seq_len, d_model)
+        self.embed = nn.Linear(seq_len_for_model, d_model)
 
         enc_layer = nn.TransformerEncoderLayer(
             d_model=d_model,
@@ -50,9 +54,10 @@ class iTransformer(BasicBaseModel):
         )
 
         self.head = nn.Linear(d_model, pred_len)
-        self.scaler = IqrScaler(
-            quantile_mode_train, quantile_mode_eval
-        )
+        if quantile_mode_train is not None:
+            self.scaler = IqrScaler(
+                quantile_mode_train, quantile_mode_eval
+            )
 
     def forward(self, x):
         # x: [B, L, C]
@@ -66,27 +71,8 @@ class iTransformer(BasicBaseModel):
 
 
 class DiffiTransformer(iTransformer):
-    def _setup(
-        self,
-        seq_len: int,
-        pred_len: int,
-        quantile_mode_train: str,
-        quantile_mode_eval: str,
-        d_model: int = 128,
-        n_heads: int = 4,
-        d_ff: int = 256,
-        e_layers: int = 3,
-        dropout: float = 0.1,
-    ) -> None:
-        # After first-order differencing, length becomes seq_len - 1.
-        diff_seq_len = seq_len - 1
-        super()._setup(
-            diff_seq_len, pred_len,
-            quantile_mode_train, quantile_mode_eval,
-            d_model, n_heads, d_ff, e_layers, dropout,
-        )
-        # Restore original seq_len for _extract_input slicing.
-        self.seq_len = seq_len
+    def _get_seq_len_for_model(self, seq_len):
+        return seq_len - 1
 
     def forward(self, x):  # x: [B, seq_len, C] (scaled)
         last_val = x[:, -1:, :]  # [B, 1, C]

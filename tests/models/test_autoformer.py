@@ -3,97 +3,49 @@ from nazuna.models.autoformer import Autoformer, DiffAutoformer
 from nazuna.criteria import MSE
 import numpy as np
 import torch
+import pytest
+from tests.utils import set_training
 
 
-def test_forward(device):
+@pytest.mark.parametrize('independent_heads', [False, True])
+@pytest.mark.parametrize('training', [True, False])
+def test_forward(device, dummy_data, training, independent_heads):
     model = Autoformer.create(
-        device=device,
-        seq_len=16,
-        pred_len=4,
-        quantile_mode_train='full',
-        quantile_mode_eval='saved',
-        c_in=3,
-        d_model=32,
-        n_heads=4,
-        d_ff=64,
-        e_layers=2,
-        decomp_kernel=3,
+        device=device, seq_len=16, pred_len=4, c_in=3,
+        d_model=16, n_heads=4, d_ff=64, decomp_kernel=5,
+        independent_heads=independent_heads,
     )
-    x = torch.tensor([[
-        [10., 10., 10.],
-        [20., 20., 20.],
-        [30., 30., 30.],
-        [40., 40., 40.],
-        [10., 10., 10.],
-        [20., 20., 20.],
-        [30., 30., 30.],
-        [40., 40., 40.],
-        [10., 10., 10.],
-        [20., 20., 20.],
-        [30., 30., 30.],
-        [40., 40., 40.],
-        [10., 10., 10.],
-        [20., 20., 20.],
-        [30., 30., 30.],
-        [40., 40., 40.],
-    ]], device=device)
+    set_training(model, training)
+    x = dummy_data((1, 16, 3))
     x_mark_enc = torch.zeros(1, 16, 4, device=device)
-    x_mark_dec = torch.zeros(1, 16 // 2 + 4, 4, device=device)
+    x_mark_dec = torch.zeros(1, 8 + 4, 4, device=device)
     output, _ = model((x, x_mark_enc, x_mark_dec))
-    assert list(output.size()) == [1, 4, 3]
+    assert output.shape == (1, 4, 3)
 
 
-def test_get_loss(device):
+@pytest.mark.parametrize('independent_heads', [False, True])
+@pytest.mark.parametrize('training', [True, False])
+def test_get_loss(device, dummy_data, training, independent_heads):
     model = Autoformer.create(
-        device=device,
-        seq_len=16,
-        pred_len=4,
-        quantile_mode_train='full',
-        quantile_mode_eval='saved',
-        c_in=3,
-        d_model=32,
-        n_heads=4,
-        d_ff=64,
-        e_layers=2,
-        decomp_kernel=3,
+        device=device, seq_len=16, pred_len=4, c_in=3,
+        d_model=16, n_heads=4, d_ff=64, decomp_kernel=5,
+        independent_heads=independent_heads,
     )
-    tsta = np.array([[np.datetime64('2025-01-01') + np.timedelta64(i, 'D') for i in range(16)]])
-    tsta_future = np.array(
-        [[np.datetime64('2025-01-17') + np.timedelta64(i, 'D') for i in range(4)]]
-    )
+    set_training(model, training)
+    tsta = np.array([[
+        np.datetime64('2025-01-01') + np.timedelta64(i, 'D')
+        for i in range(16)
+    ]])
+    tsta_future = np.array([[
+        np.datetime64('2025-01-17') + np.timedelta64(i, 'D')
+        for i in range(4)
+    ]])
     batch = TimeSeriesDataset.TimeSeriesBatch(
-        tsta=tsta,
-        tste=None,
-        data=torch.tensor([[
-            [10., 10., 10.],
-            [20., 20., 20.],
-            [30., 30., 30.],
-            [40., 40., 40.],
-            [10., 10., 10.],
-            [20., 20., 20.],
-            [30., 30., 30.],
-            [40., 40., 40.],
-            [10., 10., 10.],
-            [20., 20., 20.],
-            [30., 30., 30.],
-            [40., 40., 40.],
-            [10., 10., 10.],
-            [20., 20., 20.],
-            [30., 30., 30.],
-            [40., 40., 40.],
-        ]], device=device),
-        tsta_future=tsta_future,
-        tste_future=None,
-        data_future=torch.tensor([[
-            [50., 50., 50.],
-            [60., 60., 60.],
-            [70., 70., 70.],
-            [80., 80., 80.],
-        ]], device=device),
+        tsta=tsta, tste=None, data=dummy_data((1, 16, 3)),
+        tsta_future=tsta_future, tste_future=None,
+        data_future=dummy_data((1, 4, 3)),
         quantiles={'full': torch.tensor([[
-            [0., 0., 0.],
-            [10., 10., 10.],
-            [20., 20., 20.],
+            [0., 0., 0.], [10., 10., 10.], [20., 20., 20.],
         ]], device=device)},
     )
     criterion = MSE.create(device, n_channel=3, pred_len=4)
@@ -102,98 +54,45 @@ def test_get_loss(device):
     assert loss.batch_mean.item() >= 0
 
 
-def test_diff_autoformer_forward(device):
+@pytest.mark.parametrize('independent_heads', [False, True])
+@pytest.mark.parametrize('training', [True, False])
+def test_diff_autoformer_forward(device, dummy_data, training, independent_heads):
     model = DiffAutoformer.create(
-        device=device,
-        seq_len=17,
-        pred_len=4,
-        quantile_mode_train='full',
-        quantile_mode_eval='saved',
-        c_in=3,
-        d_model=32,
-        n_heads=4,
-        d_ff=64,
-        e_layers=2,
-        decomp_kernel=3,
+        device=device, seq_len=17, pred_len=4, c_in=3,
+        d_model=16, n_heads=4, d_ff=64, decomp_kernel=5,
+        independent_heads=independent_heads,
     )
-    x = torch.tensor([[
-        [10., 10., 10.],
-        [20., 20., 20.],
-        [30., 30., 30.],
-        [40., 40., 40.],
-        [10., 10., 10.],
-        [20., 20., 20.],
-        [30., 30., 30.],
-        [40., 40., 40.],
-        [10., 10., 10.],
-        [20., 20., 20.],
-        [30., 30., 30.],
-        [40., 40., 40.],
-        [10., 10., 10.],
-        [20., 20., 20.],
-        [30., 30., 30.],
-        [40., 40., 40.],
-        [50., 50., 50.],
-    ]], device=device)
+    set_training(model, training)
+    x = dummy_data((1, 17, 3))
     x_mark_enc = torch.zeros(1, 17, 4, device=device)
-    # DiffAutoformer differences the input: effective encoder length is 16.
-    x_mark_dec = torch.zeros(1, 16 // 2 + 4, 4, device=device)
+    x_mark_dec = torch.zeros(1, 8 + 4, 4, device=device)
     output, _ = model((x, x_mark_enc, x_mark_dec))
-    assert list(output.size()) == [1, 4, 3]
+    assert output.shape == (1, 4, 3)
 
 
-def test_diff_autoformer_get_loss(device):
+@pytest.mark.parametrize('independent_heads', [False, True])
+@pytest.mark.parametrize('training', [True, False])
+def test_diff_autoformer_get_loss(device, dummy_data, training, independent_heads):
     model = DiffAutoformer.create(
-        device=device,
-        seq_len=17,
-        pred_len=4,
-        quantile_mode_train='full',
-        quantile_mode_eval='saved',
-        c_in=3,
-        d_model=32,
-        n_heads=4,
-        d_ff=64,
-        e_layers=2,
-        decomp_kernel=3,
+        device=device, seq_len=17, pred_len=4, c_in=3,
+        d_model=16, n_heads=4, d_ff=64, decomp_kernel=5,
+        independent_heads=independent_heads,
     )
-    tsta = np.array([[np.datetime64('2025-01-01') + np.timedelta64(i, 'D') for i in range(17)]])
-    tsta_future = np.array(
-        [[np.datetime64('2025-01-18') + np.timedelta64(i, 'D') for i in range(4)]]
-    )
+    set_training(model, training)
+    tsta = np.array([[
+        np.datetime64('2025-01-01') + np.timedelta64(i, 'D')
+        for i in range(17)
+    ]])
+    tsta_future = np.array([[
+        np.datetime64('2025-01-18') + np.timedelta64(i, 'D')
+        for i in range(4)
+    ]])
     batch = TimeSeriesDataset.TimeSeriesBatch(
-        tsta=tsta,
-        tste=None,
-        data=torch.tensor([[
-            [10., 10., 10.],
-            [20., 20., 20.],
-            [30., 30., 30.],
-            [40., 40., 40.],
-            [10., 10., 10.],
-            [20., 20., 20.],
-            [30., 30., 30.],
-            [40., 40., 40.],
-            [10., 10., 10.],
-            [20., 20., 20.],
-            [30., 30., 30.],
-            [40., 40., 40.],
-            [10., 10., 10.],
-            [20., 20., 20.],
-            [30., 30., 30.],
-            [40., 40., 40.],
-            [50., 50., 50.],
-        ]], device=device),
-        tsta_future=tsta_future,
-        tste_future=None,
-        data_future=torch.tensor([[
-            [60., 60., 60.],
-            [70., 70., 70.],
-            [80., 80., 80.],
-            [90., 90., 90.],
-        ]], device=device),
+        tsta=tsta, tste=None, data=dummy_data((1, 17, 3)),
+        tsta_future=tsta_future, tste_future=None,
+        data_future=dummy_data((1, 4, 3)),
         quantiles={'full': torch.tensor([[
-            [0., 0., 0.],
-            [10., 10., 10.],
-            [20., 20., 20.],
+            [0., 0., 0.], [10., 10., 10.], [20., 20., 20.],
         ]], device=device)},
     )
     criterion = MSE.create(device, n_channel=3, pred_len=4)

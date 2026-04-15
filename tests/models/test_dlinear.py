@@ -4,7 +4,7 @@ from nazuna.criteria import MSE
 import torch
 
 
-def test_forward(device):
+def test_forward(device, dummy_data):
     model = DLinear.create(
         device=device,
         seq_len=4,
@@ -14,17 +14,12 @@ def test_forward(device):
         quantile_mode_train='full',
         quantile_mode_eval='saved',
     )
-    batch = torch.tensor([[
-        [10., 10., 10.],
-        [20., 20., 20.],
-        [30., 30., 30.],
-        [40., 40., 40.],
-    ]], device=model.device)
+    batch = dummy_data((1, 4, 3))
     output, _ = model(batch)
     assert list(output.size()) == [1, 2, 3]
 
 
-def test_get_loss(device):
+def test_get_loss(device, dummy_data):
     model = DLinear.create(
         device=device,
         seq_len=4,
@@ -37,12 +32,7 @@ def test_get_loss(device):
     batch = TimeSeriesDataset.TimeSeriesBatch(
         tsta=None,
         tste=None,
-        data=torch.tensor([[
-            [10., 10., 10.],
-            [20., 20., 20.],
-            [30., 30., 30.],
-            [40., 40., 40.],
-        ]], device=device),
+        data=dummy_data((1, 4, 3)),
         tsta_future=None,
         tste_future=None,
         data_future=torch.tensor([[
@@ -59,7 +49,7 @@ def test_get_loss(device):
     loss = model.get_loss(batch, criterion)
 
 
-def test_nlinear_forward(device):
+def test_nlinear_forward(device, dummy_data):
     model = NLinear.create(
         device=device,
         seq_len=4,
@@ -68,18 +58,13 @@ def test_nlinear_forward(device):
         quantile_mode_train='full',
         quantile_mode_eval='saved',
     )
-    batch = torch.tensor([[
-        [10., 10., 10.],
-        [20., 20., 20.],
-        [30., 30., 30.],
-        [40., 40., 40.],
-    ]], device=model.device)
+    batch = dummy_data((1, 4, 3))
     output, info = model(batch)
     assert list(output.size()) == [1, 2, 3]
     assert info == {}
 
 
-def test_nlinear_get_loss(device):
+def test_nlinear_get_loss(device, dummy_data):
     model = NLinear.create(
         device=device,
         seq_len=4,
@@ -91,12 +76,7 @@ def test_nlinear_get_loss(device):
     batch = TimeSeriesDataset.TimeSeriesBatch(
         tsta=None,
         tste=None,
-        data=torch.tensor([[
-            [10., 10., 10.],
-            [20., 20., 20.],
-            [30., 30., 30.],
-            [40., 40., 40.],
-        ]], device=device),
+        data=dummy_data((1, 4, 3)),
         tsta_future=None,
         tste_future=None,
         data_future=torch.tensor([[
@@ -113,7 +93,7 @@ def test_nlinear_get_loss(device):
     loss = model.get_loss(batch, criterion)
 
 
-def test_channelwise_forward(device):
+def test_channelwise_forward(device, dummy_data):
     model = DLinearChannelwise.create(
         device=device,
         seq_len=4,
@@ -124,19 +104,14 @@ def test_channelwise_forward(device):
         quantile_mode_train='full',
         quantile_mode_eval='saved',
     )
-    batch = torch.tensor([[
-        [10., 10., 10.],
-        [20., 20., 20.],
-        [30., 30., 30.],
-        [40., 40., 40.],
-    ]], device=model.device)
+    batch = dummy_data((1, 4, 3))
     output, info = model(batch)
     assert list(output.size()) == [1, 2, 3]
     assert 'seasonal' in info
     assert 'trend' in info
 
 
-def test_channelwise_get_loss(device):
+def test_channelwise_get_loss(device, dummy_data):
     model = DLinearChannelwise.create(
         device=device,
         seq_len=4,
@@ -150,12 +125,7 @@ def test_channelwise_get_loss(device):
     batch = TimeSeriesDataset.TimeSeriesBatch(
         tsta=None,
         tste=None,
-        data=torch.tensor([[
-            [10., 10., 10.],
-            [20., 20., 20.],
-            [30., 30., 30.],
-            [40., 40., 40.],
-        ]], device=device),
+        data=dummy_data((1, 4, 3)),
         tsta_future=None,
         tste_future=None,
         data_future=torch.tensor([[

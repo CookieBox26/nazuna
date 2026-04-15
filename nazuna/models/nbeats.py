@@ -1,5 +1,5 @@
 from abc import abstractmethod
-from nazuna.models.base import BasicBaseModel
+from nazuna.models._base import BasicBaseModel
 from nazuna.scaler import IqrScaler
 import torch
 import torch.nn as nn

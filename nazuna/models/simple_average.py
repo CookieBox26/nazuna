@@ -1,4 +1,4 @@
-from nazuna.models.base import BasicBaseModel
+from nazuna.models._base import BasicBaseModel
 import torch
 
 

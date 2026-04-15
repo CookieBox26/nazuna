@@ -27,6 +27,7 @@ cls_path = "nazuna.models.patchtst.PatchTST"
 [definitions.PatchTST.params]
 seq_len = 29
 pred_len = 7
+c_in = 2
 
 [definitions.BatchSamplerShuffle]
 cls_path = "nazuna.batch_sampler.BatchSamplerShuffle"

@@ -24,7 +24,7 @@ This repository mainly consists of the following files:
 │  ├─ criteria.py  # Loss functions for training and evaluation
 │  ├─ scaler.py  # Scaler (used by models)
 │  ├─ models/  # Time-series forecasting models (some examples)
-│  │  ├─ base.py
+│  │  ├─ _base.py
 │  │  ├─ simple_average.py
 │  │  ├─ autoformer.py
 │  │  └─ dlinear.py
