@@ -4,7 +4,7 @@ from nazuna.criteria import MSE
 import torch
 
 
-def test_forward(device):
+def test_forward(device, dummy_data):
     model = ResidualModel.create(
         device=device,
         seq_len=96,
@@ -19,7 +19,7 @@ def test_forward(device):
             'quantile_mode_train': 'full', 'quantile_mode_eval': 'saved',
         },
     )
-    batch = torch.randn(2, 96, 3, device=device)
+    batch = dummy_data((2, 96, 3))
     output, _ = model(batch)
     assert list(output.size()) == [2, 24, 3]
 
@@ -45,12 +45,7 @@ def test_get_loss(device, dummy_data):
         data=dummy_data((1, 16, 3)),
         tsta_future=None,
         tste_future=None,
-        data_future=torch.tensor([[
-            [50., 50., 50.],
-            [60., 60., 60.],
-            [70., 70., 70.],
-            [80., 80., 80.],
-        ]], device=device),
+        data_future=dummy_data((1, 4, 3)),
         quantiles={'full': torch.tensor([[
             [0., 0., 0.],
             [10., 10., 10.],
@@ -61,7 +56,7 @@ def test_get_loss(device, dummy_data):
     loss = model.get_loss(batch, criterion)
 
 
-def test_residual_model2_forward(device):
+def test_residual_model2_forward(device, dummy_data):
     n_channel = 3
     model = ResidualModel2.create(
         device=device,
@@ -87,7 +82,7 @@ def test_residual_model2_forward(device):
     )
     assert list(model.w_naive.size()) == [n_channel]
 
-    batch = torch.randn(2, 96, n_channel, device=device)
+    batch = dummy_data((2, 96, 3))
     output, _ = model(batch)
     assert list(output.size()) == [2, 24, n_channel]
 
@@ -117,12 +112,7 @@ def _make_batch_for_residual3(device, dummy_data, n_channel=3):
         data=dummy_data((1, 16, 3)),
         tsta_future=None,
         tste_future=None,
-        data_future=torch.tensor([[
-            [50., 50., 50.],
-            [60., 60., 60.],
-            [70., 70., 70.],
-            [80., 80., 80.],
-        ]], device=device),
+        data_future=dummy_data((1, 4, 3)),
         quantiles={'full': torch.tensor([[
             [0., 0., 0.],
             [10., 10., 10.],
@@ -156,10 +146,10 @@ def _create_residual_model3(device, n_channel=3):
     )
 
 
-def test_residual_model3_forward(device):
+def test_residual_model3_forward(device, dummy_data):
     n_channel = 3
     model = _create_residual_model3(device, n_channel)
-    batch = torch.randn(2, 16, n_channel, device=device)
+    batch = dummy_data((2, 16, 3))
     output, info = model(batch)
     assert list(output.size()) == [2, 4, n_channel]
     assert 'naive' in info

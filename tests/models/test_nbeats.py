@@ -31,12 +31,7 @@ def test_get_loss(device, dummy_data):
         data=dummy_data((1, 16, 3)),
         tsta_future=None,
         tste_future=None,
-        data_future=torch.tensor([[
-            [50., 50., 50.],
-            [60., 60., 60.],
-            [70., 70., 70.],
-            [80., 80., 80.],
-        ]], device=device),
+        data_future=dummy_data((1, 4, 3)),
         quantiles={'full': torch.tensor([[
             [0., 0., 0.],
             [10., 10., 10.],

@@ -52,12 +52,7 @@ def test_get_loss(device, dummy_data):
         tste_future=torch.tensor(
             [[4, 5, 6, 7]], dtype=torch.float32, device=device
         ),
-        data_future=torch.tensor([[
-            [50., 50., 50.],
-            [60., 60., 60.],
-            [70., 70., 70.],
-            [80., 80., 80.],
-        ]], device=device),
+        data_future=dummy_data((1, 4, 3)),
         quantiles=_make_quantiles(device),
     )
     criterion = MSE.create(device, n_channel=3, pred_len=4)
