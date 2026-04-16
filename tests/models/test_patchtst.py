@@ -6,10 +6,7 @@ import torch
 
 def test_forward(device, dummy_data):
     model = PatchTST.create(
-        device=device,
-        seq_len=16,
-        pred_len=4,
-        c_in=3,
+        device=device, seq_len=16, pred_len=4, c_in=3,
     )
     batch = dummy_data((1, 16, 3))
     output, _ = model(batch)
@@ -18,10 +15,7 @@ def test_forward(device, dummy_data):
 
 def test_get_loss(device, dummy_data):
     model = PatchTST.create(
-        device=device,
-        seq_len=16,
-        pred_len=4,
-        c_in=3,
+        device=device, seq_len=16, pred_len=4, c_in=3,
     )
     batch = TimeSeriesDataset.TimeSeriesBatch(
         tsta=None,
@@ -29,19 +23,14 @@ def test_get_loss(device, dummy_data):
         data=dummy_data((1, 16, 3)),
         tsta_future=None,
         tste_future=None,
-        data_future=torch.tensor([[
-            [50., 50., 50.],
-            [60., 60., 60.],
-            [70., 70., 70.],
-            [80., 80., 80.],
-        ]], device=device),
+        data_future=dummy_data((1, 4, 3)),
         quantiles=None,
     )
     criterion = MSE.create(device, n_channel=3, pred_len=4)
     loss = model.get_loss(batch, criterion)
 
 
-def test_diff_patchtst_forward(device):
+def test_diff_patchtst_forward(device, dummy_data):
     # seq_len=17: diff produces 16 steps, matching patch_len=16
     model = DiffPatchTST.create(
         device=device,
@@ -49,30 +38,12 @@ def test_diff_patchtst_forward(device):
         pred_len=4,
         c_in=3,
     )
-    batch = torch.tensor([[
-        [10., 10., 10.],
-        [20., 20., 20.],
-        [30., 30., 30.],
-        [40., 40., 40.],
-        [10., 10., 10.],
-        [20., 20., 20.],
-        [30., 30., 30.],
-        [40., 40., 40.],
-        [10., 10., 10.],
-        [20., 20., 20.],
-        [30., 30., 30.],
-        [40., 40., 40.],
-        [10., 10., 10.],
-        [20., 20., 20.],
-        [30., 30., 30.],
-        [40., 40., 40.],
-        [50., 50., 50.],
-    ]], device=device)
+    batch = dummy_data((1, 17, 3))
     output, _ = model(batch)
     assert list(output.size()) == [1, 4, 3]
 
 
-def test_diff_patchtst_get_loss(device):
+def test_diff_patchtst_get_loss(device, dummy_data):
     model = DiffPatchTST.create(
         device=device,
         seq_len=17,
@@ -82,44 +53,22 @@ def test_diff_patchtst_get_loss(device):
     batch = TimeSeriesDataset.TimeSeriesBatch(
         tsta=None,
         tste=None,
-        data=torch.tensor([[
-            [10., 10., 10.],
-            [20., 20., 20.],
-            [30., 30., 30.],
-            [40., 40., 40.],
-            [10., 10., 10.],
-            [20., 20., 20.],
-            [30., 30., 30.],
-            [40., 40., 40.],
-            [10., 10., 10.],
-            [20., 20., 20.],
-            [30., 30., 30.],
-            [40., 40., 40.],
-            [10., 10., 10.],
-            [20., 20., 20.],
-            [30., 30., 30.],
-            [40., 40., 40.],
-            [50., 50., 50.],
-        ]], device=device),
+        data=dummy_data((1, 17, 3)),
         tsta_future=None,
         tste_future=None,
-        data_future=torch.tensor([[
-            [60., 60., 60.],
-            [70., 70., 70.],
-            [80., 80., 80.],
-            [90., 90., 90.],
-        ]], device=device),
+        data_future=dummy_data((1, 4, 3)),
         quantiles=None,
     )
     criterion = MSE.create(device, n_channel=3, pred_len=4)
     loss = model.get_loss(batch, criterion)
 
 
-def test_positional_encoding_zero_init():
+def test_positional_encoding_uniform_init():
     d_model = 32
     max_len = 10
     pe_module = PositionalEncoding(d_model=d_model, max_len=max_len)
     pe = pe_module.pe  # [max_len, d_model]
 
     assert pe.shape == (max_len, d_model)
-    assert torch.all(pe == 0)
+    assert torch.all(pe >= -0.02)
+    assert torch.all(pe <= 0.02)

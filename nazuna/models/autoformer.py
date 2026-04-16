@@ -29,6 +29,9 @@ class AutoCorrelationLayer(torch.nn.Module):
         self.out_proj = torch.nn.Linear(d_model, d_model)
         self.dropout = torch.nn.Dropout(dropout)
 
+    def _lagged_aggregation_approx(self, b, mean_corr):
+        each_head = (mean_corr.ndim == 3)
+
     def _lagged_aggregation(self, b, mean_corr, topk, v, l):
         # mean_corr: [B, L] or [B, H, L]
         # weights, delay: [B, topk] or [B, H, topk]

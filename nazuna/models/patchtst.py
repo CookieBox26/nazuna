@@ -10,8 +10,9 @@ class PositionalEncoding(nn.Module):
         super().__init__()
         self.dropout = nn.Dropout(dropout)
         self.pe = nn.Parameter(
-            torch.zeros(max_len, d_model)
+            torch.empty(max_len, d_model)
         )  # [max_len, d_model]
+        nn.init.uniform_(self.pe, -0.02, 0.02)
 
     def forward(self, x):  # x: [B, S, D]
         s = x.size(1)
@@ -175,7 +176,7 @@ class PatchTST(BasicBaseModel):
 
         assert seq_len_for_model >= self.patch_len, 'seq_len >= patch_len'
         self.n_patches = (
-            1 + (seq_len_for_model - self.patch_len) // self.stride
+            1 + (seq_len_for_model - self.patch_len) // self.stride + 1
         )
 
         self.patch_proj = nn.Linear(self.patch_len, self.d_model)
@@ -198,6 +199,7 @@ class PatchTST(BasicBaseModel):
 
     def _patchify(self, x):  # x: [B, L, C] -> [B, C, P, patch_len]
         x = x.transpose(1, 2)  # [B, C, L]
+        x = F.pad(x, (0, self.stride), mode='replicate')
         return x.unfold(dimension=2, size=self.patch_len, step=self.stride)
 
     def forward(self, x):
