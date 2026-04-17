@@ -2,24 +2,24 @@ from nazuna.models._base import BasicBaseModel
 from nazuna.scaler import IqrScaler
 import math
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 
-class PositionalEncoding(nn.Module):
+
+class PositionalEncoding(torch.nn.Module):
     def __init__(self, d_model, max_len=5000, dropout=0.0):
         super().__init__()
-        self.dropout = nn.Dropout(dropout)
-        self.pe = nn.Parameter(
+        self.dropout = torch.nn.Dropout(dropout)
+        self.pe = torch.nn.Parameter(
             torch.empty(max_len, d_model)
         )  # [max_len, d_model]
-        nn.init.uniform_(self.pe, -0.02, 0.02)
+        torch.nn.init.uniform_(self.pe, -0.02, 0.02)
 
     def forward(self, x):  # x: [B, S, D]
         s = x.size(1)
         return self.dropout(x + self.pe[:s].unsqueeze(0))
 
 
-class _MultiheadAttention(nn.Module):
+class _MultiheadAttention(torch.nn.Module):
     def __init__(self, d_model, n_heads, dropout=0., res_attention=True):
         super().__init__()
         assert d_model % n_heads == 0, 'd_model must be divisible by n_heads'
@@ -28,11 +28,11 @@ class _MultiheadAttention(nn.Module):
         self.d_head = d_model // n_heads
         self.res_attention = res_attention
 
-        self.q_proj = nn.Linear(d_model, d_model)
-        self.k_proj = nn.Linear(d_model, d_model)
-        self.v_proj = nn.Linear(d_model, d_model)
-        self.out_proj = nn.Linear(d_model, d_model)
-        self.attn_dropout = nn.Dropout(dropout)
+        self.q_proj = torch.nn.Linear(d_model, d_model)
+        self.k_proj = torch.nn.Linear(d_model, d_model)
+        self.v_proj = torch.nn.Linear(d_model, d_model)
+        self.out_proj = torch.nn.Linear(d_model, d_model)
+        self.attn_dropout = torch.nn.Dropout(dropout)
 
     def forward(self, x, prev=None):  # x: [B, L, D]
         B, L, _ = x.shape
@@ -58,7 +58,7 @@ class _MultiheadAttention(nn.Module):
         return output
 
 
-class TSTEncoderLayer(nn.Module):
+class TSTEncoderLayer(torch.nn.Module):
     def __init__(
         self, d_model, n_heads, d_ff,
         dropout=0.1, res_attention=True,
@@ -69,17 +69,17 @@ class TSTEncoderLayer(nn.Module):
             d_model, n_heads,
             dropout=dropout, res_attention=res_attention,
         )
-        self.dropout_attn = nn.Dropout(dropout)
-        self.norm_attn = nn.BatchNorm1d(d_model)
+        self.dropout_attn = torch.nn.Dropout(dropout)
+        self.norm_attn = torch.nn.BatchNorm1d(d_model)
 
-        self.ff = nn.Sequential(
-            nn.Linear(d_model, d_ff),
-            nn.GELU(),
-            nn.Dropout(dropout),
-            nn.Linear(d_ff, d_model),
-            nn.Dropout(dropout),
+        self.ff = torch.nn.Sequential(
+            torch.nn.Linear(d_model, d_ff),
+            torch.nn.GELU(),
+            torch.nn.Dropout(dropout),
+            torch.nn.Linear(d_ff, d_model),
+            torch.nn.Dropout(dropout),
         )
-        self.norm_ff = nn.BatchNorm1d(d_model)
+        self.norm_ff = torch.nn.BatchNorm1d(d_model)
 
     def forward(self, x, prev=None):  # x: [B, S, D]
         if self.res_attention:
@@ -171,15 +171,15 @@ class PatchTST(BasicBaseModel):
         self.pool = 'last'  # 'last' or 'mean'
 
         if self.use_revin and self.revin_affine:
-            self.revin_affine_weight = nn.Parameter(torch.ones(c_in))
-            self.revin_affine_bias = nn.Parameter(torch.zeros(c_in))
+            self.revin_affine_weight = torch.nn.Parameter(torch.ones(c_in))
+            self.revin_affine_bias = torch.nn.Parameter(torch.zeros(c_in))
 
         assert seq_len_for_model >= self.patch_len, 'seq_len >= patch_len'
         self.n_patches = (
             1 + (seq_len_for_model - self.patch_len) // self.stride + 1
         )
 
-        self.patch_proj = nn.Linear(self.patch_len, self.d_model)
+        self.patch_proj = torch.nn.Linear(self.patch_len, self.d_model)
 
         self.pos = PositionalEncoding(
             self.d_model,
@@ -187,7 +187,7 @@ class PatchTST(BasicBaseModel):
             dropout=self.dropout,
         )
 
-        self.encoder = nn.ModuleList([
+        self.encoder = torch.nn.ModuleList([
             TSTEncoderLayer(
                 self.d_model, self.n_heads,
                 self.d_ff, self.dropout,
@@ -195,7 +195,7 @@ class PatchTST(BasicBaseModel):
             )
             for _ in range(self.n_layers)
         ])
-        self.head = nn.Linear(self.d_model, self.pred_len)
+        self.head = torch.nn.Linear(self.d_model, self.pred_len)
 
     def _patchify(self, x):  # x: [B, L, C] -> [B, C, P, patch_len]
         x = x.transpose(1, 2)  # [B, C, L]
@@ -207,7 +207,6 @@ class PatchTST(BasicBaseModel):
 
         # RevIN: instance normalization (per-sample, per-channel)
         if self.use_revin:
-            # x: [B, L, C]
             ri_mean = x.mean(dim=1, keepdim=True).detach()  # [B, 1, C]
             ri_std = torch.sqrt(
                 x.var(dim=1, keepdim=True, unbiased=False) + self.revin_eps

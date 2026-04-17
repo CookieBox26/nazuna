@@ -1,3 +1,5 @@
+[Japanese notes are here](notes_ja.md)
+
 ::: nazuna.models.simple_average.SimpleAverage
 
 === "en"

@@ -1,14 +1,22 @@
-@import url('https://fonts.googleapis.com/css2?family=Source+Code+Pro:ital,wght@0,200..900;1,200..900&family=Armata&family=IBM+Plex+Sans+JP&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Source+Code+Pro:ital,wght@0,400;0,600;1,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Armata&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;600&display=swap");
 :root, [data-md-color-scheme=default] {
-    --md-default-bg-color: #f7fbfa;
-    --md-code-fg-color: #536267;
-    --md-code-bg-color: #dee2e3;
+    --md-default-bg-color: #fdfcf5;
+    --md-primary-fg-color: #99cc9f;
+    --md-primary-bg-color: #4a4135;
+    --md-default-fg-color: #4a4135;
+    --md-default-fg-color--light: #4a4135;
+    --md-code-fg-color: #615546;
+    --md-code-bg-color: #e3e2de;
+    --md-footer-bg-color--dark: #4a4135;
+    --md-admonition-bg-color: #fefdfa;
 }
 [data-md-color-primary=white] {
-    --md-typeset-a-color: #0d895f;
+    --md-typeset-a-color: #3d8f58;
 }
 [data-md-color-accent=indigo] {
-    --md-accent-fg-color: #8ecab8;
+    --md-accent-fg-color: #9bcc94;
 }
 body {
     font-family: 'Armata', 'IBM Plex Sans JP', var(--md-text-font-family);
@@ -26,37 +34,42 @@ body {
 code, pre, .md-typeset code {
     font-family: 'Source Code Pro', var(--md-code-font-family);
     font-optical-sizing: auto;
-    font-weight: 500;
 }
 .md-typeset code {
     font-size: .94em;
-    padding: .05em .25em;
+    padding: .05em .3em;
+    border-radius: .3em;
 }
 .md-header {
-    background-color: #daece7;
 	box-shadow: none;
+    font-weight: 400;
 }
 .md-typeset h1 {
     margin: 0 0 -0.25em;
 }
 .md-typeset h2 {
-    font-weight: bold;
     margin: 1.5em 0 -0.25em;
-}
-.md-typeset h3{
-    font-weight: bold;
 }
 .md-typeset h3 code {
     font-size: 1.1em;
-    font-weight: 600;
 }
 .md-typeset h4 code {
     margin-top: 1.5em;
 }
 .md-typeset h4 code {
     font-size: 1.05em;
-    font-weight: 600;
 }
 .md-typeset .admonition, .md-typeset details {
 	box-shadow: none;
+}
+.md-typeset ol li,.md-typeset ul li {
+    margin-bottom: .25em
+}
+.md-typeset .admonition-title,.md-typeset summary {
+    font-weight: 400
+}
+@media screen and (max-width: 44.9844em) {
+    .md-content__inner>.highlight {
+        margin: 1em 0;
+    }
 }
