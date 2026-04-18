@@ -6,6 +6,38 @@ import torch
 import math
 
 
+class TokenNormTimeDemean(torch.nn.Module):
+    """
+    Normalize each token, then remove mean over time
+    """
+    def __init__(self, d_model: int):
+        super().__init__()
+        self.norm = torch.nn.LayerNorm(d_model)
+    def forward(self, x):
+        x = self.norm(x)
+        return x - x.mean(dim=1, keepdim=True)
+
+
+class ConvEmb(torch.nn.Module):
+    def __init__(
+        self, c_in, c_out, kernel_size, bias=False,
+        keep_len=True, padding_mode='circular',
+    ):
+        padding = 0
+        if keep_len:
+            assert kernel_size % 2 == 1, 'Kernel size must be odd.'
+            padding = (kernel_size - 1) // 2
+        super().__init__()
+        self.conv1d = torch.nn.Conv1d(
+            in_channels=c_in, out_channels=c_out, kernel_size=kernel_size,
+            bias=bias, padding=padding, padding_mode=padding_mode,
+        )
+    def forward(self, x):  # x: [B, L, C_in]
+        x = x.permute(0, 2, 1)  # [B, C_in, L]
+        x = self.conv1d(x)  # [B, C_out, L']
+        return x.transpose(2, 1)  # [B, L', C_out]
+
+
 class AutoCorrelationLayer(torch.nn.Module):
     def __init__(
         self, d_model: int, n_heads: int,
@@ -179,11 +211,7 @@ class DecoderLayer(torch.nn.Module):
             torch.nn.Linear(d_ff, d_model, bias=False),
             torch.nn.Dropout(dropout_ff[1]),
         )
-        self.out_proj = torch.nn.Conv1d(
-            in_channels=d_model, out_channels=c_out,
-            kernel_size=3, stride=1, padding=1,
-            padding_mode='circular', bias=False,
-        )
+        self.out_proj = ConvEmb(d_model, c_out, kernel_size=3)
 
     def forward(self, x, cross):
         y = self.dropout_ac(self.self_ac(x, x, x))
@@ -192,21 +220,7 @@ class DecoderLayer(torch.nn.Module):
         x, trend2 = self.decomp2(x + y)
         y = self.ff(x)
         x, trend3 = self.decomp3(x + y)
-        res_trend = trend1 + trend2 + trend3
-        res_trend = self.out_proj(res_trend.permute(0, 2, 1)).transpose(1, 2)
-        return x, res_trend
-
-
-class TokenNormTimeDemean(torch.nn.Module):
-    """
-    Normalize each token, then remove mean over time
-    """
-    def __init__(self, d_model: int):
-        super().__init__()
-        self.norm = torch.nn.LayerNorm(d_model)
-    def forward(self, x):
-        x = self.norm(x)
-        return x - x.mean(dim=1, keepdim=True)
+        return x, self.out_proj(trend1 + trend2 + trend3)
 
 
 class Autoformer(BasicBaseModel):
@@ -236,14 +250,8 @@ class Autoformer(BasicBaseModel):
         if self.label_len is None:
             self.label_len = seq_len_for_model // 2
 
-        self.enc_in_proj = torch.nn.Conv1d(
-            in_channels=c_in, out_channels=d_model, kernel_size=3,
-            padding=1, padding_mode='circular', bias=False,
-        )
-        self.dec_in_proj = torch.nn.Conv1d(
-            in_channels=c_in, out_channels=d_model, kernel_size=3,
-            padding=1, padding_mode='circular', bias=False,
-        )
+        self.enc_in_proj = ConvEmb(c_in, d_model, kernel_size=3)
+        self.dec_in_proj = ConvEmb(c_in, d_model, kernel_size=3)
         self.enc_tfe = TimeFeatureEmbedding(d_model, freq=freq)
         self.dec_tfe = TimeFeatureEmbedding(d_model, freq=freq)
         self.decomp = SeriesDecomp(decomp_kernel, n_moving_avg)

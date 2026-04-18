@@ -29,12 +29,11 @@ seq_len = 29
 pred_len = 7
 c_in = 2
 freq = "Day"
-d_model = 32
-n_heads = 4
-d_ff = 64
+d_model = 8
+n_heads = 2
+d_ff = 32
 e_layers = 2
 decomp_kernel = 13
-dropout = 0.1
 
 [definitions.BatchSamplerShuffle]
 cls_path = "nazuna.batch_sampler.BatchSamplerShuffle"
