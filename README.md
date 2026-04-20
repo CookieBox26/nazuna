@@ -35,17 +35,31 @@ This repository mainly consists of the following files:
 └─ docs/
 ```
 
-### Running Nazuna
+### Installation
 ```sh
-# Run example configurations
-uv run nazuna --example jma_daily_train_dlinear
+git clone https://github.com/CookieBox26/nazuna.git
+cd nazuna
+
+# If you want to install the CUDA 12.6 version of PyTorch:
+uv sync --extra torch-cu126
+uv sync --extra torch-cu126 --extra test  # if you want to test
+
+# If you want to install the CPU-only version of PyTorch:
+uv sync --extra torch-cpu
+uv sync --extra torch-cpu --extra test  # if you want to test
+```
+
+### Usage
+```sh
+# Run example configurations that use bundled JMA weather data
+uv run nazuna --example jma_train_dlinear
+uv run nazuna --example jma_optuna_dlinear
 
 # Run tasks defined in a TOML config file:
 uv run nazuna config.toml
 ```
 
 ### Development Guide (for Developers)
-
 ```sh
 uv sync --extra torch-cu126 --extra test --extra docs  # CUDA 12.6
 uv sync --extra torch-cpu --extra test --extra docs  # CPU

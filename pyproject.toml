@@ -7,7 +7,7 @@ name = "nazuna"
 version = "0.0.1"
 description = "Utility functions for time-series data analysis"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.12"
 authors = [
     { name = "CookieBox26", email = "cookie-box@cookie-box.info" },
 ]

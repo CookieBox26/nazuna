@@ -1,0 +1,46 @@
+out_dir = "./out/jma_optuna_dlinear"
+exist_ok = true
+
+# =============== data ===============
+[data]
+path = [ "jma", "weather_japan_hourly_2025-09-01_2025-12-31_27_blocks.csv",]
+colname_timestamp = "timestamp"
+seq_len = 97  # 24 * 4 + 1
+pred_len = 24
+white_list = "temp_fukuoka,temp_osaka,temp_tokyo,temp_sendai"
+
+# =============== definitions ===============
+[definitions.MSE]
+cls_path = "nazuna.criteria.MSE"
+params = { n_channel = 4, pred_len = 24 }
+
+[definitions.DLinear]
+cls_path = "nazuna.models.dlinear.DLinear"
+[definitions.DLinear.params]
+seq_len = 97
+pred_len = 24
+kernel_size = 25
+bias = true
+quantile_mode_train = "full"
+quantile_mode_eval = "saved"
+
+[definitions.BatchSamplerShuffle]
+cls_path = "nazuna.batch_sampler.BatchSamplerShuffle"
+params = { batch_size = 16 }
+
+# =============== tasks ===============
+[[tasks]]
+task_type = "optuna"
+name = "Optuna"
+n_trials = 2
+n_epoch = 2
+criterion = "MSE"
+model = "DLinear"
+batch_sampler = "BatchSamplerShuffle"
+optimizer = { cls_path = "torch.optim.Adam", params = { lr = 0.01 } }
+data_ranges = [
+  { train = [ 0.0, 0.2,], eval = [ 0.2, 0.3,] },
+  { train = [ 0.1, 0.3,], eval = [ 0.3, 0.4,] },
+]
+[tasks.search_space]
+lr = [ "log_uniform", "0.0001", "0.1",]

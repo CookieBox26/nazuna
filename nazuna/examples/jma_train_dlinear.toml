@@ -1,34 +1,33 @@
-out_dir = "./out/jma_daily_train_dlinearc"
+out_dir = "./out/jma_train_dlinear"
 exist_ok = true
 
 # =============== data ===============
 [data]
-path = [ "jma", "weather_japan_daily_2025-01-01_2025-12-31_2_blocks.csv",]
-colname_timestamp = "date"
-seq_len = 29
-pred_len = 7
-white_list = [ "temp_avg_nagoya", "temp_avg_fukuoka",]
+path = [ "jma", "weather_japan_hourly_2025-09-01_2025-12-31_27_blocks.csv",]
+colname_timestamp = "timestamp"
+seq_len = 97  # 24 * 4 + 1
+pred_len = 24
+white_list = "temp_fukuoka,temp_osaka,temp_tokyo,temp_sendai"
 
 # =============== definitions ===============
 [definitions.MAE]
 cls_path = "nazuna.criteria.MAE"
-params = { n_channel = 2, pred_len = 7 }
+params = { n_channel = 4, pred_len = 24 }
 
 [definitions.ImprovementRate]
 cls_path = "nazuna.criteria.ImprovementRate"
-params = { n_channel = 2, pred_len = 7, error_type = "mae" }
+params = { n_channel = 4, pred_len = 24, error_type = "mae" }
 
 [definitions.SimpleDiffAverage]
 cls_path = "nazuna.models.simple_average.SimpleDiffAverage"
-params = { seq_len = 29, pred_len = 7, period_len = 7 }
+params = { seq_len = 97, pred_len = 24, period_len = 24 }
 
-[definitions.DLinearChannelwise]
-cls_path = "nazuna.models.dlinear.DLinearChannelwise"
-[definitions.DLinearChannelwise.params]
-seq_len = 29
-pred_len = 7
+[definitions.DLinear]
+cls_path = "nazuna.models.dlinear.DLinear"
+[definitions.DLinear.params]
+seq_len = 97
+pred_len = 24
 kernel_size = 25
-n_channel = 2
 bias = true
 quantile_mode_train = "full"
 quantile_mode_eval = "saved"
@@ -40,57 +39,56 @@ params = { batch_size = 32 }
 # =============== tasks ===============
 [[tasks]]
 task_type = "eval"
-name = "Eval SimpleDiffAverage"
+name = "Eval Baseline"
 data_range_eval = [ 0.8, 1.0,]
 criterion = "MAE"
 model = "SimpleDiffAverage"
 
 [[tasks]]
 task_type = "train"
-name = "Pilot DLinearChannelwise"
+name = "Pilot"
 data_range_train = [ 0.0, 0.6,]
 data_range_eval = [ 0.6, 0.8,]
 criterion = "MAE"
-model = "DLinearChannelwise"
+model = "DLinear"
 batch_sampler = "BatchSamplerShuffle"
-n_epoch = 20
+n_epoch = 10
 early_stop = true
-save_model_state_every_epoch = true
 [tasks.optimizer]
 cls_path = "torch.optim.Adam"
 params = { lr = 0.001 }
 [tasks.lr_scheduler]
 cls_path = "torch.optim.lr_scheduler.CosineAnnealingLR"
-params = { T_max = 20 }
+params = { T_max = 5 }
 
 [[tasks]]
 task_type = "train"
-name = "Train DLinearChannelwise"
+name = "Train"
 data_range_train = [ 0.0, 0.8,]
 criterion = "MAE"
-model = "DLinearChannelwise"
+model = "DLinear"
 batch_sampler = "BatchSamplerShuffle"
-n_epoch = { task_name = "Pilot DLinearChannelwise" }
+n_epoch = { task_name = "Pilot" }
 [tasks.optimizer]
 cls_path = "torch.optim.Adam"
 params = { lr = 0.001 }
 [tasks.lr_scheduler]
 cls_path = "torch.optim.lr_scheduler.CosineAnnealingLR"
-params = { T_max = 20 }
+params = { T_max = 5 }
 
 [[tasks]]
 task_type = "eval"
-name = "Eval DLinearChannelwise"
+name = "Eval"
 data_range_eval = [ 0.8, 1.0,]
 criterion = "MAE"
-model = "DLinearChannelwise"
-model_state = { task_name = "Train DLinearChannelwise" }
+model = "DLinear"
+model_state = { task_name = "Train" }
 
 [[tasks]]
 task_type = "eval"
-name = "Eval DLinearChannelwise (ImprovementRate)"
+name = "Eval ImpRate"
 data_range_eval = [ 0.8, 1.0,]
 criterion = "ImprovementRate"
 baseline_model = "SimpleDiffAverage"
-model = "DLinearChannelwise"
-model_state = { task_name = "Train DLinearChannelwise" }
+model = "DLinear"
+model_state = { task_name = "Train" }
