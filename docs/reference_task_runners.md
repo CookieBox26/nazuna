@@ -1,19 +1,19 @@
 ## Base Task Runner
 
-::: nazuna.task_runner.BaseTaskRunner
+::: nazuna.task_runners.BaseTaskRunner
 
 ## Eval Task Runner
 
-::: nazuna.task_runner.EvalTaskRunner
+::: nazuna.task_runners.EvalTaskRunner
 
 ## Train Task Runner
 
-::: nazuna.task_runner.TrainTaskRunner
+::: nazuna.task_runners.TrainTaskRunner
 
 ## Diagnostics Task Runner
 
-::: nazuna.task_runner.DiagnosticsTaskRunner
+::: nazuna.task_runners.DiagnosticsTaskRunner
 
 ## Optuna Task Runner
 
-::: nazuna.task_runner.OptunaTaskRunner
+::: nazuna.task_runners.OptunaTaskRunner

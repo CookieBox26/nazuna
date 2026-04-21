@@ -1,4 +1,4 @@
-from nazuna.task_runners import run_tasks
+from nazuna.workflow import run_tasks
 import nazuna.examples
 import argparse
 

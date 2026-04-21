@@ -1,10 +1,9 @@
 from nazuna.task_runners import (
-    Config,
     EvalTaskRunner,
     TrainTaskRunner,
     OptunaTaskRunner,
-    run_tasks,
 )
+from nazuna.workflow import Workflow, run_tasks
 
 
 def test_eval_task_runner(tmp_path, get_data_manager):
@@ -268,7 +267,7 @@ def test_config_definitions(tmp_path):
 
 
 def test_config_definitions_resolve(tmp_path):
-    conf = Config(
+    conf = Workflow(
         out_dir=tmp_path / 'test_resolve',
         exist_ok=True,
         data={
