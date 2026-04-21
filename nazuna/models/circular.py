@@ -1,7 +1,6 @@
 from nazuna.models._base import BasicBaseModel
-from nazuna.scaler import IqrScaler
+from nazuna.models.common import IqrScaler
 import torch
-import torch.nn as nn
 import numpy as np
 
 
@@ -83,7 +82,7 @@ class BaseCircular(BasicBaseModel):
 
     def _init_helper_and_linear(self, device):
         self.helper = CircularHelper(self.pred_len, self.periods, device)
-        self.linear = nn.Linear(
+        self.linear = torch.nn.Linear(
             in_features=self.helper.len_features, out_features=self.n_channel
         )
 

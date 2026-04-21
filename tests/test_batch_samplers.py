@@ -1,5 +1,5 @@
 import pytest
-from nazuna.batch_sampler import (
+from nazuna.batch_samplers import (
     BatchSampler, BatchSamplerShuffle, BatchSamplerBatchShuffle, BatchSamplerPeriodic,
 )
 from torch.utils.data import DataLoader

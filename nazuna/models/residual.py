@@ -1,9 +1,8 @@
-import torch
-import torch.nn as nn
 from nazuna.models._base import BasicBaseModel
-from nazuna.scaler import IqrScaler
+from nazuna.models.common import IqrScaler
 from nazuna.criteria import TimeSeriesError
 from nazuna.utils import load_class
+import torch
 
 
 def _make_concrete(cls):
@@ -109,7 +108,7 @@ class ResidualModel2(ResidualModel):
             naive_model_cls_path, naive_model_params,
             neural_model_cls_path, neural_model_params,
         )
-        self.w_naive = nn.Parameter(torch.full((n_channel,), 0.5))
+        self.w_naive = torch.nn.Parameter(torch.full((n_channel,), 0.5))
 
     def forward(self, x):
         naive_out = self.naive_model(x)

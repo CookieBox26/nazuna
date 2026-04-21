@@ -1,11 +1,11 @@
-from nazuna.scaler import IqrScaler
+from nazuna.models.common import IqrScaler
 import torch
-from collections import namedtuple
+import collections
 
 
 def test_iqr_scaler():
     scaler = IqrScaler('full', 'saved')
-    DummyBatch = namedtuple('DummyBatch', ['quantiles'])
+    DummyBatch = collections.namedtuple('DummyBatch', ['quantiles'])
     quantiles = {
         'full': torch.tensor([[
             [0 - 0.5, 2.5 - 1.25, 5.0 - 2.5],

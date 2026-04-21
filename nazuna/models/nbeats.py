@@ -1,29 +1,28 @@
 from abc import abstractmethod
 from nazuna.models._base import BasicBaseModel
-from nazuna.scaler import IqrScaler
+from nazuna.models.common import IqrScaler
 import torch
-import torch.nn as nn
 
 
-class NBeatsBlock(nn.Module):
+class NBeatsBlock(torch.nn.Module):
     """Basic building block of N-BEATS."""
 
     def __init__(self, input_size, theta_size, hidden_size, output_size):
         super().__init__()
-        self.fc = nn.Sequential(
-            nn.Linear(input_size, hidden_size),
-            nn.ReLU(),
-            nn.Linear(hidden_size, hidden_size),
-            nn.ReLU(),
-            nn.Linear(hidden_size, hidden_size),
-            nn.ReLU(),
-            nn.Linear(hidden_size, hidden_size),
-            nn.ReLU(),
+        self.fc = torch.nn.Sequential(
+            torch.nn.Linear(input_size, hidden_size),
+            torch.nn.ReLU(),
+            torch.nn.Linear(hidden_size, hidden_size),
+            torch.nn.ReLU(),
+            torch.nn.Linear(hidden_size, hidden_size),
+            torch.nn.ReLU(),
+            torch.nn.Linear(hidden_size, hidden_size),
+            torch.nn.ReLU(),
         )
-        self.theta_b = nn.Linear(hidden_size, theta_size, bias=False)
-        self.theta_f = nn.Linear(hidden_size, theta_size, bias=False)
-        self.backcast = nn.Linear(theta_size, input_size, bias=False)
-        self.forecast = nn.Linear(theta_size, output_size, bias=False)
+        self.theta_b = torch.nn.Linear(hidden_size, theta_size, bias=False)
+        self.theta_f = torch.nn.Linear(hidden_size, theta_size, bias=False)
+        self.backcast = torch.nn.Linear(theta_size, input_size, bias=False)
+        self.forecast = torch.nn.Linear(theta_size, output_size, bias=False)
 
     def forward(self, x):
         h = self.fc(x)
@@ -42,7 +41,7 @@ class BaseNBEATS(BasicBaseModel):
         self.hidden_size = hidden_size
         self.theta_size = theta_size
 
-        self.blocks = nn.ModuleList()
+        self.blocks = torch.nn.ModuleList()
         for _ in range(n_stacks):
             for _ in range(n_blocks):
                 self.blocks.append(

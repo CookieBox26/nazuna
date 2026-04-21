@@ -15,3 +15,7 @@
 ::: nazuna.criteria.MAE
 
 ::: nazuna.criteria.ImprovementRate
+
+## Diagnoser
+
+::: nazuna.utils.diagnoser.Diagnoser

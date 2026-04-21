@@ -1,5 +1,5 @@
 from nazuna.models._base import BasicBaseModel
-from nazuna.scaler import IqrScaler
+from nazuna.models.common import IqrScaler
 import math
 import torch
 import torch.nn.functional as F

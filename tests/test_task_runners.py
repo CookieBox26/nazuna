@@ -1,4 +1,4 @@
-from nazuna.task_runner import (
+from nazuna.task_runners import (
     Config,
     EvalTaskRunner,
     TrainTaskRunner,
@@ -40,7 +40,7 @@ def test_train_task_runner(tmp_path, get_data_manager):
         },
         'data_range_train': (0.0, 0.6),
         'batch_sampler': {
-            'cls_path': 'nazuna.batch_sampler.BatchSamplerShuffle',
+            'cls_path': 'nazuna.batch_samplers.BatchSamplerShuffle',
             'params': {'batch_size': 32},
         },
         'optimizer': {
@@ -80,7 +80,7 @@ def test_optuna_task_runner(tmp_path, get_data_manager):
             'params': {'seq_len': 28, 'pred_len': 7, 'period_len': 7},
         },
         batch_sampler={
-            'cls_path': 'nazuna.batch_sampler.BatchSamplerShuffle',
+            'cls_path': 'nazuna.batch_samplers.BatchSamplerShuffle',
             'params': {'batch_size': 16},
         },
         optimizer={
@@ -133,7 +133,7 @@ def test_optuna_task_runner_with_failures(
             'params': {'seq_len': 28, 'pred_len': 7, 'period_len': 7},
         },
         batch_sampler={
-            'cls_path': 'nazuna.batch_sampler.BatchSamplerShuffle',
+            'cls_path': 'nazuna.batch_samplers.BatchSamplerShuffle',
             'params': {'batch_size': 16},
         },
         optimizer={
@@ -195,7 +195,7 @@ data_range_train = [ 0.0, 0.6,]
 data_range_eval = [ 0.6, 0.8,]
 criterion = { cls_path = "nazuna.criteria.MSE", params = { n_channel = 2, pred_len = 7 } }
 model = { cls_path = "nazuna.models.simple_average.SimpleAverageVariableDecay", params = { seq_len = 28, pred_len = 7, period_len = 7 } }
-batch_sampler = { cls_path = "nazuna.batch_sampler.BatchSamplerShuffle", params = { batch_size = 16 } }
+batch_sampler = { cls_path = "nazuna.batch_samplers.BatchSamplerShuffle", params = { batch_size = 16 } }
 optimizer = { cls_path = "torch.optim.Adam", params = { lr = 0.001 } }
 lr_scheduler = { cls_path = "torch.optim.lr_scheduler.CosineAnnealingLR", params = { T_max = 10 } }
 n_epoch = 10
@@ -207,7 +207,7 @@ name = "Train"
 data_range_train = [ 0.0, 0.8,]
 criterion = { cls_path = "nazuna.criteria.MSE", params = { n_channel = 2, pred_len = 7 } }
 model = { cls_path = "nazuna.models.simple_average.SimpleAverageVariableDecay", params = { seq_len = 28, pred_len = 7, period_len = 7 } }
-batch_sampler = { cls_path = "nazuna.batch_sampler.BatchSamplerShuffle", params = { batch_size = 16 } }
+batch_sampler = { cls_path = "nazuna.batch_samplers.BatchSamplerShuffle", params = { batch_size = 16 } }
 optimizer = { cls_path = "torch.optim.Adam", params = { lr = 0.001 } }
 lr_scheduler = { cls_path = "torch.optim.lr_scheduler.CosineAnnealingLR", params = { T_max = 10 } }
 n_epoch = { task_name = "Pilot" }

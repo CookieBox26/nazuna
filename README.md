@@ -17,17 +17,17 @@ This repository mainly consists of the following files:
 │
 ├─ nazuna/
 │  ├─ data_manager.py  # Time-series data management class
-│  ├─ batch_sampler.py  # Batch sampler
+│  ├─ batch_samplers.py  # Batch sampler
 │  ├─ criteria.py  # Loss functions for training and evaluation
-│  ├─ scaler.py  # Scaler (used by models)
 │  ├─ models/  # Time-series forecasting models (some examples)
+│  │  ├─ common/  # Common modules across models
 │  │  ├─ _base.py
 │  │  ├─ simple_average.py
 │  │  ├─ autoformer.py
 │  │  └─ dlinear.py
 │  ├─ utils/
 │  │  └─ report.py  # Generates reports from task results
-│  ├─ task_runner.py  # Task runner that orchestrates the above modules
+│  ├─ task_runners.py  # Task runner that orchestrates the above modules
 │  ├─ datasets/  # Sample datasets
 │  └─ examples/  # Example configurations
 │
@@ -72,7 +72,7 @@ uv run ruff check
 
 # run tests locally
 uv run pytest
-uv run pytest -m ""  # run all tests, including slow ones
+# uv run pytest -m ""  # run all tests, including slow ones
 
 # update documentation in ./docs/
 uv run mkdocs serve --livereload  # preview documentation locally

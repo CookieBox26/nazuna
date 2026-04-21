@@ -1,7 +1,6 @@
 from nazuna.models._base import BasicBaseModel
-from nazuna.scaler import IqrScaler
+from nazuna.models.common import IqrScaler
 import torch
-import torch.nn as nn
 
 
 class iTransformer(BasicBaseModel):
@@ -36,9 +35,9 @@ class iTransformer(BasicBaseModel):
         seq_len_for_model = self._get_seq_len_for_model(seq_len)
 
         # Embed each variate's full time series into d_model.
-        self.embed = nn.Linear(seq_len_for_model, d_model)
+        self.embed = torch.nn.Linear(seq_len_for_model, d_model)
 
-        enc_layer = nn.TransformerEncoderLayer(
+        enc_layer = torch.nn.TransformerEncoderLayer(
             d_model=d_model,
             nhead=n_heads,
             dim_feedforward=d_ff,
@@ -47,13 +46,13 @@ class iTransformer(BasicBaseModel):
             norm_first=False,
             activation='gelu',
         )
-        self.encoder = nn.TransformerEncoder(
+        self.encoder = torch.nn.TransformerEncoder(
             enc_layer,
             num_layers=e_layers,
             enable_nested_tensor=False,
         )
 
-        self.head = nn.Linear(d_model, pred_len)
+        self.head = torch.nn.Linear(d_model, pred_len)
         if quantile_mode_train is not None:
             self.scaler = IqrScaler(
                 quantile_mode_train, quantile_mode_eval

@@ -1,6 +1,5 @@
 from nazuna.models._base import BasicBaseModel
-from nazuna.models.common import TimeFeatureEmbedding, SeriesDecomp
-from nazuna.scaler import IqrScaler
+from nazuna.models.common import IqrScaler, TimeFeatureEmbedding, SeriesDecomp
 import numpy as np
 import torch
 import math

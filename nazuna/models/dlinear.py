@@ -1,6 +1,5 @@
 from nazuna.models._base import BasicBaseModel
-from nazuna.models.common import SeriesDecomp
-from nazuna.scaler import IqrScaler
+from nazuna.models.common import IqrScaler, SeriesDecomp
 import torch
 import math
 

@@ -33,7 +33,7 @@ quantile_mode_train = "full"
 quantile_mode_eval = "saved"
 
 [definitions.BatchSamplerShuffle]
-cls_path = "nazuna.batch_sampler.BatchSamplerShuffle"
+cls_path = "nazuna.batch_samplers.BatchSamplerShuffle"
 params = { batch_size = 32 }
 
 # =============== tasks ===============

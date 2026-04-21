@@ -1,3 +1,4 @@
+from nazuna.models.common.scalers import IqrScaler as IqrScaler
 from nazuna.models.common.time_feature_embedding \
     import TimeFeatureEmbedding as TimeFeatureEmbedding
 import torch

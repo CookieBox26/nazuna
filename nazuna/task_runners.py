@@ -177,7 +177,7 @@ class EvalTaskRunner(BaseTaskRunner):
     def set_data_loader_eval(self):
         self.data_loader_eval = self.dm.get_data_loader(
             data_range=self.data_range_eval,
-            batch_sampler_cls=load_class('nazuna.batch_sampler.BatchSampler'),
+            batch_sampler_cls=load_class('nazuna.batch_samplers.BatchSampler'),
             batch_sampler_params={'batch_size': self.batch_size_eval},
             offset=self.data_offset_eval,
             rolling_window=self.data_rolling_window_eval,
