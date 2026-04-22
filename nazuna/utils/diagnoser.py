@@ -1,9 +1,3 @@
-"""
-Diagnoser module for analyzing time series data characteristics.
-
-This module provides tools for diagnosing time series data, including seasonality
-measurement using STL decomposition.
-"""
 import numpy as np
 from statsmodels.tsa.seasonal import STL
 from nazuna.data_manager import TimeSeriesDataManager

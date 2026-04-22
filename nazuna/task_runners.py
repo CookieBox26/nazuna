@@ -18,12 +18,8 @@ from nazuna.utils.optuna_helper import OptunaHelper
 from nazuna.utils.diagnoser import Diagnoser
 from nazuna.utils.inspector import Inspector
 from nazuna.utils import (
-    fix_seed, load_class, measure_time
+    fix_seed, load_class, measure_time, get_timestamp
 )
-
-
-def _get_timestamp():
-    return datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
 
 
 def _get_params(func):
@@ -77,7 +73,7 @@ class BaseTaskRunner(ABC):
     def __post_init__(self):
         if not self.device:
             self.device = str(torch.device('cuda' if torch.cuda.is_available() else 'cpu'))
-        self.out_path = Path(self.out_dir or f'out/{_get_timestamp()}/task_0/').expanduser()
+        self.out_path = Path(self.out_dir or f'out/{get_timestamp()}/task_0/').expanduser()
         if (not self.exist_ok) and self.out_path.exists():
             raise FileExistsError(f'Already exists: {self.out_path.as_posix()}')
         self.log_path = self.out_path / 'log.txt'
@@ -601,11 +597,8 @@ class OptunaTaskRunner(BaseTaskRunner):
         self._log(f'Trial {trial.number} started')
         model_params, optimizer_params, batch_sampler_params = \
             OptunaHelper.build_params_for_trial(
-                trial,
-                self.search_space,
-                self.model_params,
-                self.optimizer_params,
-                self.batch_sampler_params,
+                trial, self.search_space, self.model_params,
+                self.optimizer_params, self.batch_sampler_params,
             )
 
         losses = []
@@ -617,9 +610,7 @@ class OptunaTaskRunner(BaseTaskRunner):
             data_range_eval = data_range['eval']
 
             runner = TrainTaskRunner(
-                dm=self.dm,
-                device=self.device,
-                name=f'Trial {trial.number} Fold {i_fold}',
+                dm=self.dm, device=self.device, name=f'Trial {trial.number} Fold {i_fold}',
                 out_dir=(self.out_path / f'trial_{trial.number}' / f'fold_{i_fold}'),
                 exist_ok=self.exist_ok,
                 data_range_train=data_range_train,
@@ -633,12 +624,10 @@ class OptunaTaskRunner(BaseTaskRunner):
                 model={'cls_path': self.model_cls_path, 'params': model_params},
                 batch_sampler={'cls_path': self.batch_sampler_cls_path, 'params': batch_sampler_params},
                 optimizer={'cls_path': self.optimizer_cls_path, 'params': optimizer_params},
-                lr_scheduler=(
-                    {
-                        'cls_path': self.lr_scheduler_cls_path,
-                        'params': self.lr_scheduler_params,
-                    } if self.lr_scheduler_cls_path else None
-                ),
+                lr_scheduler=({
+                    'cls_path': self.lr_scheduler_cls_path,
+                    'params': self.lr_scheduler_params,
+                } if self.lr_scheduler_cls_path else None),
                 n_epoch=self.n_epoch,
                 early_stop=self.early_stop,
             )

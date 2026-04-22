@@ -50,3 +50,7 @@ def measure_time(info):
         elapsed = time.perf_counter() - start
         mins, secs = divmod(elapsed, 60)
         info['elapsed'] = f'{int(mins)} min {int(secs)} sec'
+
+
+def get_timestamp():
+    return datetime.datetime.now().strftime('%Y%m%d-%H%M%S')

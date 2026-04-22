@@ -1,4 +1,4 @@
-from nazuna.workflow import run_tasks
+from nazuna.workflow import run
 import nazuna.examples
 import argparse
 
@@ -13,11 +13,7 @@ def main():
     conf = args.conf
     if args.example:
         conf = nazuna.examples.get_conf_toml_path(conf)
-
-    run_tasks(
-        conf,
-        args.skip_task_ids,
-    )
+    run(conf, args.skip_task_ids)
 
 
 if __name__ == '__main__':

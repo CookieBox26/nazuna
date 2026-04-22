@@ -1,4 +1,4 @@
-from nazuna.workflow import run_tasks
+from nazuna.workflow import run
 import nazuna.examples
 import pytest
 
@@ -11,4 +11,4 @@ import pytest
 )
 def test_examples(identifier):
     conf_toml_path = nazuna.examples.get_conf_toml_path(identifier)
-    run_tasks(conf_toml_path)
+    run(conf_toml_path)

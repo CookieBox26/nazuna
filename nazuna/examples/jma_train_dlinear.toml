@@ -36,6 +36,14 @@ quantile_mode_eval = "saved"
 cls_path = "nazuna.batch_samplers.BatchSamplerShuffle"
 params = { batch_size = 32 }
 
+[definitions.Adam]
+cls_path = "torch.optim.Adam"
+params = { lr = 0.001 }
+
+[definitions.CosineAnnealingLR]
+cls_path = "torch.optim.lr_scheduler.CosineAnnealingLR"
+params = { T_max = 5 }
+
 # =============== tasks ===============
 [[tasks]]
 task_type = "eval"
@@ -52,14 +60,10 @@ data_range_eval = [ 0.6, 0.8,]
 criterion = "MAE"
 model = "DLinear"
 batch_sampler = "BatchSamplerShuffle"
-n_epoch = 10
+optimizer = "Adam"
+lr_scheduler = "CosineAnnealingLR"
+n_epoch = 5
 early_stop = true
-[tasks.optimizer]
-cls_path = "torch.optim.Adam"
-params = { lr = 0.001 }
-[tasks.lr_scheduler]
-cls_path = "torch.optim.lr_scheduler.CosineAnnealingLR"
-params = { T_max = 5 }
 
 [[tasks]]
 task_type = "train"
@@ -68,13 +72,9 @@ data_range_train = [ 0.0, 0.8,]
 criterion = "MAE"
 model = "DLinear"
 batch_sampler = "BatchSamplerShuffle"
+optimizer = "Adam"
+lr_scheduler = "CosineAnnealingLR"
 n_epoch = { task_name = "Pilot" }
-[tasks.optimizer]
-cls_path = "torch.optim.Adam"
-params = { lr = 0.001 }
-[tasks.lr_scheduler]
-cls_path = "torch.optim.lr_scheduler.CosineAnnealingLR"
-params = { T_max = 5 }
 
 [[tasks]]
 task_type = "eval"

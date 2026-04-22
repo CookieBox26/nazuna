@@ -1,9 +1,3 @@
-"""
-Helper module for Optuna-based hyperparameter optimization.
-
-This module provides utility functions for parameter suggestion and merging,
-separated from the task runner to keep the runner classes concise.
-"""
 import copy
 
 
@@ -26,7 +20,7 @@ class OptunaHelper:
                   - ['log_uniform', low, high]: Log-uniform float
                   - ['uniform', low, high]: Uniform float
                   - ['int', low, high]: Integer
-                  - ['categorical', type, choices]: Categorical
+                  - ['categorical', type, choices]: Categorical (choices: comma-separated string)
 
         Returns:
             Suggested parameter value.
@@ -40,13 +34,9 @@ class OptunaHelper:
                 name, float(spec[1]), float(spec[2]), log=True,
             )
         elif method == 'uniform':
-            return trial.suggest_float(
-                name, float(spec[1]), float(spec[2]),
-            )
+            return trial.suggest_float(name, float(spec[1]), float(spec[2]))
         elif method == 'int':
-            return trial.suggest_int(
-                name, int(spec[1]), int(spec[2]),
-            )
+            return trial.suggest_int(name, int(spec[1]), int(spec[2]))
         elif method == 'categorical':
             type_ = spec[1]
             choices = spec[2].split(',')
