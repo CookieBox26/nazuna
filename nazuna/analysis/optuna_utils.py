@@ -1,9 +1,9 @@
 import copy
 
 
-class OptunaHelper:
+class OptunaUtils:
     """
-    Helper class for Optuna hyperparameter optimization.
+    Utility class for Optuna hyperparameter optimization.
     """
 
     @staticmethod
@@ -80,7 +80,7 @@ class OptunaHelper:
         """
         suggested = {}
         for name, spec in search_space.items():
-            suggested[name] = OptunaHelper.suggest_param(trial, name, spec)
+            suggested[name] = OptunaUtils.suggest_param(trial, name, spec)
         return suggested
 
     @staticmethod
@@ -108,17 +108,17 @@ class OptunaHelper:
         Returns:
             Tuple of (model_params, optimizer_params, batch_sampler_params).
         """
-        suggested = OptunaHelper.suggest_all_params(trial, search_space)
+        suggested = OptunaUtils.suggest_all_params(trial, search_space)
 
-        merged_model_params = OptunaHelper.merge_params(
+        merged_model_params = OptunaUtils.merge_params(
             model_params, suggested,
             {k: v for k, v in search_space.items() if k in (model_params or {})}
         )
-        merged_optimizer_params = OptunaHelper.merge_params(
+        merged_optimizer_params = OptunaUtils.merge_params(
             optimizer_params, suggested,
             {k: v for k, v in search_space.items() if k in (optimizer_params or {})}
         )
-        merged_batch_sampler_params = OptunaHelper.merge_params(
+        merged_batch_sampler_params = OptunaUtils.merge_params(
             batch_sampler_params, suggested,
             {k: v for k, v in search_space.items() if k in (batch_sampler_params or {})}
         )

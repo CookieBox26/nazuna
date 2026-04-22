@@ -25,9 +25,10 @@ This repository mainly consists of the following files:
 │  │  ├─ simple_average.py
 │  │  ├─ autoformer.py
 │  │  └─ dlinear.py
-│  ├─ utils/
-│  │  └─ report.py  # Generates reports from task results
+│  ├─ analysis/  # Analysis utilities
 │  ├─ task_runners.py  # Task runner that orchestrates the above modules
+│  ├─ workflow.py  # Executes a sequence of tasks
+│  ├─ report.py  # Generates reports
 │  ├─ datasets/  # Sample datasets
 │  └─ examples/  # Example configurations
 │

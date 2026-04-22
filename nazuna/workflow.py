@@ -6,7 +6,7 @@ import torch
 from nazuna.datasets import get_path
 from nazuna.data_manager import TimeSeriesDataManager
 from nazuna.task_runners import TaskType
-from nazuna.utils.report import report
+from nazuna.report import report
 from nazuna.utils import as_path_if_length_safe, measure_time, get_timestamp
 
 

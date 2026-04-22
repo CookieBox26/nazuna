@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from nazuna.utils.diagnoser import Diagnoser
+from nazuna.analysis.diagnoser import Diagnoser
 
 
 @pytest.fixture(scope='module')

@@ -14,9 +14,9 @@ import optuna
 import torch
 from nazuna.data_manager import TimeSeriesDataManager
 from nazuna.criteria import BaseImprovement
-from nazuna.utils.optuna_helper import OptunaHelper
-from nazuna.utils.diagnoser import Diagnoser
-from nazuna.utils.inspector import Inspector
+from nazuna.analysis.optuna_utils import OptunaUtils
+from nazuna.analysis.diagnoser import Diagnoser
+from nazuna.analysis.inspector import Inspector
 from nazuna.utils import (
     fix_seed, load_class, measure_time, get_timestamp
 )
@@ -596,7 +596,7 @@ class OptunaTaskRunner(BaseTaskRunner):
     def _run_trial(self, trial):
         self._log(f'Trial {trial.number} started')
         model_params, optimizer_params, batch_sampler_params = \
-            OptunaHelper.build_params_for_trial(
+            OptunaUtils.build_params_for_trial(
                 trial, self.search_space, self.model_params,
                 self.optimizer_params, self.batch_sampler_params,
             )
