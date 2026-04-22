@@ -1,0 +1,24 @@
+repos:
+  - repo: local
+    hooks:
+      - id: ruff
+        name: ruff
+        entry: uv
+        args: ['run', 'ruff', 'check']
+        language: system
+        files: \.py$
+      - id: pytest
+        name: pytest
+        entry: uv
+        args: ['run', 'pytest', 'tests/test_workflow.py']
+        language: system
+        pass_filenames: false
+      - id: mkdocs
+        name: mkdocs
+        entry: bash
+        args:
+          - -c
+          - timeout 3s mkdocs serve --clean --dev-addr 127.0.0.1:8001;
+            rc=$?; exit $([ "$rc" -eq 124 ] && echo 0 || echo "$rc")
+        language: system
+        pass_filenames: false

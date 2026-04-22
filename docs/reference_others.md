@@ -4,9 +4,9 @@
 
 ## Batch Sampler
 
-::: nazuna.batch_sampler.BatchSampler
+::: nazuna.batch_samplers.BatchSampler
 
-::: nazuna.batch_sampler.BatchSamplerShuffle
+::: nazuna.batch_samplers.BatchSamplerShuffle
 
 ## Criteria
 
@@ -15,7 +15,3 @@
 ::: nazuna.criteria.MAE
 
 ::: nazuna.criteria.ImprovementRate
-
-## Diagnoser
-
-::: nazuna.utils.diagnoser.Diagnoser

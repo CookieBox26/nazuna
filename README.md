@@ -61,8 +61,8 @@ uv run nazuna config.toml
 
 ### Development Guide (for Developers)
 ```sh
-uv sync --extra torch-cu126 --extra test --extra docs  # CUDA 12.6
-uv sync --extra torch-cpu --extra test --extra docs  # CPU
+uv sync --extra torch-cu126 --extra dev --extra docs  # CUDA 12.6
+uv sync --extra torch-cpu --extra dev --extra docs  # CPU
 
 # make some changes to the code in ./nazuna/
 # implement tests in ./tests/
@@ -76,6 +76,13 @@ uv run pytest
 
 # update documentation in ./docs/
 uv run mkdocs serve --livereload  # preview documentation locally
+
+# developers are encouraged to install pre-commit
+# however, do not install it if `timeout` is unavailable,
+# as it is used for documentation validation
+# (available on linux and git bash, but not on macos)
+uv run pre-commit install  # first time only
+uv run pre-commit run --all-files  # run manually
 
 # commit changes
 ```

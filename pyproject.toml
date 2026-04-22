@@ -32,7 +32,8 @@ torch-cpu = [
 torch-cu126 = [
     "torch==2.9.1+cu126",
 ]
-test = [
+dev = [
+    "pre-commit",
     "pytest",
     "ruff",
 ]
