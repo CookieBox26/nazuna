@@ -1,5 +1,6 @@
 import copy
 import dataclasses
+from enum import Enum
 from pathlib import Path
 import toml
 import torch
@@ -82,7 +83,7 @@ class Workflow:
             self.out_paths[name] = Path(self.tasks[i_task]['out_dir'])
 
         self.out_path.mkdir(parents=True, exist_ok=self.exist_ok)
-        self.to_toml_path()
+        self.save_toml()
 
     def get_data_param(self):
         param = copy.deepcopy(self.data)
@@ -123,34 +124,6 @@ class Workflow:
 
         return task_runner_cls, params
 
-    @classmethod
-    def from_toml_str(cls, toml_str: str | Path):
-        d = toml.loads(toml_str)
-        return cls(**d)
-
-    @classmethod
-    def from_toml_path(cls, toml_path: str | Path):
-        p = toml_path
-        if isinstance(p, str):
-            p = Path(p)
-        return cls.from_toml_str(p.read_text(encoding='utf8'))
-
-    @classmethod
-    def create(cls, source):
-        if isinstance(source, cls):
-            return source
-        if isinstance(source, dict):
-            return cls(**source)
-        if isinstance(source, Path):
-            return cls.from_toml_path(source)
-        if isinstance(source, str):
-            s = source.strip()
-            p = as_path_if_length_safe(s)
-            if isinstance(p, Path):
-                return cls.from_toml_path(p)
-            return cls.from_toml_str(s)
-        raise ValueError('Cannot cast to Workflow')
-
     def to_toml_str(self):
         assert [field.name for field in dataclasses.fields(self)] == \
             ['out_dir', 'exist_ok', 'data', 'device', 'definitions', 'tasks'], \
@@ -175,30 +148,27 @@ class Workflow:
             toml_str += s + '\n'
         return toml_str
 
-    def to_toml_path(self):
+    def save_toml(self):
         self.conf_path = self.out_path / 'config.toml'
-        self.conf_path.write_text(
-            self.to_toml_str(), newline='\n', encoding='utf8',
-        )
+        self.conf_path.write_text(self.to_toml_str(), newline='\n', encoding='utf8')
 
-    def run(self, skip_task_ids_: str = ''):
+    @classmethod
+    def parse_skip_task_ids(cls, skip_task_ids_):
         if '-' in skip_task_ids_:
             a, b = skip_task_ids_.split('-', 1)
-            skip_task_ids = list(range(int(a), int(b) + 1))
-        else:
-            skip_task_ids = [
-                int(i) for i in skip_task_ids_.split(',')
-                if i != ''
-            ]
+            return list(range(int(a), int(b) + 1))
+        return [int(i) for i in skip_task_ids_.split(',') if i != '']
 
+    def run(self, skip_task_ids_: str = ''):
+        skip_task_ids = type(self).parse_skip_task_ids(skip_task_ids_)
         dm = TimeSeriesDataManager(**self.get_data_param())
         task_runners = []
         for i_task, _ in enumerate(self.tasks):
             cls_, params_ = self.get_task_runner(i_task)
             task_runners.append(cls_(dm=dm, **params_))
 
-        result = {}
-        with measure_time(result):
+        info = {}
+        with measure_time(info):
             for i_task, task_runner in enumerate(task_runners):
                 if i_task in skip_task_ids:
                     continue
@@ -206,11 +176,141 @@ class Workflow:
 
         report_path = self.out_path / 'report.md'
         report(report_path, self.to_toml_str(), task_runners)
-        print(f'Finished all tasks: {report_path.as_posix()} ({result["elapsed"]})')
+        print(f'Finished all tasks: {report_path.as_posix()} ({info["elapsed"]})')
+
+
+class WorkflowTemplateResolver:
+    """
+    Resolves a template into tasks when a template is specified instead of tasks.
+    """
+    Type = Enum('Type', [
+        'train_with_baseline',
+        'train_with_baseline_multiseeds',
+        'train_with_baseline_multimodels',
+    ])
+
+    @classmethod
+    def update(cls, d_dst, d_src, keys, rename=None):
+        rename = rename or {}
+        for key in keys:
+            d_dst[rename.get(key, key)] = copy.deepcopy(d_src[key])
+        return d_dst
+
+    @classmethod
+    def get_task_eval_baseline(cls, d):
+        task = {'task_type': 'eval', 'name': 'Eval Baseline'}
+        keys = ['data_range_eval', 'criterion', 'baseline_model']
+        rename = {'baseline_model': 'model'}
+        return cls.update(task, d, keys, rename)
+
+    @classmethod
+    def get_task_pilot(cls, d, i_trial=0):
+        task = {'task_type': 'train', 'name': f'Pilot {i_trial}', 'early_stop': True}
+        keys = ['data_range_train_pilot', 'data_range_eval_pilot', 'criterion'] + \
+            ['model', 'batch_sampler', 'optimizer', 'lr_scheduler', 'n_epoch']
+        rename = {f'data_range_{t}_pilot': f'data_range_{t}' for t in ['train', 'eval']}
+        return cls.update(task, d, keys, rename)
+
+    @classmethod
+    def get_task_train(cls, d, i_trial=0, seed=0, i_trial_pilot=None):
+        i_trial_pilot = i_trial_pilot if (i_trial_pilot is not None) else i_trial
+        task = {'task_type': 'train', 'name': f'Train {i_trial}'}
+        task['n_epoch'] = {'task_name': f'Pilot {i_trial_pilot}'}
+        task['seed'] = seed
+        keys = ['data_range_train', 'criterion'] + \
+            ['model', 'batch_sampler', 'optimizer', 'lr_scheduler']
+        return cls.update(task, d, keys)
+
+    @classmethod
+    def get_task_eval(cls, d, i_trial=0):
+        task = {'task_type': 'eval', 'name': f'Eval {i_trial}'}
+        task['model_state'] = {'task_name': f'Train {i_trial}'}
+        keys = ['data_range_eval', 'criterion', 'model']
+        return cls.update(task, d, keys)
+
+    @classmethod
+    def get_task_eval_imprate(cls, d, i_trial=0):
+        task = {'task_type': 'eval', 'name': f'Eval ImpRate {i_trial}'}
+        task['model_state'] = {'task_name': f'Train {i_trial}'}
+        keys = ['data_range_eval', 'criterion', 'baseline_model', 'model']
+        return cls.update(task, d, keys)
+
+    @classmethod
+    def get_tasks_train_with_baseline(cls, d):
+        return [
+            cls.get_task_eval_baseline(d),
+            cls.get_task_pilot(d),
+            cls.get_task_train(d),
+            cls.get_task_eval(d),
+            cls.get_task_eval_imprate(d),
+        ]
+
+    @classmethod
+    def get_tasks_train_with_baseline_multiseeds(cls, d):
+        tasks = [cls.get_task_eval_baseline(d), cls.get_task_pilot(d)]
+        for i_trial, seed in enumerate(d['seeds']):
+            tasks += [
+                cls.get_task_train(d, i_trial, seed, i_trial_pilot=0),
+                cls.get_task_eval(d, i_trial),
+                cls.get_task_eval_imprate(d, i_trial),
+            ]
+        return tasks
+
+
+    @classmethod
+    def get_tasks_train_with_baseline_multimodels(cls, d):
+        tasks = [cls.get_task_eval_baseline(d)]
+        for i_trial, model in enumerate(d['models']):
+            tasks_ = [
+                cls.get_task_pilot(d, i_trial),
+                cls.get_task_train(d, i_trial),
+                cls.get_task_eval(d, i_trial),
+                cls.get_task_eval_imprate(d, i_trial),
+            ]
+            for i_task in range(4):
+                tasks_[i_task]['model'] = model
+            tasks += tasks_
+        return tasks
+
+
+    @classmethod
+    def resolve(cls, d: dict) -> dict:
+        if 'template' not in d:
+            return d
+        if 'tasks' in d:
+            raise ValueError('Template and tasks cannot be set at the same time')
+        d_tmpl = d.pop('template')
+        type_ = cls.Type[d_tmpl['template_type']]
+        if type_ == cls.Type.train_with_baseline:
+            d['tasks'] = cls.get_tasks_train_with_baseline(d_tmpl)
+        if type_ == cls.Type.train_with_baseline_multiseeds:
+            d['tasks'] = cls.get_tasks_train_with_baseline_multiseeds(d_tmpl)
+        if type_ == cls.Type.train_with_baseline_multimodels:
+            d['tasks'] = cls.get_tasks_train_with_baseline_multimodels(d_tmpl)
+        return d
+
+
+def normalize_config(source: dict | Path | str):
+    if isinstance(source, dict):
+        return source
+    if isinstance(source, Path):
+        text = source.read_text(encoding='utf8')
+        return toml.loads(text)
+    if isinstance(source, str):
+        s = source.strip()
+        p = as_path_if_length_safe(s)
+        if isinstance(p, Path):
+            text = p.read_text(encoding='utf8')
+            return toml.loads(text)
+        return toml.loads(s)
+    return None  # Cannot cast to dict
 
 
 def run(
-    conf_: 'Workflow | dict | Path | str',
+    source: dict | Path | str,
     skip_task_ids_: str = '',
 ):
-    Workflow.create(conf_).run(skip_task_ids_=skip_task_ids_)
+    d = normalize_config(source)
+    d = WorkflowTemplateResolver.resolve(d)
+    wf = Workflow(**d)
+    wf.run(skip_task_ids_=skip_task_ids_)

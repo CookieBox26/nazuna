@@ -1,7 +1,8 @@
 from nazuna.workflow import run
+import pytest
 
 
-conf_toml_str_0 = '''
+premise = '''
 exist_ok = true
 
 # =============== data ===============
@@ -36,7 +37,10 @@ params = { lr = 0.001 }
 [definitions.CosineAnnealingLR]
 cls_path = "torch.optim.lr_scheduler.CosineAnnealingLR"
 params = { T_max = 5 }
+'''
 
+
+tasks_0 = '''
 # =============== tasks ===============
 [[tasks]]
 task_type = "eval"
@@ -71,7 +75,69 @@ n_epoch = { task_name = "Pilot" }
 '''
 
 
-def test_run_0(tmp_path):
-    out_dir = tmp_path / 'workflow_0'
-    run(f'out_dir = "{out_dir.as_posix()}"\n' + conf_toml_str_0)
+template_train_with_baseline = '''
+# =============== template ===============
+[template]
+template_type = "train_with_baseline"
+criterion = "MSE"
+baseline_model = "SimpleAverage"
+model = "SimpleAverageVariableDecay"
+data_range_train = [ 0.0, 0.8,]
+data_range_eval = [ 0.8, 1.0,]
+data_range_train_pilot = [ 0.0, 0.6,]
+data_range_eval_pilot = [ 0.6, 0.8,]
+batch_sampler = "BatchSamplerShuffle"
+optimizer = "Adam"
+lr_scheduler = "CosineAnnealingLR"
+n_epoch = 5
+'''
+
+
+template_train_with_baseline_multiseeds = '''
+# =============== template ===============
+[template]
+template_type = "train_with_baseline_multiseeds"
+criterion = "MSE"
+baseline_model = "SimpleAverage"
+model = "SimpleAverageVariableDecay"
+data_range_train = [ 0.0, 0.8,]
+data_range_eval = [ 0.8, 1.0,]
+data_range_train_pilot = [ 0.0, 0.6,]
+data_range_eval_pilot = [ 0.6, 0.8,]
+batch_sampler = "BatchSamplerShuffle"
+optimizer = "Adam"
+lr_scheduler = "CosineAnnealingLR"
+n_epoch = 5
+seeds = [ 0, 1, 2,]
+'''
+
+
+def validate_outputs(out_dir):
     assert out_dir.is_dir()
+    assert (out_dir / 'config.toml').is_file()
+    assert (out_dir / 'report.md').is_file()
+
+
+def test_run_tasks_0(tmp_path):
+    out_dir = tmp_path / 'tasks_0'
+    conf = f'out_dir = "{out_dir.as_posix()}"\n' + premise + tasks_0
+    run(conf)
+    validate_outputs(out_dir)
+
+
+@pytest.mark.slow
+def test_run_template_train_with_baseline(tmp_path):
+    out_dir = tmp_path / 'template_train_with_baseline'
+    conf = f'out_dir = "{out_dir.as_posix()}"\n' + premise + \
+        template_train_with_baseline
+    run(conf)
+    validate_outputs(out_dir)
+
+
+@pytest.mark.slow
+def test_run_template_train_with_baseline_multiseeds(tmp_path):
+    out_dir = tmp_path / 'template_train_with_baseline_multiseeds'
+    conf = f'out_dir = "{out_dir.as_posix()}"\n' + premise + \
+        template_train_with_baseline_multiseeds
+    run(conf)
+    validate_outputs(out_dir)

@@ -10,7 +10,7 @@ repos:
       - id: pytest
         name: pytest
         entry: uv
-        args: ['run', 'pytest', 'tests/test_workflow.py']
+        args: ['run', 'pytest', 'tests/test_workflow.py::test_run_tasks_0']
         language: system
         pass_filenames: false
       - id: mkdocs

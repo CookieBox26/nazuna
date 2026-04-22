@@ -77,8 +77,6 @@ class BaseTaskRunner(ABC):
         if (not self.exist_ok) and self.out_path.exists():
             raise FileExistsError(f'Already exists: {self.out_path.as_posix()}')
         self.log_path = self.out_path / 'log.txt'
-        if self.log_path.exists():
-            self.log_path.unlink()
         self.result = {}
 
     @abstractmethod
@@ -96,6 +94,8 @@ class BaseTaskRunner(ABC):
         if self.result:
             raise RuntimeError('Running TaskRunner more than once is not supported.')
         self.out_path.mkdir(parents=True, exist_ok=self.exist_ok)
+        if self.log_path.exists():
+            self.log_path.unlink()
         self._log('Started')
         with measure_time(self.result):
             fix_seed(self.seed)
