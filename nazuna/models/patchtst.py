@@ -104,7 +104,8 @@ class PatchTST(BasicBaseModel):
         > Yuqi Nie, Nam H. Nguyen, Phanwadee Sinthong, and Jayant Kalagnanam.
           "A Time Series is Worth 64 Words: Long-term Forecasting with Transformers."
           In International Conference on Learning Representations (ICLR), 2023.
-          [Paper](https://arxiv.org/abs/2211.14730) |
+          [Paper](https://openreview.net/forum?id=Jbdc0vTOcol) |
+          [arXiv](https://arxiv.org/abs/2211.14730) |
           [GitHub](https://github.com/yuqinie98/PatchTST)
     """
     def _get_seq_len_for_model(self, seq_len):

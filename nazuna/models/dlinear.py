@@ -10,8 +10,9 @@ class DLinear(BasicBaseModel):
         This model is based on the following research:
         > Ailing Zeng, Muxi Chen, Lei Zhang, and Qiang Xu.
           "Are Transformers Effective for Time Series Forecasting?"
-          In Proceedings of the AAAI Conference on Artificial Intelligence (AAAI), 2023.
-          [Paper](https://arxiv.org/abs/2205.13504) |
+          In Proceedings of the AAAI Conference on Artificial Intelligence
+          (AAAI 2023), vol. 37, pp. 11121-11128, 2023.
+          [arXiv](https://arxiv.org/abs/2205.13504) |
           [GitHub](https://github.com/cure-lab/LTSF-Linear)
     """
     def _setup(

@@ -11,52 +11,37 @@ class iTransformer(BasicBaseModel):
           Shiyu Wang, Lintao Ma, and Mingsheng Long.
           "iTransformer: Inverted Transformers Are Effective
           for Time Series Forecasting."
-          In International Conference on Learning
-          Representations (ICLR), 2024.
-          [Paper](https://arxiv.org/abs/2310.06625) |
+          In Proceedings of the 12th International Conference on Learning
+          Representations (ICLR 2024), 2024.
+          [Paper](https://openreview.net/forum?id=JePfAI8fah) |
+          [arXiv](https://arxiv.org/abs/2310.06625) |
           [GitHub](https://github.com/thuml/iTransformer)
     """
     def _get_seq_len_for_model(self, seq_len):
         return seq_len
 
     def _setup(
-        self,
-        seq_len: int,
-        pred_len: int,
-        d_model: int = 128,
-        n_heads: int = 4,
-        d_ff: int = 256,
-        e_layers: int = 3,
-        dropout: float = 0.1,
+        self, seq_len: int, pred_len: int,
+        d_model: int = 128, n_heads: int = 4, d_ff: int = 256,
+        e_layers: int = 3, dropout: float = 0.1,
         quantile_mode_train: str | None = None,
         quantile_mode_eval: str | None = None,
     ) -> None:
         super()._setup(seq_len, pred_len)
         seq_len_for_model = self._get_seq_len_for_model(seq_len)
 
-        # Embed each variate's full time series into d_model.
         self.embed = torch.nn.Linear(seq_len_for_model, d_model)
-
         enc_layer = torch.nn.TransformerEncoderLayer(
-            d_model=d_model,
-            nhead=n_heads,
-            dim_feedforward=d_ff,
-            dropout=dropout,
-            batch_first=True,
-            norm_first=False,
+            d_model=d_model, nhead=n_heads, dim_feedforward=d_ff,
+            dropout=dropout, batch_first=True, norm_first=False,
             activation='gelu',
         )
         self.encoder = torch.nn.TransformerEncoder(
-            enc_layer,
-            num_layers=e_layers,
-            enable_nested_tensor=False,
+            enc_layer, num_layers=e_layers, enable_nested_tensor=False,
         )
-
         self.head = torch.nn.Linear(d_model, pred_len)
         if quantile_mode_train is not None:
-            self.scaler = IqrScaler(
-                quantile_mode_train, quantile_mode_eval
-            )
+            self.scaler = IqrScaler(quantile_mode_train, quantile_mode_eval)
 
     def forward(self, x):
         # x: [B, L, C]

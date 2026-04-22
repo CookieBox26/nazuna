@@ -223,6 +223,18 @@ class DecoderLayer(torch.nn.Module):
 
 
 class Autoformer(BasicBaseModel):
+    """
+    !!! note "Original Research"
+        This model is based on the following research:
+        > Haixu Wu, Jiehui Xu, Jianmin Wang, and Mingsheng Long.
+          "Autoformer: Decomposition Transformers with Auto-Correlation
+          for Long-Term Series Forecasting."
+          In Advances in Neural Information Processing Systems
+          (NeurIPS 2021), vol. 34, 2021.
+          [Paper](https://proceedings.neurips.cc/paper/2021/hash/bcc0d400288793e8bdcd7c19a8ac0c2b-Abstract.html) |
+          [arXiv](https://arxiv.org/abs/2106.13008) |
+          [GitHub](https://github.com/thuml/Autoformer)
+    """
     def _get_seq_len_for_model(self, seq_len):
         return seq_len
 
