@@ -1,7 +1,19 @@
 # ノート
 
 
-### Autoformer モデルについて
+## `Workflow` クラスについて
+
+- このプロジェクトでは `Workflow` インスタンスを生成して実行することを基本とする。`Workflow` インスタンスを実行すると指定の `TaskRunner` インスタンスのリストが作成され順に実行される。
+    - `TaskRunner` インスタンスも `TimeSeriesDataManager` インスタンスを与えれば直接実行できるが、`TimeSeriesDataManager` インスタンス生成機能やレポート機能をもたない。また、 `Workflow` では前方の `TaskRunner` の成果物 (最良エポック数や訓練済パラメータ) を引継げる。
+- `nazuna.workflow.run` に設定を記入した TOML パス / TOML 文字列 / 辞書オブジェクトを渡すと `Workflow` インスタンスを生成して実行できる。便利のため、以下の記法を用意している。
+    - (設定を TOML パスで渡したとき限定) `out_dir` キーに `"__CONFIG_STEM__"` を指定すると、その TOML パスの拡張子を取ったパスを設定する (`Workflow` クラスに渡す前に解決される)。
+    - **definition 記法** &ndash; `tasks` 設定で繰り返し使う設定値を定義しておいて名前で参照できる。さらに、定義自体を記述する際にも、ベースとする定義名とそれに対する差分で定義することができる (`Workflow` インスタンスを実行し、各 `TaskRunner` インスタンスが生成される時解決される)。
+    - **template 記法** &ndash; `tasks` キーを記述する代わりに `template` キーで典型的な `TaskRunner` のリストを設定する (`Workflow` クラスに渡す前に解決される)。
+
+
+## 各モデルクラスについて
+
+### `Autoformer` クラスについて
 
 #### モデル構造の詳細
 公式実装 [51c7d41](https://github.com/thuml/Autoformer/tree/51c7d416ae120b805fd5beef2f4ccf7de496a6ff) に倣っている。

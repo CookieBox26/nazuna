@@ -18,6 +18,10 @@ white_list = [ "temp_avg_nagoya", "temp_avg_fukuoka",]
 cls_path = "nazuna.criteria.MSE"
 params = { n_channel = 2, pred_len = 7 }
 
+[definitions.ImprovementRate]
+cls_path = "nazuna.criteria.ImprovementRate"
+params = { n_channel = 2, pred_len = 7, error_type = "mse" }
+
 [definitions.SimpleAverage]
 cls_path = "nazuna.models.simple_average.SimpleAverage"
 params = { seq_len = 28, pred_len = 7, period_len = 7 }
@@ -80,6 +84,7 @@ template_train_with_baseline = '''
 [template]
 template_type = "train_with_baseline"
 criterion = "MSE"
+criterion_imprate = "ImprovementRate"
 baseline_model = "SimpleAverage"
 model = "SimpleAverageVariableDecay"
 data_range_train = [ 0.0, 0.8,]
@@ -98,6 +103,7 @@ template_train_with_baseline_multiseeds = '''
 [template]
 template_type = "train_with_baseline_multiseeds"
 criterion = "MSE"
+criterion_imprate = "ImprovementRate"
 baseline_model = "SimpleAverage"
 model = "SimpleAverageVariableDecay"
 data_range_train = [ 0.0, 0.8,]

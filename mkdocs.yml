@@ -9,7 +9,7 @@ extra_css:
   - custom.css
 nav:
   - Home: index.md
-  - About Config File: config.md
+  - How to Run: how_to_run.md
   - Reference:
     - Task Runners: reference_task_runners.md
     - Models: reference_models.md

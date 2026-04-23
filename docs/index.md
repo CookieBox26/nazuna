@@ -50,7 +50,7 @@ uv run nazuna --example jma_optuna_dlinear
 # Run tasks defined in a TOML config file:
 uv run nazuna config.toml
 ```
-For details on how to write the TOML config file, see [About Config File](config.md).
+For details on how to write the TOML config file, see [How to Run](how_to_run.md).
 
 
 ## Reference

@@ -250,8 +250,9 @@ class WorkflowTemplateResolver:
     def get_task_eval_imprate(cls, d, i_trial=0):
         task = {'task_type': 'eval', 'name': f'Eval ImpRate {i_trial}'}
         task['model_state'] = {'task_name': f'Train {i_trial}'}
-        keys = ['data_range_eval', 'criterion', 'baseline_model', 'model']
-        return cls.update(task, d, keys)
+        keys = ['data_range_eval', 'criterion_imprate', 'baseline_model', 'model']
+        rename = {'criterion_imprate': 'criterion'}
+        return cls.update(task, d, keys, rename)
 
     @classmethod
     def get_tasks_train_with_baseline(cls, d):
