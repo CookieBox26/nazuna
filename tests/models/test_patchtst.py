@@ -28,6 +28,7 @@ def test_get_loss(device, dummy_data):
     )
     criterion = MSE.create(device, n_channel=3, pred_len=4)
     loss = model.get_loss(batch, criterion)
+    assert loss.batch_mean.item() > 0.0
 
 
 def test_diff_patchtst_forward(device, dummy_data):
@@ -61,6 +62,7 @@ def test_diff_patchtst_get_loss(device, dummy_data):
     )
     criterion = MSE.create(device, n_channel=3, pred_len=4)
     loss = model.get_loss(batch, criterion)
+    assert loss.batch_mean.item() > 0.0
 
 
 def test_positional_encoding_uniform_init():
@@ -68,7 +70,6 @@ def test_positional_encoding_uniform_init():
     max_len = 10
     pe_module = PositionalEncoding(d_model=d_model, max_len=max_len)
     pe = pe_module.pe  # [max_len, d_model]
-
     assert pe.shape == (max_len, d_model)
     assert torch.all(pe >= -0.02)
     assert torch.all(pe <= 0.02)

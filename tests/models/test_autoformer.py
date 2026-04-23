@@ -88,8 +88,7 @@ def test_get_loss(device, dummy_data, training, independent_heads):
     )
     criterion = MSE.create(device, n_channel=3, pred_len=4)
     loss = model.get_loss(batch, criterion)
-    assert loss.batch_mean.shape == ()
-    assert loss.batch_mean.item() >= 0
+    assert loss.batch_mean.item() > 0.0
 
 
 @pytest.mark.parametrize('independent_heads', [False, True])
@@ -135,5 +134,4 @@ def test_diff_autoformer_get_loss(device, dummy_data, training, independent_head
     )
     criterion = MSE.create(device, n_channel=3, pred_len=4)
     loss = model.get_loss(batch, criterion)
-    assert loss.batch_mean.shape == ()
-    assert loss.batch_mean.item() >= 0
+    assert loss.batch_mean.item() > 0.0

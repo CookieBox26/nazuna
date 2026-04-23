@@ -286,7 +286,7 @@ class Autoformer(BasicBaseModel):
         self.dec_norm = TokenNormTimeDemean(d_model)
         self.out_proj = torch.nn.Linear(d_model, self.c_out)
 
-        if quantile_mode_train is not None:
+        if quantile_mode_train and quantile_mode_eval:
             self.scaler = IqrScaler(quantile_mode_train, quantile_mode_eval)
 
     def _build_marks(self, batch, device):

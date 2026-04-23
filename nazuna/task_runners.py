@@ -420,6 +420,10 @@ class TrainTaskRunner(EvalTaskRunner):
 
         self.result['cols_org'] = dict(zip(self.dm.cols, self.dm.cols_org))
         self.result['data_range_train'] = self.data_loader_train.dataset.info
+        self.result['n_sample_train'] = self.data_loader_train.dataset.n_sample
+        if self.data_range_eval is not None:
+            self.result['data_range_eval'] = self.data_loader_eval.dataset.info
+            self.result['n_sample_eval'] = self.data_loader_eval.dataset.n_sample
 
         loss_history = []
         for i_epoch in range(self.n_epoch):
@@ -454,7 +458,6 @@ class TrainTaskRunner(EvalTaskRunner):
                 loss_per_sample_eval_best = loss_per_sample_eval
                 early_stop_counter = 0
                 self.result['i_epoch_best'] = i_epoch
-                self.result['n_sample_eval'] = self.data_loader_eval.dataset.n_sample
                 self.result['loss_per_sample_eval_best'] = loss_per_sample_eval_best
                 self.save_model('model_state.pth')
             else:

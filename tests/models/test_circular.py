@@ -57,3 +57,4 @@ def test_get_loss(device, dummy_data):
     )
     criterion = MSE.create(device, n_channel=3, pred_len=4)
     loss = model.get_loss(batch, criterion)
+    assert loss.batch_mean.item() > 0.0

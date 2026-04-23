@@ -48,8 +48,7 @@ def test_get_loss(device, dummy_data):
     )
     criterion = MSE.create(device, n_channel=3, pred_len=4)
     loss = model.get_loss(batch, criterion)
-    assert loss.batch_mean.shape == ()
-    assert loss.batch_mean.item() >= 0
+    assert loss.batch_mean.item() > 0.0
 
 
 def test_diff_itransformer_forward(device, dummy_data):
@@ -96,5 +95,4 @@ def test_diff_itransformer_get_loss(device, dummy_data):
     )
     criterion = MSE.create(device, n_channel=3, pred_len=4)
     loss = model.get_loss(batch, criterion)
-    assert loss.batch_mean.shape == ()
-    assert loss.batch_mean.item() >= 0
+    assert loss.batch_mean.item() > 0.0

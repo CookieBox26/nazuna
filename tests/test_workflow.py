@@ -1,4 +1,4 @@
-from nazuna.workflow import run
+from nazuna.workflow import Workflow, load_config_from_path, run
 import pytest
 
 
@@ -141,3 +141,39 @@ def test_run_template_train_with_baseline_multiseeds(tmp_path):
         template_train_with_baseline_multiseeds
     run(conf)
     validate_outputs(out_dir)
+
+
+def test_load_config_from_path(tmp_path):
+    conf_path = tmp_path / 'hoge.toml'
+    conf_path.write_text('out_dir = "__CONFIG_STEM__"', newline='\n', encoding='utf8')
+    d = load_config_from_path(conf_path)
+    assert d['out_dir'] == (tmp_path / 'hoge').as_posix()
+
+
+def test_workflow_get_task_runner():
+    d = {
+        'data': {},
+        'definitions': {
+            'DataRange': [0.8, 1.0],
+            'MAE': {'cls_path': 'nazuna.criteria.MAE', 'params': {'n_channel': 4, 'pred_len': 24}},
+            'SimpleDiffAverage': {
+                'cls_path': 'nazuna.models.simple_average.SimpleDiffAverage',
+                'params': {'seq_len': 97, 'pred_len': 24, 'period_len': 24},
+            },
+            'SimpleDiffAverage_10': {'base': 'SimpleDiffAverage', 'params': {'decay_rate': 1.0}},
+            'SimpleDiffAverage_07': {'base': 'SimpleDiffAverage', 'params': {'decay_rate': 0.7}},
+        },
+        'tasks': [
+            {'task_type': 'eval', 'data_range_eval': 'DataRange', 'model': 'SimpleDiffAverage_10'},
+            {'task_type': 'eval', 'data_range_eval': 'DataRange', 'model': 'SimpleDiffAverage_07'},
+        ],
+    }
+    wf = Workflow(**d)
+    _, params = wf.parse_task_runner_config(0)
+    assert params['model']['cls_path'] == 'nazuna.models.simple_average.SimpleDiffAverage'
+    assert set(params['model']['params'].keys()) == {'seq_len', 'pred_len', 'period_len', 'decay_rate'}
+    assert params['model']['params']['decay_rate'] == pytest.approx(1.0)
+    _, params = wf.parse_task_runner_config(1)
+    assert params['model']['cls_path'] == 'nazuna.models.simple_average.SimpleDiffAverage'
+    assert set(params['model']['params'].keys()) == {'seq_len', 'pred_len', 'period_len', 'decay_rate'}
+    assert params['model']['params']['decay_rate'] == pytest.approx(0.7)

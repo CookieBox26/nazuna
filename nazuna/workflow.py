@@ -82,16 +82,13 @@ class Workflow:
             self.tasks[i_task].setdefault('out_dir', out_dir_default)
             self.out_paths[name] = Path(self.tasks[i_task]['out_dir'])
 
-        self.out_path.mkdir(parents=True, exist_ok=self.exist_ok)
-        self.save_toml()
-
     def get_data_param(self):
         param = copy.deepcopy(self.data)
         if isinstance(param['path'], (list, tuple)):
             param['path'] = get_path(*param['path'])
         return param
 
-    def get_task_runner(self, i_task):
+    def parse_task_runner_config(self, i_task):
         params = copy.deepcopy(self.tasks[i_task])
         self.task_type = params.pop('task_type')
         task_runner_cls = TaskType[self.task_type].value
@@ -111,11 +108,28 @@ class Workflow:
             'batch_sampler', 'optimizer', 'lr_scheduler',
         ]:
             if target in params and isinstance(params[target], str):
-                d = self.definitions[params[target]]
-                params[target] = {
-                    'cls_path': d['cls_path'],
-                    'params': copy.deepcopy(d['params']),
-                }
+                definition = self.definitions[params[target]]
+                if 'base' in definition:
+                    definition_base = self.definitions[definition['base']]
+                    params[target] = {
+                        'cls_path': definition_base['cls_path'],
+                        'params': copy.deepcopy(definition_base['params']),
+                    }
+                    if 'cls_path' in definition:
+                        params[target]['cls_path'] = definition['cls_path']
+                    if 'params' in definition:
+                        params[target]['params'].update(definition['params'])
+                else:
+                    params[target] = {
+                        'cls_path': definition['cls_path'],
+                        'params': copy.deepcopy(definition['params']),
+                    }
+        for target in [
+            'batch_size_eval', 'data_range_train', 'data_range_eval',
+            'n_epoch',
+        ]:
+            if target in params and isinstance(params[target], str):
+                params[target] = self.definitions[params[target]]
 
         if 'model_state' in params:
             target_path = self.out_paths[params['model_state']['task_name']]
@@ -123,6 +137,13 @@ class Workflow:
             del params['model_state']
 
         return task_runner_cls, params
+
+    def create_task_runners(self, dm):
+        task_runners = []
+        for i_task, _ in enumerate(self.tasks):
+            cls_, params_ = self.parse_task_runner_config(i_task)
+            task_runners.append(cls_(dm=dm, **params_))
+        return task_runners
 
     def to_toml_str(self):
         assert [field.name for field in dataclasses.fields(self)] == \
@@ -162,18 +183,15 @@ class Workflow:
     def run(self, skip_task_ids_: str = ''):
         skip_task_ids = type(self).parse_skip_task_ids(skip_task_ids_)
         dm = TimeSeriesDataManager(**self.get_data_param())
-        task_runners = []
-        for i_task, _ in enumerate(self.tasks):
-            cls_, params_ = self.get_task_runner(i_task)
-            task_runners.append(cls_(dm=dm, **params_))
-
+        task_runners = self.create_task_runners(dm)
+        self.out_path.mkdir(parents=True, exist_ok=self.exist_ok)
+        self.save_toml()
         info = {}
         with measure_time(info):
             for i_task, task_runner in enumerate(task_runners):
                 if i_task in skip_task_ids:
                     continue
                 task_runner.run()
-
         report_path = self.out_path / 'report.md'
         report(report_path, self.to_toml_str(), task_runners)
         print(f'Finished all tasks: {report_path.as_posix()} ({info["elapsed"]})')
@@ -290,18 +308,24 @@ class WorkflowTemplateResolver:
         return d
 
 
+def load_config_from_path(p: Path):
+    d = toml.loads(p.read_text(encoding='utf8'))
+    out_dir = d.get('out_dir')
+    if out_dir == '__CONFIG_STEM__':
+        d['out_dir'] = (p.parent / p.stem).as_posix()
+    return d
+
+
 def normalize_config(source: dict | Path | str):
     if isinstance(source, dict):
         return source
     if isinstance(source, Path):
-        text = source.read_text(encoding='utf8')
-        return toml.loads(text)
+        return load_config_from_path(source)
     if isinstance(source, str):
         s = source.strip()
         p = as_path_if_length_safe(s)
         if isinstance(p, Path):
-            text = p.read_text(encoding='utf8')
-            return toml.loads(text)
+            return load_config_from_path(p)
         return toml.loads(s)
     return None  # Cannot cast to dict
 

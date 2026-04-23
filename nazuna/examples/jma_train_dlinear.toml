@@ -10,6 +10,12 @@ pred_len = 24
 white_list = "temp_fukuoka,temp_osaka,temp_tokyo,temp_sendai"
 
 # =============== definitions ===============
+[definitions]
+DataRangeEval = [ 0.8, 1.0,]
+DataRangeTrain = [ 0.0, 0.8,]
+DataRangeEvalPilot = [ 0.6, 0.8,]
+DataRangeTrainPilot = [ 0.0, 0.6,]
+
 [definitions.MAE]
 cls_path = "nazuna.criteria.MAE"
 params = { n_channel = 4, pred_len = 24 }
@@ -48,15 +54,15 @@ params = { T_max = 5 }
 [[tasks]]
 task_type = "eval"
 name = "Eval Baseline"
-data_range_eval = [ 0.8, 1.0,]
+data_range_eval = "DataRangeEval"
 criterion = "MAE"
 model = "SimpleDiffAverage"
 
 [[tasks]]
 task_type = "train"
 name = "Pilot"
-data_range_train = [ 0.0, 0.6,]
-data_range_eval = [ 0.6, 0.8,]
+data_range_train = "DataRangeTrainPilot"
+data_range_eval = "DataRangeEvalPilot"
 criterion = "MAE"
 model = "DLinear"
 batch_sampler = "BatchSamplerShuffle"
@@ -68,7 +74,7 @@ early_stop = true
 [[tasks]]
 task_type = "train"
 name = "Train"
-data_range_train = [ 0.0, 0.8,]
+data_range_train = "DataRangeTrain"
 criterion = "MAE"
 model = "DLinear"
 batch_sampler = "BatchSamplerShuffle"
@@ -79,7 +85,7 @@ n_epoch = { task_name = "Pilot" }
 [[tasks]]
 task_type = "eval"
 name = "Eval"
-data_range_eval = [ 0.8, 1.0,]
+data_range_eval = "DataRangeEval"
 criterion = "MAE"
 model = "DLinear"
 model_state = { task_name = "Train" }
@@ -87,7 +93,7 @@ model_state = { task_name = "Train" }
 [[tasks]]
 task_type = "eval"
 name = "Eval ImpRate"
-data_range_eval = [ 0.8, 1.0,]
+data_range_eval = "DataRangeEval"
 criterion = "ImprovementRate"
 baseline_model = "SimpleDiffAverage"
 model = "DLinear"
