@@ -21,24 +21,14 @@ class DLinear(BasicBaseModel):
         pred_len: int,
         kernel_size: int,
         bias: bool,
-        quantile_mode_train: str,
-        quantile_mode_eval: str,
         n_moving_avg: int = 1,
+        scaler_cls: type | None = IqrScaler,
+        scaler_params: dict | None = {'stat_types': ('qtile_full', 'saved')},
     ) -> None:
-        """
-        Args:
-            seq_len: Input sequence length
-            pred_len: Prediction length
-            kernel_size: Kernel size for the moving average decomposition
-            bias: Whether to use bias in linear layers
-            quantile_mode: Source of quantiles for scaling ('full', 'cum', or 'rolling')
-            n_moving_avg: Number of times to apply moving average
-        """
-        super()._setup(seq_len, pred_len)
+        super()._setup(seq_len, pred_len, scaler_cls, scaler_params)
         self.decompsition = SeriesDecomp(kernel_size, n_moving_avg)
         self.Linear_Seasonal = torch.nn.Linear(self.seq_len, self.pred_len, bias=bias)
         self.Linear_Trend = torch.nn.Linear(self.seq_len, self.pred_len, bias=bias)
-        self.scaler = IqrScaler(quantile_mode_train, quantile_mode_eval)
         self._init_weights()
 
     def _init_weights(self):
@@ -67,12 +57,11 @@ class NLinear(BasicBaseModel):
         seq_len: int,
         pred_len: int,
         bias: bool,
-        quantile_mode_train: str,
-        quantile_mode_eval: str,
+        scaler_cls: type | None = IqrScaler,
+        scaler_params: dict | None = {'stat_types': ('qtile_full', 'saved')},
     ) -> None:
-        super()._setup(seq_len, pred_len)
+        super()._setup(seq_len, pred_len, scaler_cls, scaler_params)
         self.Linear = torch.nn.Linear(self.seq_len, self.pred_len, bias=bias)
-        self.scaler = IqrScaler(quantile_mode_train, quantile_mode_eval)
         self._init_weights()
 
     def _init_weights(self):
@@ -100,11 +89,11 @@ class DLinearChannelwise(BasicBaseModel):
         n_channel: int,
         kernel_size: int,
         bias: bool,
-        quantile_mode_train: str,
-        quantile_mode_eval: str,
         n_moving_avg: int = 1,
+        scaler_cls: type | None = IqrScaler,
+        scaler_params: dict | None = {'stat_types': ('qtile_full', 'saved')},
     ) -> None:
-        super()._setup(seq_len, pred_len)
+        super()._setup(seq_len, pred_len, scaler_cls, scaler_params)
         self.n_channel = n_channel
         self.decompsition = SeriesDecomp(kernel_size, n_moving_avg)
 
@@ -124,7 +113,6 @@ class DLinearChannelwise(BasicBaseModel):
             self.seasonal_bias = None
             self.trend_bias = None
 
-        self.scaler = IqrScaler(quantile_mode_train, quantile_mode_eval)
         self._init_weights()
 
     def _init_weights(self):

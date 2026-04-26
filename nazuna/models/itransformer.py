@@ -1,5 +1,4 @@
 from nazuna.models._base import BasicBaseModel
-from nazuna.models.common import IqrScaler
 import torch
 
 
@@ -24,10 +23,10 @@ class iTransformer(BasicBaseModel):
         self, seq_len: int, pred_len: int,
         d_model: int = 128, n_heads: int = 4, d_ff: int = 256,
         e_layers: int = 3, dropout: float = 0.1,
-        quantile_mode_train: str | None = None,
-        quantile_mode_eval: str | None = None,
+        scaler_cls: type | None = None,
+        scaler_params: dict | None = None,
     ) -> None:
-        super()._setup(seq_len, pred_len)
+        super()._setup(seq_len, pred_len, scaler_cls, scaler_params)
         seq_len_for_model = self._get_seq_len_for_model(seq_len)
 
         self.embed = torch.nn.Linear(seq_len_for_model, d_model)
@@ -40,8 +39,6 @@ class iTransformer(BasicBaseModel):
             enc_layer, num_layers=e_layers, enable_nested_tensor=False,
         )
         self.head = torch.nn.Linear(d_model, pred_len)
-        if quantile_mode_train is not None:
-            self.scaler = IqrScaler(quantile_mode_train, quantile_mode_eval)
 
     def forward(self, x):
         # x: [B, L, C]

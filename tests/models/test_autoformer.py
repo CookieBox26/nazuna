@@ -54,6 +54,7 @@ def test_forward(device, dummy_data, training, independent_heads):
         independent_heads=independent_heads,
     )
     set_training(model, training)
+
     x = dummy_data((1, 16, 3))
     x_mark_enc = torch.zeros(1, 16, 4, device=device)
     x_mark_dec = torch.zeros(1, 8 + 4, 4, device=device)
@@ -64,12 +65,6 @@ def test_forward(device, dummy_data, training, independent_heads):
 @pytest.mark.parametrize('independent_heads', [False, True])
 @pytest.mark.parametrize('training', [True, False])
 def test_get_loss(device, dummy_data, training, independent_heads):
-    model = Autoformer.create(
-        device=device, seq_len=16, pred_len=4, c_in=3,
-        d_model=8, n_heads=2, d_ff=32, decomp_kernel=5,
-        independent_heads=independent_heads,
-    )
-    set_training(model, training)
     tsta = np.array([[
         np.datetime64('2025-01-01') + np.timedelta64(i, 'D')
         for i in range(16)
@@ -82,11 +77,23 @@ def test_get_loss(device, dummy_data, training, independent_heads):
         tsta=tsta, tste=None, data=dummy_data((1, 16, 3)),
         tsta_future=tsta_future, tste_future=None,
         data_future=dummy_data((1, 4, 3)),
-        quantiles={'full': torch.tensor([[
+        stats={'qtile_full': torch.tensor([[
             [0., 0., 0.], [10., 10., 10.], [20., 20., 20.],
         ]], device=device)},
     )
     criterion = MSE.create(device, n_channel=3, pred_len=4)
+
+    model = Autoformer.create(
+        device=device, seq_len=16, pred_len=4, c_in=3,
+        d_model=8, n_heads=2, d_ff=32, decomp_kernel=5,
+        independent_heads=independent_heads,
+    )
+    set_training(model, training)
+    if not training:
+        model.scaler.q1s = torch.tensor([[[0., 0., 0.]]], device=device)
+        model.scaler.q2s = torch.tensor([[[10., 10., 10.]]], device=device)
+        model.scaler.q3s = torch.tensor([[[20., 20., 20.]]], device=device)
+
     loss = model.get_loss(batch, criterion)
     assert loss.batch_mean.item() > 0.0
 
@@ -100,6 +107,7 @@ def test_diff_autoformer_forward(device, dummy_data, training, independent_heads
         independent_heads=independent_heads,
     )
     set_training(model, training)
+
     x = dummy_data((1, 17, 3))
     x_mark_enc = torch.zeros(1, 17, 4, device=device)
     x_mark_dec = torch.zeros(1, 8 + 4, 4, device=device)
@@ -110,12 +118,6 @@ def test_diff_autoformer_forward(device, dummy_data, training, independent_heads
 @pytest.mark.parametrize('independent_heads', [False, True])
 @pytest.mark.parametrize('training', [True, False])
 def test_diff_autoformer_get_loss(device, dummy_data, training, independent_heads):
-    model = DiffAutoformer.create(
-        device=device, seq_len=17, pred_len=4, c_in=3,
-        d_model=8, n_heads=2, d_ff=32, decomp_kernel=5,
-        independent_heads=independent_heads,
-    )
-    set_training(model, training)
     tsta = np.array([[
         np.datetime64('2025-01-01') + np.timedelta64(i, 'D')
         for i in range(17)
@@ -128,10 +130,22 @@ def test_diff_autoformer_get_loss(device, dummy_data, training, independent_head
         tsta=tsta, tste=None, data=dummy_data((1, 17, 3)),
         tsta_future=tsta_future, tste_future=None,
         data_future=dummy_data((1, 4, 3)),
-        quantiles={'full': torch.tensor([[
+        stats={'qtile_full': torch.tensor([[
             [0., 0., 0.], [10., 10., 10.], [20., 20., 20.],
         ]], device=device)},
     )
     criterion = MSE.create(device, n_channel=3, pred_len=4)
+
+    model = DiffAutoformer.create(
+        device=device, seq_len=17, pred_len=4, c_in=3,
+        d_model=8, n_heads=2, d_ff=32, decomp_kernel=5,
+        independent_heads=independent_heads,
+    )
+    set_training(model, training)
+    if not training:
+        model.scaler.q1s = torch.tensor([[[0., 0., 0.]]], device=device)
+        model.scaler.q2s = torch.tensor([[[10., 10., 10.]]], device=device)
+        model.scaler.q3s = torch.tensor([[[20., 20., 20.]]], device=device)
+
     loss = model.get_loss(batch, criterion)
     assert loss.batch_mean.item() > 0.0

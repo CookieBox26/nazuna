@@ -9,14 +9,11 @@ def test_forward(device, dummy_data):
         device=device,
         seq_len=96,
         pred_len=24,
-        quantile_mode_train='full',
-        quantile_mode_eval='saved',
         naive_model_cls_path='nazuna.models.simple_average.SimpleAverage',
         naive_model_params={'seq_len': 96, 'pred_len': 24, 'period_len': 24, 'decay_rate': 1.0},
         neural_model_cls_path='nazuna.models.dlinear.DLinear',
         neural_model_params={
             'seq_len': 96, 'pred_len': 24, 'kernel_size': 25, 'bias': True,
-            'quantile_mode_train': 'full', 'quantile_mode_eval': 'saved',
         },
     )
     batch = dummy_data((2, 96, 3))
@@ -29,14 +26,11 @@ def test_get_loss(device, dummy_data):
         device=device,
         seq_len=16,
         pred_len=4,
-        quantile_mode_train='full',
-        quantile_mode_eval='saved',
         naive_model_cls_path='nazuna.models.simple_average.SimpleAverage',
         naive_model_params={'seq_len': 16, 'pred_len': 4, 'period_len': 4, 'decay_rate': 1.0},
         neural_model_cls_path='nazuna.models.dlinear.DLinear',
         neural_model_params={
             'seq_len': 16, 'pred_len': 4, 'kernel_size': 25, 'bias': True,
-            'quantile_mode_train': 'full', 'quantile_mode_eval': 'saved',
         },
     )
     batch = TimeSeriesDataset.TimeSeriesBatch(
@@ -46,7 +40,7 @@ def test_get_loss(device, dummy_data):
         tsta_future=None,
         tste_future=None,
         data_future=dummy_data((1, 4, 3)),
-        quantiles={'full': torch.tensor([[
+        stats={'qtile_full': torch.tensor([[
             [0., 0., 0.],
             [10., 10., 10.],
             [20., 20., 20.],
@@ -64,8 +58,6 @@ def test_residual_model2_forward(device, dummy_data):
         n_channel=n_channel,
         seq_len=96,
         pred_len=24,
-        quantile_mode_train='full',
-        quantile_mode_eval='saved',
         naive_model_cls_path=(
             'nazuna.models.simple_average.SimpleAverage'
         ),
@@ -77,8 +69,6 @@ def test_residual_model2_forward(device, dummy_data):
         neural_model_params={
             'seq_len': 96, 'pred_len': 24,
             'kernel_size': 25, 'bias': True,
-            'quantile_mode_train': 'full',
-            'quantile_mode_eval': 'saved',
         },
     )
     assert list(model.w_naive.size()) == [n_channel]
@@ -114,7 +104,7 @@ def _make_batch_for_residual3(device, dummy_data, n_channel=3):
         tsta_future=None,
         tste_future=None,
         data_future=dummy_data((1, 4, 3)),
-        quantiles={'full': torch.tensor([[
+        stats={'qtile_full': torch.tensor([[
             [0., 0., 0.],
             [10., 10., 10.],
             [20., 20., 20.],
@@ -128,8 +118,6 @@ def _create_residual_model3(device, n_channel=3):
         n_channel=n_channel,
         seq_len=16,
         pred_len=4,
-        quantile_mode_train='full',
-        quantile_mode_eval='saved',
         naive_model_cls_path=(
             'nazuna.models.simple_average.SimpleAverage'
         ),
@@ -141,8 +129,6 @@ def _create_residual_model3(device, n_channel=3):
         neural_model_params={
             'seq_len': 16, 'pred_len': 4,
             'kernel_size': 25, 'bias': True,
-            'quantile_mode_train': 'full',
-            'quantile_mode_eval': 'saved',
         },
     )
 

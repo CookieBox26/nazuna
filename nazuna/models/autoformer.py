@@ -41,6 +41,7 @@ class AutoCorrelationLayer(torch.nn.Module):
     def __init__(
         self, d_model: int, n_heads: int,
         topk_factor: float = 1.0, dropout: float = 0.1,
+        approx_durning_training: bool = True,
         independent_heads: bool = False,
     ):
         super().__init__()
@@ -54,6 +55,7 @@ class AutoCorrelationLayer(torch.nn.Module):
         self.v_proj = torch.nn.Linear(d_model, d_model)
         self.out_proj = torch.nn.Linear(d_model, d_model)
         self.dropout = torch.nn.Dropout(dropout)
+        self.approx_durning_training = approx_durning_training
         self.independent_heads = independent_heads
 
     def _lagged_aggregation_approx(self, b, mean_corr, topk, v):
@@ -108,13 +110,13 @@ class AutoCorrelationLayer(torch.nn.Module):
 
         if self.independent_heads:
             mean_corr = corr.mean(dim=-1)  # [B, H, L]
-            if self.training:
+            if self.training and self.approx_durning_training:
                 agg = self._lagged_aggregation_approx(b, mean_corr, topk, v)
             else:
                 agg = self._lagged_aggregation(b, mean_corr, topk, v, l)
         else:
             mean_corr = corr.mean(dim=1).mean(dim=-1)  # [B, L]
-            if self.training:
+            if self.training and self.approx_durning_training:
                 agg = self._lagged_aggregation_approx(b, mean_corr, topk, v)
             else:
                 agg = self._lagged_aggregation(b, mean_corr, topk, v, l)
@@ -156,11 +158,13 @@ class EncoderLayer(torch.nn.Module):
         decomp_kernel: int, n_moving_avg: int = 1, topk_factor: float = 1.0,
         dropout_aw: float = 0.1, dropout_ac: float = 0.1,
         dropout_ff: tuple[float, float] = (0.0, 0.3),
+        approx_durning_training: bool = True,
         independent_heads: bool = False,
     ):
         super().__init__()
         self.ac = AutoCorrelationLayer(
             d_model, n_heads, topk_factor=topk_factor, dropout=dropout_aw,
+            approx_durning_training=approx_durning_training,
             independent_heads=independent_heads,
         )
         self.dropout_ac = torch.nn.Dropout(dropout_ac)
@@ -188,15 +192,18 @@ class DecoderLayer(torch.nn.Module):
         decomp_kernel: int, n_moving_avg: int = 1, topk_factor: float = 1.0,
         dropout_aw: float = 0.1, dropout_ac: float = 0.1,
         dropout_ff: tuple[float, float] = (0.0, 0.3),
+        approx_durning_training: bool = True,
         independent_heads: bool = False,
     ):
         super().__init__()
         self.self_ac = AutoCorrelationLayer(
             d_model, n_heads, topk_factor=topk_factor, dropout=dropout_aw,
+            approx_durning_training=approx_durning_training,
             independent_heads=independent_heads,
         )
         self.cross_ac = AutoCorrelationLayer(
             d_model, n_heads, topk_factor=topk_factor, dropout=dropout_aw,
+            approx_durning_training=approx_durning_training,
             independent_heads=independent_heads,
         )
         self.dropout_ac = torch.nn.Dropout(dropout_ac)
@@ -239,18 +246,19 @@ class Autoformer(BasicBaseModel):
         return seq_len
 
     def _setup(
-        self, seq_len: int, pred_len: int, c_in: int, label_len: int = None,
+        self, *, seq_len: int, pred_len: int, c_in: int, label_len: int = None,
         freq: str = 'Hour', e_layers: int = 2, d_layers: int = 1,
-        d_model: int = 64, n_heads: int = 4, d_ff: int = 256,
+        d_model: int = 512, n_heads: int = 8, d_ff: int = 2048,
         decomp_kernel: int = 25, n_moving_avg: int = 1,
-        topk_factor: float = 1.0, dropout_emb: float = 0.05,
+        topk_factor: float = 3.0, dropout_emb: float = 0.05,
         dropout_aw: float = 0.1, dropout_ac: float = 0.1,
-        dropout_ff: tuple[float, float] = (0.0, 0.3),
+        dropout_ff: tuple[float, float] = (0.0, 0.1),
+        approx_durning_training: bool = True,
         independent_heads: bool = False,
-        quantile_mode_train: str | None = None,
-        quantile_mode_eval: str | None = None,
+        scaler_cls: type | None = IqrScaler,
+        scaler_params: dict | None = {'stat_types': ('qtile_full', 'saved')},
     ) -> None:
-        super()._setup(seq_len, pred_len)
+        super()._setup(seq_len, pred_len, scaler_cls, scaler_params)
         seq_len_for_model = self._get_seq_len_for_model(seq_len)
 
         self.c_in = c_in
@@ -272,22 +280,21 @@ class Autoformer(BasicBaseModel):
             EncoderLayer(
                 d_model, n_heads, d_ff,
                 decomp_kernel, n_moving_avg, topk_factor,
-                dropout_aw, dropout_ac, dropout_ff, independent_heads,
+                dropout_aw, dropout_ac, dropout_ff,
+                approx_durning_training, independent_heads,
             ) for _ in range(e_layers)
         ])
         self.decoder_layers = torch.nn.ModuleList([
             DecoderLayer(
                 d_model, n_heads, d_ff, self.c_out,
                 decomp_kernel, n_moving_avg, topk_factor,
-                dropout_aw, dropout_ac, dropout_ff, independent_heads,
+                dropout_aw, dropout_ac, dropout_ff,
+                approx_durning_training, independent_heads,
             ) for _ in range(d_layers)
         ])
         self.enc_norm = TokenNormTimeDemean(d_model)
         self.dec_norm = TokenNormTimeDemean(d_model)
         self.out_proj = torch.nn.Linear(d_model, self.c_out)
-
-        if quantile_mode_train and quantile_mode_eval:
-            self.scaler = IqrScaler(quantile_mode_train, quantile_mode_eval)
 
     def _build_marks(self, batch, device):
         # Build encoder/decoder time-feature tensors from batch timestamps.

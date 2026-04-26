@@ -4,10 +4,10 @@ import collections
 
 
 def test_iqr_scaler():
-    scaler = IqrScaler('full', 'saved')
-    DummyBatch = collections.namedtuple('DummyBatch', ['quantiles'])
+    scaler = IqrScaler(stat_types=('qtile_full', 'saved'))
+    DummyBatch = collections.namedtuple('DummyBatch', ['stats'])
     quantiles = {
-        'full': torch.tensor([[
+        'qtile_full': torch.tensor([[
             [0 - 0.5, 2.5 - 1.25, 5.0 - 2.5],
             [0, 2.5, 5],
             [0 + 0.5, 2.5 + 1.25, 5.0 + 2.5],

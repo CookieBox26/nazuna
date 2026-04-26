@@ -11,8 +11,6 @@ def test_forward(device, dummy_data):
         pred_len=2,
         kernel_size=3,
         bias=True,
-        quantile_mode_train='full',
-        quantile_mode_eval='saved',
     )
     batch = dummy_data((1, 4, 3))
     output, _ = model(batch)
@@ -26,8 +24,6 @@ def test_get_loss(device, dummy_data):
         pred_len=2,
         kernel_size=3,
         bias=True,
-        quantile_mode_train='full',
-        quantile_mode_eval='saved',
     )
     batch = TimeSeriesDataset.TimeSeriesBatch(
         tsta=None,
@@ -36,7 +32,7 @@ def test_get_loss(device, dummy_data):
         tsta_future=None,
         tste_future=None,
         data_future=dummy_data((1, 2, 3)),
-        quantiles={'full': torch.tensor([[
+        stats={'qtile_full': torch.tensor([[
             [0., 0., 0.],
             [10., 10., 10.],
             [20., 20., 20.],
@@ -53,8 +49,6 @@ def test_nlinear_forward(device, dummy_data):
         seq_len=4,
         pred_len=2,
         bias=True,
-        quantile_mode_train='full',
-        quantile_mode_eval='saved',
     )
     batch = dummy_data((1, 4, 3))
     output, info = model(batch)
@@ -68,8 +62,6 @@ def test_nlinear_get_loss(device, dummy_data):
         seq_len=4,
         pred_len=2,
         bias=True,
-        quantile_mode_train='full',
-        quantile_mode_eval='saved',
     )
     batch = TimeSeriesDataset.TimeSeriesBatch(
         tsta=None,
@@ -78,7 +70,7 @@ def test_nlinear_get_loss(device, dummy_data):
         tsta_future=None,
         tste_future=None,
         data_future=dummy_data((1, 2, 3)),
-        quantiles={'full': torch.tensor([[
+        stats={'qtile_full': torch.tensor([[
             [0., 0., 0.],
             [10., 10., 10.],
             [20., 20., 20.],
@@ -97,8 +89,6 @@ def test_channelwise_forward(device, dummy_data):
         n_channel=3,
         kernel_size=3,
         bias=True,
-        quantile_mode_train='full',
-        quantile_mode_eval='saved',
     )
     batch = dummy_data((1, 4, 3))
     output, info = model(batch)
@@ -115,8 +105,6 @@ def test_channelwise_get_loss(device, dummy_data):
         n_channel=3,
         kernel_size=3,
         bias=True,
-        quantile_mode_train='full',
-        quantile_mode_eval='saved',
     )
     batch = TimeSeriesDataset.TimeSeriesBatch(
         tsta=None,
@@ -125,7 +113,7 @@ def test_channelwise_get_loss(device, dummy_data):
         tsta_future=None,
         tste_future=None,
         data_future=dummy_data((1, 2, 3)),
-        quantiles={'full': torch.tensor([[
+        stats={'qtile_full': torch.tensor([[
             [0., 0., 0.],
             [10., 10., 10.],
             [20., 20., 20.],

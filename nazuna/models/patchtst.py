@@ -1,5 +1,4 @@
 from nazuna.models._base import BasicBaseModel
-from nazuna.models.common import IqrScaler
 import math
 import torch
 import torch.nn.functional as F
@@ -20,7 +19,10 @@ class PositionalEncoding(torch.nn.Module):
 
 
 class _MultiheadAttention(torch.nn.Module):
-    def __init__(self, d_model, n_heads, dropout=0., res_attention=True):
+    def __init__(
+        self, d_model, n_heads,
+        attn_dropout=0., proj_dropout=0., res_attention=True,
+    ):
         super().__init__()
         assert d_model % n_heads == 0, 'd_model must be divisible by n_heads'
         self.d_model = d_model
@@ -31,8 +33,11 @@ class _MultiheadAttention(torch.nn.Module):
         self.q_proj = torch.nn.Linear(d_model, d_model)
         self.k_proj = torch.nn.Linear(d_model, d_model)
         self.v_proj = torch.nn.Linear(d_model, d_model)
-        self.out_proj = torch.nn.Linear(d_model, d_model)
-        self.attn_dropout = torch.nn.Dropout(dropout)
+        self.out_proj = torch.nn.Sequential(
+            torch.nn.Linear(d_model, d_model),
+            torch.nn.Dropout(proj_dropout),
+        )
+        self.attn_dropout = torch.nn.Dropout(attn_dropout)
 
     def forward(self, x, prev=None):  # x: [B, L, D]
         B, L, _ = x.shape
@@ -61,13 +66,14 @@ class _MultiheadAttention(torch.nn.Module):
 class TSTEncoderLayer(torch.nn.Module):
     def __init__(
         self, d_model, n_heads, d_ff,
-        dropout=0.1, res_attention=True,
+        attn_dropout=0., dropout=0.1, res_attention=True,
     ):
         super().__init__()
         self.res_attention = res_attention
         self.self_attn = _MultiheadAttention(
             d_model, n_heads,
-            dropout=dropout, res_attention=res_attention,
+            attn_dropout=attn_dropout, proj_dropout=dropout,
+            res_attention=res_attention,
         )
         self.dropout_attn = torch.nn.Dropout(dropout)
         self.norm_attn = torch.nn.BatchNorm1d(d_model)
@@ -112,73 +118,41 @@ class PatchTST(BasicBaseModel):
         return seq_len
 
     def _setup(
-        self,
-        seq_len: int,
-        pred_len: int,
-        c_in: int,
-        patch_len: int = 16,
-        stride: int = 8,
-        d_model: int = 128,
-        n_heads: int = 16,
-        n_layers: int = 3,
-        d_ff: int = 256,
-        dropout: float = 0.2,
-        res_attention: bool = True,
-        revin: bool = True,
-        revin_affine: bool = False,
-        revin_eps: float = 1e-5,
-        quantile_mode_train: str | None = None,
-        quantile_mode_eval: str | None = None,
+        self, seq_len: int, pred_len: int, c_in: int,
+        patch_len: int = 16, stride: int = 8, padding_patch: str | None = 'end',
+        d_model: int = 128, n_heads: int = 16, n_layers: int = 3,
+        d_ff: int = 256, dropout: float = 0.2,
+        attn_dropout: float = 0.0, head_dropout: float = 0.0, res_attention: bool = True,
+        revin: bool = True, revin_affine: bool = True, revin_eps: float = 1e-5,
+        scaler_cls: type | None = None,
+        scaler_params: dict | None = None,
     ) -> None:
-        """
-        Args:
-            seq_len: Input sequence length (must be >= `patch_len`)
-            pred_len: Prediction length
-            c_in: Number of input channels
-            patch_len: Length of each patch
-            stride: Stride for patch extraction
-            d_model: Dimension of the model
-            n_heads: Number of attention heads
-            n_layers: Number of Transformer encoder layers
-            d_ff: Dimension of the feedforward network
-            dropout: Dropout rate
-            res_attention: Whether to use Realformer-style residual attention
-                (pre-softmax scores are carried across encoder layers)
-            revin: Whether to apply RevIN (instance normalization)
-            revin_affine: Whether to apply learnable affine to RevIN output
-            revin_eps: Epsilon for RevIN std computation
-            quantile_mode_train: IqrScaler mode for training (None to disable)
-            quantile_mode_eval: IqrScaler mode for evaluation (None to disable)
-        """
-        super()._setup(seq_len, pred_len)
+        super()._setup(seq_len, pred_len, scaler_cls, scaler_params)
         seq_len_for_model = self._get_seq_len_for_model(seq_len)
-
-        if quantile_mode_train is not None:
-            self.scaler = IqrScaler(
-                quantile_mode_train, quantile_mode_eval,
-            )
 
         self.patch_len = patch_len
         self.stride = stride
+        self.padding_patch = padding_patch
         self.d_model = d_model
         self.n_heads = n_heads
         self.n_layers = n_layers
         self.d_ff = d_ff
         self.dropout = dropout
+        self.attn_dropout = attn_dropout
+        self.head_dropout = head_dropout
         self.res_attention = res_attention
         self.use_revin = revin
         self.revin_affine = revin_affine
         self.revin_eps = revin_eps
-        self.pool = 'last'  # 'last' or 'mean'
 
         if self.use_revin and self.revin_affine:
             self.revin_affine_weight = torch.nn.Parameter(torch.ones(c_in))
             self.revin_affine_bias = torch.nn.Parameter(torch.zeros(c_in))
 
         assert seq_len_for_model >= self.patch_len, 'seq_len >= patch_len'
-        self.n_patches = (
-            1 + (seq_len_for_model - self.patch_len) // self.stride + 1
-        )
+        self.n_patches = (seq_len_for_model - self.patch_len) // self.stride + 1
+        if self.padding_patch == 'end':
+            self.n_patches += 1
 
         self.patch_proj = torch.nn.Linear(self.patch_len, self.d_model)
 
@@ -191,16 +165,23 @@ class PatchTST(BasicBaseModel):
         self.encoder = torch.nn.ModuleList([
             TSTEncoderLayer(
                 self.d_model, self.n_heads,
-                self.d_ff, self.dropout,
+                self.d_ff,
+                attn_dropout=self.attn_dropout,
+                dropout=self.dropout,
                 res_attention=self.res_attention,
             )
             for _ in range(self.n_layers)
         ])
-        self.head = torch.nn.Linear(self.d_model, self.pred_len)
+        self.head = torch.nn.Sequential(
+            torch.nn.Flatten(start_dim=-2),
+            torch.nn.Linear(self.d_model * self.n_patches, self.pred_len),
+            torch.nn.Dropout(self.head_dropout),
+        )
 
     def _patchify(self, x):  # x: [B, L, C] -> [B, C, P, patch_len]
         x = x.transpose(1, 2)  # [B, C, L]
-        x = F.pad(x, (0, self.stride), mode='replicate')
+        if self.padding_patch == 'end':
+            x = F.pad(x, (0, self.stride), mode='replicate')
         return x.unfold(dimension=2, size=self.patch_len, step=self.stride)
 
     def forward(self, x):
@@ -229,13 +210,8 @@ class PatchTST(BasicBaseModel):
             for layer in self.encoder:
                 z = layer(z)
 
-        if self.pool == 'last':
-            token = z[:, -1, :]  # [B*C, D]
-        else:
-            token = z.mean(dim=1)  # [B*C, D]
-
-        yhat = self.head(token)  # [B*C, pred_len]
-        yhat = yhat.view(B, C, self.pred_len)  # [B, C, H]
+        z = z.view(B, C, P, self.d_model).transpose(2, 3)  # [B, C, D, P]
+        yhat = self.head(z)  # [B, C, pred_len]
         yhat = yhat.transpose(1, 2)  # [B, H, C]
 
         # RevIN: de-normalize

@@ -20,7 +20,10 @@ def test_data_loader(dm, device):
         batch_sampler_params={'batch_size': 16},
         offset=0, rolling_window=28, device=device,
     )
-    data_loader_train.dataset.quantile_keys = ['full', 'cum', 'rolling']
+    ST = type(data_loader_train.dataset).StatType
+    data_loader_train.dataset.stats_required = [
+        ST.qtile_full, ST.qtile_cum, ST.qtile_rolling,
+    ]
 
     n_sample_expected = 264
     assert int((365 - 34) * 0.8) == n_sample_expected
@@ -39,9 +42,9 @@ def test_data_loader(dm, device):
         assert batch.tsta_future.shape == (batch_size_actual, 7)
         assert batch.tste_future.shape == (batch_size_actual, 7)
         assert batch.data_future.shape == (batch_size_actual, 7, 2)
-        assert batch.quantiles['full'].shape == (batch_size_actual, 3, 1, 2)
-        assert batch.quantiles['cum'].shape == (batch_size_actual, 3, 1, 2)
-        assert batch.quantiles['rolling'].shape == (batch_size_actual, 3, 1, 2)
+        assert batch.stats['qtile_full'].shape == (1, 3, 1, 2)
+        assert batch.stats['qtile_cum'].shape == (1, 3, 1, 2)
+        assert batch.stats['qtile_rolling'].shape == (1, 3, 1, 2)
 
 def test_data_loader_offset(dm, device):
     data_loader_train = dm.get_data_loader(
@@ -50,7 +53,10 @@ def test_data_loader_offset(dm, device):
         batch_sampler_params={'batch_size': 16},
         offset=28, rolling_window=28, device=device,
     )
-    data_loader_train.dataset.quantile_keys = ['full', 'cum', 'rolling']
+    ST = type(data_loader_train.dataset).StatType
+    data_loader_train.dataset.stats_required = [
+        ST.qtile_full, ST.qtile_cum, ST.qtile_rolling,
+    ]
 
     n_batch_expected = 15
     assert math.ceil((int((365 - 34) * 0.8) - 28) / 16) == n_batch_expected
@@ -63,7 +69,7 @@ def test_data_loader_offset(dm, device):
         for i_sample in [0, 4]:
             print(
                 batch.tsta[i_sample][27],  # prediction origin
-                ' {:6.3f}'.format(batch.quantiles['full'][i_sample, i_q, 0, i_col]),
-                ' {:6.3f}'.format(batch.quantiles['cum'][i_sample, i_q, 0, i_col]),
-                ' {:6.3f}'.format(batch.quantiles['rolling'][i_sample, i_q, 0, i_col]),
+                ' {:6.3f}'.format(batch.stats['qtile_full'][0, i_q, 0, i_col]),
+                ' {:6.3f}'.format(batch.stats['qtile_cum'][0, i_q, 0, i_col]),
+                ' {:6.3f}'.format(batch.stats['qtile_rolling'][0, i_q, 0, i_col]),
             )

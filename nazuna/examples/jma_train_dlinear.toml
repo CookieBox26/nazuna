@@ -35,8 +35,8 @@ seq_len = 97
 pred_len = 24
 kernel_size = 25
 bias = true
-quantile_mode_train = "full"
-quantile_mode_eval = "saved"
+scaler_cls_path = "nazuna.models.common.IqrScaler"
+scaler_params = { stat_types = [ "qtile_full", "saved",] }
 
 [definitions.BatchSamplerShuffle]
 cls_path = "nazuna.batch_samplers.BatchSamplerShuffle"

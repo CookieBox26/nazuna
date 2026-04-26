@@ -37,8 +37,9 @@ code, pre, .md-typeset code {
 }
 .md-typeset code {
     font-size: .94em;
-    padding: .05em .3em;
-    border-radius: .3em;
+    padding: .05em .25em;
+    border-radius: .25em;
+    word-break: break-all;
 }
 .md-header {
 	box-shadow: none;

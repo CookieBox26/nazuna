@@ -43,11 +43,9 @@ cd nazuna
 
 # If you want to install the CUDA 12.6 version of PyTorch:
 uv sync --extra torch-cu126
-uv sync --extra torch-cu126 --extra test  # if you want to test
 
 # If you want to install the CPU-only version of PyTorch:
 uv sync --extra torch-cpu
-uv sync --extra torch-cpu --extra test  # if you want to test
 ```
 
 ### Usage

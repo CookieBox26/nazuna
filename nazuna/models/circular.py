@@ -75,8 +75,11 @@ class BaseCircular(BasicBaseModel):
     and outputs predictions through linear transformation.
     """
 
-    def _setup(self, seq_len, pred_len, n_channel, periods):
-        super()._setup(seq_len, pred_len)
+    def _setup(
+        self, seq_len, pred_len, n_channel, periods,
+        scaler_cls=None, scaler_params=None,
+    ):
+        super()._setup(seq_len, pred_len, scaler_cls, scaler_params)
         self.n_channel = n_channel
         self.periods = periods
 
@@ -113,23 +116,13 @@ class Circular(BaseCircular):
         pred_len: int,
         n_channel: int,
         periods: list[int],
-        quantile_mode_train: str,
-        quantile_mode_eval: str,
+        scaler_cls: type | None = IqrScaler,
+        scaler_params: dict | None = {'stat_types': ('qtile_full', 'saved')},
     ) -> None:
-        """
-        Args:
-            seq_len: Input sequence length (not used by this model,
-                but required for interface consistency)
-            pred_len: Prediction length
-            n_channel: Number of output channels
-            periods: List of periods to use (default: [2, 3, ..., 24])
-            quantile_mode_train: Source of quantiles for scaling during
-                training ('full', 'cum', or 'rolling')
-            quantile_mode_eval: Source of quantiles for scaling during
-                evaluation ('full', 'cum', 'rolling', or 'saved')
-        """
-        super()._setup(seq_len, pred_len, n_channel, periods)
-        self.scaler = IqrScaler(quantile_mode_train, quantile_mode_eval)
+        super()._setup(
+            seq_len, pred_len, n_channel, periods,
+            scaler_cls, scaler_params,
+        )
 
     def __init__(self, device, **kwargs):
         super().__init__(device, **kwargs)

@@ -1,8 +1,7 @@
 __pycache__/
 dist/
 out/
-.obsidian/
 backyard/
+.obsidian/
 _report.md
 _report_archive/
-proc.sh

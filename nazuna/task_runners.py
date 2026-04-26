@@ -22,28 +22,6 @@ from nazuna.utils import (
 )
 
 
-def _get_params(func):
-    sig = inspect.signature(func)
-    params_required = []
-    params_optional = []
-    for p in sig.parameters.values():
-        if p.name == 'self':
-            continue
-        if p.default is inspect._empty:
-            params_required.append(p.name)
-        else:
-            params_optional.append(p.name)
-    return params_required, params_optional
-
-
-def _validate_params(func, params):
-    params_required, params_optional = _get_params(func)
-    for p in params_required:
-        assert p in params, p
-    for p in params:
-        assert (p in params_required) or (p in params_optional), p
-
-
 @dataclasses.dataclass
 class BaseTaskRunner(ABC):
     """
@@ -138,6 +116,32 @@ class EvalTaskRunner(BaseTaskRunner):
     model_state_path: str | os.PathLike[str] | IO[bytes] = None
     inspector_params: dict = None
 
+    @classmethod
+    def _get_required_params(cls, func):
+        sig = inspect.signature(func)
+        params = [p for p in sig.parameters.values() if p.name != 'self']
+        params_required = [p.name for p in params if p.default is inspect._empty]
+        params_optional = [p.name for p in params if p.default is not inspect._empty]
+        return params_required, params_optional
+
+    @classmethod
+    def _validate_params(cls, func, params):
+        params_required, params_optional = cls._get_required_params(func)
+        for p in params_required:
+            assert p in params, p
+        for p in params:
+            assert (p in params_required) or (p in params_optional), p
+
+    @classmethod
+    def _extract_model_config(cls, conf):
+        cls_, params_ = load_class(conf['cls_path']), conf['params']
+        scaler_cls_path = params_.pop('scaler_cls_path', None)
+        if scaler_cls_path is not None:
+            params_['scaler_cls'] = load_class(scaler_cls_path)
+            cls._validate_params(params_['scaler_cls'].__init__, params_['scaler_params'])
+        cls._validate_params(cls_._setup, params_)
+        return cls_, params_
+
     def __post_init__(self):
         super().__post_init__()
 
@@ -146,17 +150,14 @@ class EvalTaskRunner(BaseTaskRunner):
 
         self.criterion_cls = load_class(self.criterion['cls_path'])
         self.criterion_params = self.criterion['params']
-        _validate_params(self.criterion_cls._setup, self.criterion_params)
+        self._validate_params(self.criterion_cls._setup, self.criterion_params)
 
         self.eval_improvement = issubclass(self.criterion_cls, BaseImprovement)
         if self.eval_improvement:
-            self.baseline_model_cls = load_class(self.baseline_model['cls_path'])
-            self.baseline_model_params = self.baseline_model['params']
-            _validate_params(self.baseline_model_cls._setup, self.baseline_model_params)
+            self.baseline_model_cls, self.baseline_model_params = \
+                self._extract_model_config(self.baseline_model)
 
-        self.model_cls = load_class(self.model['cls_path'])
-        self.model_params = self.model['params']
-        _validate_params(self.model_cls._setup, self.model_params)
+        self.model_cls, self.model_params = self._extract_model_config(self.model)
 
         criterion_n_channel = self.criterion_params.get('n_channel', None)
         assert (criterion_n_channel is None) or (criterion_n_channel == self.dm.n_channel)

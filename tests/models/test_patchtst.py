@@ -24,7 +24,7 @@ def test_get_loss(device, dummy_data):
         tsta_future=None,
         tste_future=None,
         data_future=dummy_data((1, 4, 3)),
-        quantiles=None,
+        stats={},
     )
     criterion = MSE.create(device, n_channel=3, pred_len=4)
     loss = model.get_loss(batch, criterion)
@@ -58,7 +58,7 @@ def test_diff_patchtst_get_loss(device, dummy_data):
         tsta_future=None,
         tste_future=None,
         data_future=dummy_data((1, 4, 3)),
-        quantiles=None,
+        stats={},
     )
     criterion = MSE.create(device, n_channel=3, pred_len=4)
     loss = model.get_loss(batch, criterion)

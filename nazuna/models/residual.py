@@ -25,25 +25,14 @@ class ResidualModel(BasicBaseModel):
         self,
         seq_len: int,
         pred_len: int,
-        quantile_mode_train: str,
-        quantile_mode_eval: str,
         naive_model_cls_path: str,
         naive_model_params: dict,
         neural_model_cls_path: str,
         neural_model_params: dict,
+        scaler_cls: type | None = IqrScaler,
+        scaler_params: dict | None = {'stat_types': ('qtile_full', 'saved')},
     ) -> None:
-        """
-        Args:
-            seq_len: Input sequence length
-            pred_len: Prediction length
-            quantile_mode: Source of quantiles for scaling ('full', 'cum', or 'rolling')
-            naive_model_cls_path: Class path for the naive model (e.g., 'nazuna.models.simple_average.SimpleAverage')
-            naive_model_params: Parameters for the naive model
-            neural_model_cls_path: Class path for the neural model (e.g., 'nazuna.models.dlinear.DLinear')
-            neural_model_params: Parameters for the neural model
-        """
-        super()._setup(seq_len, pred_len)
-        self.scaler = IqrScaler(quantile_mode_train, quantile_mode_eval)
+        super()._setup(seq_len, pred_len, scaler_cls, scaler_params)
 
         naive_model_cls = _make_concrete(load_class(naive_model_cls_path))
         self.naive_model = naive_model_cls(device=self.device, **naive_model_params)
@@ -94,19 +83,19 @@ class ResidualModel2(ResidualModel):
         self,
         seq_len: int,
         pred_len: int,
-        quantile_mode_train: str,
-        quantile_mode_eval: str,
         naive_model_cls_path: str,
         naive_model_params: dict,
         neural_model_cls_path: str,
         neural_model_params: dict,
         n_channel: int,
+        scaler_cls: type | None = IqrScaler,
+        scaler_params: dict | None = {'stat_types': ('qtile_full', 'saved')},
     ) -> None:
         super()._setup(
             seq_len, pred_len,
-            quantile_mode_train, quantile_mode_eval,
             naive_model_cls_path, naive_model_params,
             neural_model_cls_path, neural_model_params,
+            scaler_cls, scaler_params,
         )
         self.w_naive = torch.nn.Parameter(torch.full((n_channel,), 0.5))
 

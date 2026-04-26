@@ -34,8 +34,11 @@ class NBeatsBlock(torch.nn.Module):
 
 
 class BaseNBEATS(BasicBaseModel):
-    def _setup(self, seq_len, pred_len, n_stacks, n_blocks, hidden_size, theta_size):
-        super()._setup(seq_len, pred_len)
+    def _setup(
+        self, seq_len, pred_len, n_stacks, n_blocks, hidden_size, theta_size,
+        scaler_cls=None, scaler_params=None,
+    ):
+        super()._setup(seq_len, pred_len, scaler_cls, scaler_params)
         self.n_stacks = n_stacks
         self.n_blocks = n_blocks
         self.hidden_size = hidden_size
@@ -98,25 +101,17 @@ class NBEATS(BaseNBEATS):
         self,
         seq_len: int,
         pred_len: int,
-        quantile_mode_train: str,
-        quantile_mode_eval: str,
         n_stacks: int = 2,
         n_blocks: int = 3,
         hidden_size: int = 256,
         theta_size: int = 32,
+        scaler_cls: type | None = IqrScaler,
+        scaler_params: dict | None = {'stat_types': ('qtile_full', 'saved')},
     ) -> None:
-        """
-        Args:
-            seq_len: Input sequence length
-            pred_len: Prediction length
-            quantile_mode: Source of quantiles for scaling ('full', 'cum', or 'rolling')
-            n_stacks: Number of stacks (default: 2)
-            n_blocks: Number of blocks per stack (default: 3)
-            hidden_size: Hidden layer size in FC layers (default: 256)
-            theta_size: Dimension of theta (basis expansion coefficients) (default: 32)
-        """
-        super()._setup(seq_len, pred_len, n_stacks, n_blocks, hidden_size, theta_size)
-        self.scaler = IqrScaler(quantile_mode_train, quantile_mode_eval)
+        super()._setup(
+            seq_len, pred_len, n_stacks, n_blocks, hidden_size, theta_size,
+            scaler_cls, scaler_params,
+        )
 
     def predict(self, batch):
         input_ = self.scaler.scale(batch.data[:, -self.seq_len:, :], batch)

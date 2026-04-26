@@ -1,22 +1,22 @@
-import torch
 from abc import ABC, abstractmethod
-from typing import Self, IO, Any
-import os
 from nazuna.criteria import TimeSeriesError
+from typing import Self, IO, Any
+import torch
+import os
 
 
 class BaseModel(torch.nn.Module, ABC):
     """
     Base class for time-series forecasting models.
     """
-    def __init__(self, device, **kwargs) -> None:
+    def __init__(self, device, **setup_args) -> None:
         super().__init__()
         self.device = device
-        self._setup(**kwargs)
+        self._setup(**setup_args)
         self.to(device)
 
     @abstractmethod
-    def _setup(self, **kwargs) -> None:
+    def _setup(self, **setup_args) -> None:
         """
         Define required hyperparameters and construct layers.
         """
@@ -91,15 +91,14 @@ class BaseModel(torch.nn.Module, ABC):
         cls,
         device: str,
         state_path: str | os.PathLike[str] | IO[bytes] = None,
-        **kwargs,
+        **setup_args,
     ) -> Self:
-        model = cls(device=device, **kwargs)
+        model = cls(device=device, **setup_args)
         if state_path:
             state_dict = torch.load(state_path, map_location=device)
             if hasattr(model, 'scaler') and model.scaler:
                 model.scaler.prepare_load_state_dict(state_dict)
             model.load_state_dict(state_dict, strict=False)
-            model.eval()
         return model
 
     def count_trainable_parameters(self):
@@ -111,10 +110,12 @@ class BasicBaseModel(BaseModel):
     Base class for models that have seq_len and pred_len attributes
     and predict an output sequence from an input sequence.
     """
-    def _setup(self, seq_len, pred_len):
+    def _setup(self, seq_len, pred_len, scaler_cls=None, scaler_params=None):
         self.seq_len = seq_len
         self.pred_len = pred_len
         self.scaler = None
+        if scaler_cls is not None:
+            self.scaler = scaler_cls(**scaler_params)
         self.rescale_loss = True  # False
 
     def extract_true(self, batch):

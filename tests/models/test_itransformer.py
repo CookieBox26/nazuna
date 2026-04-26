@@ -1,7 +1,6 @@
 from nazuna.data_manager import TimeSeriesDataset
 from nazuna.models.itransformer import iTransformer, DiffiTransformer
 from nazuna.criteria import MSE
-import torch
 
 
 def test_forward(device, dummy_data):
@@ -9,8 +8,6 @@ def test_forward(device, dummy_data):
         device=device,
         seq_len=16,
         pred_len=4,
-        quantile_mode_train='full',
-        quantile_mode_eval='saved',
         d_model=32,
         n_heads=4,
         d_ff=64,
@@ -26,8 +23,6 @@ def test_get_loss(device, dummy_data):
         device=device,
         seq_len=16,
         pred_len=4,
-        quantile_mode_train='full',
-        quantile_mode_eval='saved',
         d_model=32,
         n_heads=4,
         d_ff=64,
@@ -40,11 +35,7 @@ def test_get_loss(device, dummy_data):
         tsta_future=None,
         tste_future=None,
         data_future=dummy_data((1, 4, 3)),
-        quantiles={'full': torch.tensor([[
-            [0., 0., 0.],
-            [10., 10., 10.],
-            [20., 20., 20.],
-        ]], device=device)},
+        stats={},
     )
     criterion = MSE.create(device, n_channel=3, pred_len=4)
     loss = model.get_loss(batch, criterion)
@@ -56,8 +47,6 @@ def test_diff_itransformer_forward(device, dummy_data):
         device=device,
         seq_len=17,
         pred_len=4,
-        quantile_mode_train='full',
-        quantile_mode_eval='saved',
         d_model=32,
         n_heads=4,
         d_ff=64,
@@ -73,8 +62,6 @@ def test_diff_itransformer_get_loss(device, dummy_data):
         device=device,
         seq_len=17,
         pred_len=4,
-        quantile_mode_train='full',
-        quantile_mode_eval='saved',
         d_model=32,
         n_heads=4,
         d_ff=64,
@@ -87,11 +74,7 @@ def test_diff_itransformer_get_loss(device, dummy_data):
         tsta_future=None,
         tste_future=None,
         data_future=dummy_data((1, 4, 3)),
-        quantiles={'full': torch.tensor([[
-            [0., 0., 0.],
-            [10., 10., 10.],
-            [20., 20., 20.],
-        ]], device=device)},
+        stats={},
     )
     criterion = MSE.create(device, n_channel=3, pred_len=4)
     loss = model.get_loss(batch, criterion)
