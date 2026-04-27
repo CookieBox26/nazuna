@@ -106,7 +106,7 @@ class BaseCircular(BasicBaseModel):
 
     def _extract_input(self, batch):
         # Input is future timesteps, not data; no scaling needed.
-        return batch.tste_future[:, :self.pred_len]
+        return batch.tste_future[:, :self.pred_len], None
 
 
 class Circular(BaseCircular):

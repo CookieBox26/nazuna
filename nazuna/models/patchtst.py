@@ -114,9 +114,6 @@ class PatchTST(BasicBaseModel):
           [arXiv](https://arxiv.org/abs/2211.14730) |
           [GitHub](https://github.com/yuqinie98/PatchTST)
     """
-    def _get_seq_len_for_model(self, seq_len):
-        return seq_len
-
     def _setup(
         self, seq_len: int, pred_len: int, c_in: int,
         patch_len: int = 16, stride: int = 8, padding_patch: str | None = 'end',
@@ -126,9 +123,9 @@ class PatchTST(BasicBaseModel):
         revin: bool = True, revin_affine: bool = True, revin_eps: float = 1e-5,
         scaler_cls: type | None = None,
         scaler_params: dict | None = None,
+        prep_type: str = 'none',
     ) -> None:
-        super()._setup(seq_len, pred_len, scaler_cls, scaler_params)
-        seq_len_for_model = self._get_seq_len_for_model(seq_len)
+        super()._setup(seq_len, pred_len, scaler_cls, scaler_params, prep_type=prep_type)
 
         self.patch_len = patch_len
         self.stride = stride
@@ -149,8 +146,8 @@ class PatchTST(BasicBaseModel):
             self.revin_affine_weight = torch.nn.Parameter(torch.ones(c_in))
             self.revin_affine_bias = torch.nn.Parameter(torch.zeros(c_in))
 
-        assert seq_len_for_model >= self.patch_len, 'seq_len >= patch_len'
-        self.n_patches = (seq_len_for_model - self.patch_len) // self.stride + 1
+        assert seq_len >= self.patch_len, 'seq_len >= patch_len'
+        self.n_patches = (seq_len - self.patch_len) // self.stride + 1
         if self.padding_patch == 'end':
             self.n_patches += 1
 
@@ -223,15 +220,3 @@ class PatchTST(BasicBaseModel):
             yhat = yhat * ri_std + ri_mean
 
         return yhat, {}
-
-
-class DiffPatchTST(PatchTST):
-    def _get_seq_len_for_model(self, seq_len):
-        return seq_len - 1
-
-    def forward(self, x):  # x: [B, seq_len, C] (scaled)
-        last_val = x[:, -1:, :]  # [B, 1, C]
-        dx = x[:, 1:, :] - x[:, :-1, :]  # [B, seq_len-1, C]
-        pred_dx, info = super().forward(dx)  # [B, pred_len, C]
-        pred = last_val + torch.cumsum(pred_dx, dim=1)
-        return pred, info

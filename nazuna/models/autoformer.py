@@ -5,9 +5,9 @@ import torch
 import math
 
 
-class TokenNormTimeDemean(torch.nn.Module):
+class TokenNormSeriesDemean(torch.nn.Module):
     """
-    Normalize each token, then remove mean over time
+    Normalize each token, then remove mean over series
     """
     def __init__(self, d_model: int):
         super().__init__()
@@ -242,9 +242,6 @@ class Autoformer(BasicBaseModel):
           [arXiv](https://arxiv.org/abs/2106.13008) |
           [GitHub](https://github.com/thuml/Autoformer)
     """
-    def _get_seq_len_for_model(self, seq_len):
-        return seq_len
-
     def _setup(
         self, *, seq_len: int, pred_len: int, c_in: int, label_len: int = None,
         freq: str = 'Hour', e_layers: int = 2, d_layers: int = 1,
@@ -257,17 +254,16 @@ class Autoformer(BasicBaseModel):
         independent_heads: bool = False,
         scaler_cls: type | None = IqrScaler,
         scaler_params: dict | None = {'stat_types': ('qtile_full', 'saved')},
+        prep_type: str = 'none',
     ) -> None:
-        super()._setup(seq_len, pred_len, scaler_cls, scaler_params)
-        seq_len_for_model = self._get_seq_len_for_model(seq_len)
-
+        super()._setup(seq_len, pred_len, scaler_cls, scaler_params, prep_type=prep_type)
         self.c_in = c_in
         self.c_out = c_in
         self.d_model = d_model
         self.freq = freq
         self.label_len = label_len
         if self.label_len is None:
-            self.label_len = seq_len_for_model // 2
+            self.label_len = self.seq_len // 2
 
         self.enc_in_proj = ConvEmb(c_in, d_model, kernel_size=3)
         self.dec_in_proj = ConvEmb(c_in, d_model, kernel_size=3)
@@ -292,8 +288,8 @@ class Autoformer(BasicBaseModel):
                 approx_durning_training, independent_heads,
             ) for _ in range(d_layers)
         ])
-        self.enc_norm = TokenNormTimeDemean(d_model)
-        self.dec_norm = TokenNormTimeDemean(d_model)
+        self.enc_norm = TokenNormSeriesDemean(d_model)
+        self.dec_norm = TokenNormSeriesDemean(d_model)
         self.out_proj = torch.nn.Linear(d_model, self.c_out)
 
     def _build_marks(self, batch, device):
@@ -311,9 +307,9 @@ class Autoformer(BasicBaseModel):
         )
 
     def _extract_input(self, batch):
-        x = super()._extract_input(batch)
-        x_mark_enc, x_mark_dec = self._build_marks(batch, x.device)
-        return x, x_mark_enc, x_mark_dec
+        x_enc, current_value = super()._extract_input(batch)
+        x_mark_enc, x_mark_dec = self._build_marks(batch, x_enc.device)
+        return (x_enc, x_mark_enc, x_mark_dec), current_value
 
     def forward(self, input_):
         x_enc, x_mark_enc, x_mark_dec = input_
@@ -350,17 +346,3 @@ class Autoformer(BasicBaseModel):
         seasonal_part = self.out_proj(dec_h)
         out = seasonal_part + trend
         return out[:, -self.pred_len:, :], {}
-
-
-class DiffAutoformer(Autoformer):
-    def _get_seq_len_for_model(self, seq_len):
-        return seq_len - 1
-
-    def forward(self, input_):
-        x, x_mark_enc, x_mark_dec = input_
-        dx = x[:, 1:, :] - x[:, :-1, :]
-        dx_mark_enc = x_mark_enc[:, 1:, :]
-        last_val = x[:, -1:, :]
-        pred_dx, info = super().forward((dx, dx_mark_enc, x_mark_dec))
-        pred = last_val + torch.cumsum(pred_dx, dim=1)
-        return pred, info

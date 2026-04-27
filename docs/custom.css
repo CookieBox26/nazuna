@@ -11,15 +11,14 @@
     --md-code-bg-color: #e3e2de;
     --md-footer-bg-color--dark: #4a4135;
     --md-admonition-bg-color: #fefdfa;
+    --md-text-font: 'Armata', 'IBM Plex Sans JP';
+    --md-code-font: 'Source Code Pro';
 }
 [data-md-color-primary=white] {
     --md-typeset-a-color: #3d8f58;
 }
 [data-md-color-accent=indigo] {
     --md-accent-fg-color: #9bcc94;
-}
-body {
-    font-family: 'Armata', 'IBM Plex Sans JP', var(--md-text-font-family);
 }
 .md-main__inner {
     margin-top: 1.5em;
@@ -32,7 +31,6 @@ body {
     font-size: 0.65rem;
 }
 code, pre, .md-typeset code {
-    font-family: 'Source Code Pro', var(--md-code-font-family);
     font-optical-sizing: auto;
 }
 .md-typeset code {

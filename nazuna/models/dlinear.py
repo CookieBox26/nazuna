@@ -20,7 +20,7 @@ class DLinear(BasicBaseModel):
         seq_len: int,
         pred_len: int,
         kernel_size: int,
-        bias: bool,
+        bias: bool = True,
         n_moving_avg: int = 1,
         scaler_cls: type | None = IqrScaler,
         scaler_params: dict | None = {'stat_types': ('qtile_full', 'saved')},

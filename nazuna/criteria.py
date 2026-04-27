@@ -9,10 +9,16 @@ class TimeSeriesError:
     batch_mean: torch.Tensor
     each_sample: torch.Tensor
     each_sample_channel: torch.Tensor | None = None
+    grad_target: torch.Tensor | None = None
     info: dict = dataclasses.field(default_factory=dict)
 
     def batch_sum(self) -> float:
         return self.each_sample.shape[0] * self.batch_mean.item()
+
+    def get_grad_target(self) -> torch.Tensor:
+        if self.grad_target is not None:
+            return self.grad_target
+        return self.batch_mean
 
 
 class BaseError(torch.nn.Module, ABC):

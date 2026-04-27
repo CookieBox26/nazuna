@@ -11,6 +11,7 @@ nav:
   - Home: index.md
   - How to Run: how_to_run.md
   - Reference:
+    - Workflow: reference_workflow.md
     - Task Runners: reference_task_runners.md
     - Models: reference_models.md
     - Others: reference_others.md
@@ -37,3 +38,4 @@ markdown_extensions:
   - pymdownx.superfences
   - pymdownx.tabbed:
       alternate_style: true
+  - footnotes

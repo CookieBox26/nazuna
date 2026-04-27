@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from nazuna.criteria import TimeSeriesError
+from enum import Enum
 from typing import Self, IO, Any
 import torch
 import os
@@ -79,11 +80,11 @@ class BaseModel(torch.nn.Module, ABC):
 
     def get_loss_and_backward(self, batch, criterion) -> TimeSeriesError:
         """
-        Compute loss, set gradients based on batch mean, and return the loss.
-        If you want to use custom gradients, override this method.
+        Compute loss, set gradients based on target (default: batch mean),
+        and return the loss.
         """
         loss = self.get_loss(batch, criterion)
-        loss.batch_mean.backward()
+        loss.get_grad_target().backward()
         return loss
 
     @classmethod
@@ -110,34 +111,52 @@ class BasicBaseModel(BaseModel):
     Base class for models that have seq_len and pred_len attributes
     and predict an output sequence from an input sequence.
     """
-    def _setup(self, seq_len, pred_len, scaler_cls=None, scaler_params=None):
+    # preprocessing type (applied after scaling)
+    PrepType = Enum('PrepType', ['none', 'diff'])
+
+    def _setup(
+        self, seq_len, pred_len,
+        scaler_cls=None, scaler_params=None, rescale_loss=True,
+        prep_type: str = 'none',
+    ):
         self.seq_len = seq_len
         self.pred_len = pred_len
         self.scaler = None
         if scaler_cls is not None:
             self.scaler = scaler_cls(**scaler_params)
-        self.rescale_loss = True  # False
+        self.rescale_loss = rescale_loss
+        self.prep_type = type(self).PrepType[prep_type]
+        self.seq_len_required = self.seq_len
+        if self.prep_type == type(self).PrepType.diff:
+            self.seq_len_required += 1
 
     def extract_true(self, batch):
         return batch.data_future[:, :self.pred_len]
 
     def _extract_input(self, batch):
-        input_ = batch.data[:, -self.seq_len:, :]
+        input_ = batch.data[:, -self.seq_len_required:]
         if self.scaler:
             input_ = self.scaler.scale(input_, batch)
-        return input_
+        current_value = None  # used only for inverse when differencing
+        if self.prep_type == type(self).PrepType.diff:
+            current_value = input_[:, -1:, :]
+            input_ = input_[:, 1:, :] - input_[:, :-1, :]
+        return input_, current_value
 
-    def predict(self, batch):
-        input_ = self._extract_input(batch)
+    def _get_output(self, batch, rescale):
+        input_, current_value = self._extract_input(batch)
         output, info = self.forward(input_)
-        if self.scaler:
+        if self.prep_type == type(self).PrepType.diff:
+            output = current_value + torch.cumsum(output, dim=1)
+        if rescale:
             output = self.scaler.rescale(output, batch)
         return output, info
 
-    def _get_loss_impl(self, batch, criterion, rescale_loss) -> TimeSeriesError:
-        input_ = self._extract_input(batch)
-        output, info = self.forward(input_)
+    def predict(self, batch):
+        return self._get_output(batch, (self.scaler is not None))
 
+    def _get_loss_impl(self, batch, criterion, rescale_loss) -> TimeSeriesError:
+        output, info = self._get_output(batch, False)
         target = self.extract_true(batch)
         if self.scaler:
             if rescale_loss:  # compute loss in original space

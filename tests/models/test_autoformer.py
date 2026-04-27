@@ -1,8 +1,5 @@
 from nazuna.data_manager import TimeSeriesDataset
-from nazuna.models.autoformer import (
-    AutoCorrelationLayer,
-    Autoformer, DiffAutoformer,
-)
+from nazuna.models.autoformer import AutoCorrelationLayer, Autoformer
 from nazuna.criteria import MSE
 import numpy as np
 import torch
@@ -47,16 +44,19 @@ def test_ac_lagged_aggregation_approx(independent_heads, mean_corr):
 
 @pytest.mark.parametrize('independent_heads', [False, True])
 @pytest.mark.parametrize('training', [True, False])
-def test_forward(device, dummy_data, training, independent_heads):
+@pytest.mark.parametrize('prep_type', ['none', 'diff'])
+def test_forward(device, dummy_data, training, independent_heads, prep_type):
     model = Autoformer.create(
         device=device, seq_len=16, pred_len=4, c_in=3,
         d_model=8, n_heads=2, d_ff=32, decomp_kernel=5,
         independent_heads=independent_heads,
+        prep_type=prep_type,
     )
     set_training(model, training)
 
-    x = dummy_data((1, 16, 3))
-    x_mark_enc = torch.zeros(1, 16, 4, device=device)
+    seq_len_input = 16 + (0 if (prep_type == 'none') else 1)
+    x = dummy_data((1, seq_len_input, 3))
+    x_mark_enc = torch.zeros(1, seq_len_input, 4, device=device)
     x_mark_dec = torch.zeros(1, 8 + 4, 4, device=device)
     output, _ = model((x, x_mark_enc, x_mark_dec))
     assert output.shape == (1, 4, 3)
@@ -64,17 +64,19 @@ def test_forward(device, dummy_data, training, independent_heads):
 
 @pytest.mark.parametrize('independent_heads', [False, True])
 @pytest.mark.parametrize('training', [True, False])
-def test_get_loss(device, dummy_data, training, independent_heads):
+@pytest.mark.parametrize('prep_type', ['none', 'diff'])
+def test_get_loss(device, dummy_data, training, independent_heads, prep_type):
+    seq_len_input = 16 + (0 if (prep_type == 'none') else 1)
     tsta = np.array([[
         np.datetime64('2025-01-01') + np.timedelta64(i, 'D')
-        for i in range(16)
+        for i in range(seq_len_input)
     ]])
     tsta_future = np.array([[
         np.datetime64('2025-01-17') + np.timedelta64(i, 'D')
         for i in range(4)
     ]])
     batch = TimeSeriesDataset.TimeSeriesBatch(
-        tsta=tsta, tste=None, data=dummy_data((1, 16, 3)),
+        tsta=tsta, tste=None, data=dummy_data((1, seq_len_input, 3)),
         tsta_future=tsta_future, tste_future=None,
         data_future=dummy_data((1, 4, 3)),
         stats={'qtile_full': torch.tensor([[
@@ -87,59 +89,7 @@ def test_get_loss(device, dummy_data, training, independent_heads):
         device=device, seq_len=16, pred_len=4, c_in=3,
         d_model=8, n_heads=2, d_ff=32, decomp_kernel=5,
         independent_heads=independent_heads,
-    )
-    set_training(model, training)
-    if not training:
-        model.scaler.q1s = torch.tensor([[[0., 0., 0.]]], device=device)
-        model.scaler.q2s = torch.tensor([[[10., 10., 10.]]], device=device)
-        model.scaler.q3s = torch.tensor([[[20., 20., 20.]]], device=device)
-
-    loss = model.get_loss(batch, criterion)
-    assert loss.batch_mean.item() > 0.0
-
-
-@pytest.mark.parametrize('independent_heads', [False, True])
-@pytest.mark.parametrize('training', [True, False])
-def test_diff_autoformer_forward(device, dummy_data, training, independent_heads):
-    model = DiffAutoformer.create(
-        device=device, seq_len=17, pred_len=4, c_in=3,
-        d_model=8, n_heads=2, d_ff=32, decomp_kernel=5,
-        independent_heads=independent_heads,
-    )
-    set_training(model, training)
-
-    x = dummy_data((1, 17, 3))
-    x_mark_enc = torch.zeros(1, 17, 4, device=device)
-    x_mark_dec = torch.zeros(1, 8 + 4, 4, device=device)
-    output, _ = model((x, x_mark_enc, x_mark_dec))
-    assert output.shape == (1, 4, 3)
-
-
-@pytest.mark.parametrize('independent_heads', [False, True])
-@pytest.mark.parametrize('training', [True, False])
-def test_diff_autoformer_get_loss(device, dummy_data, training, independent_heads):
-    tsta = np.array([[
-        np.datetime64('2025-01-01') + np.timedelta64(i, 'D')
-        for i in range(17)
-    ]])
-    tsta_future = np.array([[
-        np.datetime64('2025-01-18') + np.timedelta64(i, 'D')
-        for i in range(4)
-    ]])
-    batch = TimeSeriesDataset.TimeSeriesBatch(
-        tsta=tsta, tste=None, data=dummy_data((1, 17, 3)),
-        tsta_future=tsta_future, tste_future=None,
-        data_future=dummy_data((1, 4, 3)),
-        stats={'qtile_full': torch.tensor([[
-            [0., 0., 0.], [10., 10., 10.], [20., 20., 20.],
-        ]], device=device)},
-    )
-    criterion = MSE.create(device, n_channel=3, pred_len=4)
-
-    model = DiffAutoformer.create(
-        device=device, seq_len=17, pred_len=4, c_in=3,
-        d_model=8, n_heads=2, d_ff=32, decomp_kernel=5,
-        independent_heads=independent_heads,
+        prep_type=prep_type,
     )
     set_training(model, training)
     if not training:

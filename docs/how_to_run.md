@@ -22,7 +22,139 @@ The following options are also available:
 
 ## About Config File
 
-Specify the arguments for the [`nazuna.workflow.Workflow`](#nazuna.workflow.Workflow) class and the arguments for each task runner class.
-For details on task runner classes, see [Reference (Task Runners)](reference_task_runners.md).
+Specify the arguments for the [`nazuna.workflow.Workflow`](reference_workflow.md) class and the arguments for each [task runner class](reference_task_runners.md).
 
-::: nazuna.workflow.Workflow
+### Config File Examples
+
+#### Example 1 (Defining tasks explicitly)
+
+The following is an example workflow that trains a model and measures its improvement rate over a baseline.
+
+- Setting `out_dir` to the special keyword `"__CONFIG_STEM__"` uses the config file path (without extension) as the output directory.
+- The `definitions` key lets you define named settings shared across tasks. Reference a definition by its key name in each task. You can also specify values directly in each task without using `definitions`.
+
+
+```toml
+out_dir = "__CONFIG_STEM__"
+exist_ok = true
+
+# =============== data ===============
+[data]
+path = "~/datasets/traffic/traffic.csv"
+colname_timestamp = "date"
+seq_len = 672
+pred_len = 168
+white_list = "0,1,2,3,4,5,6,7"
+
+# =============== definitions ===============
+[definitions]
+DataRangeEval = [ 0.8, 1.0,]
+DataRangeTrain = [ 0.0, 0.8,]
+DataRangeEvalPilot = [ 0.6, 0.8,]
+DataRangeTrainPilot = [ 0.0, 0.6,]
+NEpoch = 30
+
+[definitions.MAE]
+cls_path = "nazuna.criteria.MAE"
+params = { n_channel = 8, pred_len = 168 }
+
+[definitions.ImprovementRate]
+cls_path = "nazuna.criteria.ImprovementRate"
+params = { n_channel = 8, pred_len = 168, error_type = "mae" }
+
+[definitions.SimpleAverage]
+cls_path = "nazuna.models.simple_average.SimpleAverage"
+params = { seq_len = 672, pred_len = 168, period_len = 168 }
+
+[definitions.DLinear]
+cls_path = "nazuna.models.dlinear.DLinear"
+[definitions.DLinear.params]
+seq_len = 672
+pred_len = 168
+kernel_size = 25
+
+[definitions.BatchSamplerShuffle]
+cls_path = "nazuna.batch_samplers.BatchSamplerShuffle"
+params = { batch_size = 32 }
+
+[definitions.Adam]
+cls_path = "torch.optim.Adam"
+params = { lr = 0.001 }
+
+[definitions.CosineAnnealingLR]
+cls_path = "torch.optim.lr_scheduler.CosineAnnealingLR"
+params = { T_max = 10 }
+
+# =============== tasks ===============
+[[tasks]]
+task_type = "eval"
+name = "Eval Baseline"
+data_range_eval = "DataRangeEval"
+criterion = "MAE"
+model = "SimpleAverage"
+
+[[tasks]]
+task_type = "train"
+name = "Pilot"
+data_range_train = "DataRangeTrainPilot"
+data_range_eval = "DataRangeEvalPilot"
+criterion = "MAE"
+model = "DLinear"
+batch_sampler = "BatchSamplerShuffle"
+optimizer = "Adam"
+lr_scheduler = "CosineAnnealingLR"
+n_epoch = "NEpoch"
+early_stop = true
+
+[[tasks]]
+task_type = "train"
+name = "Train"
+data_range_train = "DataRangeTrain"
+criterion = "MAE"
+model = "DLinear"
+batch_sampler = "BatchSamplerShuffle"
+optimizer = "Adam"
+lr_scheduler = "CosineAnnealingLR"
+n_epoch = { task_name = "Pilot" }
+
+[[tasks]]
+task_type = "eval"
+name = "Eval"
+data_range_eval = "DataRangeEval"
+criterion = "MAE"
+model = "DLinear"
+model_state = { task_name = "Train" }
+
+[[tasks]]
+task_type = "eval"
+name = "Eval ImpRate"
+data_range_eval = "DataRangeEval"
+criterion = "ImprovementRate"
+baseline_model = "SimpleAverage"
+model = "DLinear"
+model_state = { task_name = "Train" }
+```
+
+#### Example 2 (Using a template)
+
+Example 1 is a common scenario and is available as a template. Replace the `tasks` key with the following to run the same set of tasks.
+
+```toml
+# =============== template ===============
+[template]
+template_type = "train_with_baseline"
+criterion = "MAE"
+criterion_imprate = "ImprovementRate"
+baseline_model = "SimpleAverage"
+model = "DLinear"
+data_range_eval = "DataRangeEval"
+data_range_train = "DataRangeTrain"
+data_range_eval_pilot = "DataRangeEvalPilot"
+data_range_train_pilot = "DataRangeTrainPilot"
+batch_sampler = "BatchSamplerShuffle"
+optimizer = "Adam"
+lr_scheduler = "CosineAnnealingLR"
+n_epoch = "NEpoch"
+```
+
+Additional templates are also available for running the above scenario with multiple random seeds or multiple model configurations (documentation in progress).

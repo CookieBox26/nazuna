@@ -33,10 +33,8 @@ class ResidualModel(BasicBaseModel):
         scaler_params: dict | None = {'stat_types': ('qtile_full', 'saved')},
     ) -> None:
         super()._setup(seq_len, pred_len, scaler_cls, scaler_params)
-
         naive_model_cls = _make_concrete(load_class(naive_model_cls_path))
         self.naive_model = naive_model_cls(device=self.device, **naive_model_params)
-
         neural_model_cls = _make_concrete(load_class(neural_model_cls_path))
         self.neural_model = neural_model_cls(device=self.device, **neural_model_params)
 
@@ -49,19 +47,11 @@ class ResidualModel(BasicBaseModel):
             neural_out = neural_out[0]
         return naive_out + neural_out, {'naive': naive_out}
 
-    def predict(self, batch):
-        input_ = self._extract_input(batch)
-        output, info = self(input_)
-        output = self.scaler.rescale(output, batch)
-        return output, info
-
 
 class ResidualModel1(ResidualModel):
-    def get_loss_and_backward(self, batch, criterion) -> TimeSeriesError:
-        input_ = self._extract_input(batch)
-        output, info = self.forward(input_)
+    def get_loss(self, batch, criterion) -> TimeSeriesError:
+        output, info = self._get_output(batch, False)
         target = self.extract_true(batch)
-
         output = self.scaler.rescale(output, batch)
         naive = self.scaler.rescale(info['naive'], batch)
 
@@ -73,8 +63,7 @@ class ResidualModel1(ResidualModel):
 
         alpha = 1.0
         loss_sc = loss_model_sc + alpha * penalty_sc
-        loss = loss_sc.mean()
-        loss.backward()
+        loss_model.grad_target = loss_sc.mean()
         return loss_model
 
 
@@ -115,11 +104,9 @@ class ResidualModel2(ResidualModel):
 
 
 class ResidualModel3(ResidualModel2):
-    def get_loss_and_backward(self, batch, criterion) -> TimeSeriesError:
-        input_ = self._extract_input(batch)
-        output, info = self.forward(input_)
+    def get_loss(self, batch, criterion) -> TimeSeriesError:
+        output, info = self._get_output(batch, False)
         target = self.extract_true(batch)
-
         output = self.scaler.rescale(output, batch)
         naive = self.scaler.rescale(info['naive'], batch)
 
@@ -131,6 +118,5 @@ class ResidualModel3(ResidualModel2):
 
         alpha = 1.0
         loss_sc = loss_model_sc + alpha * penalty_sc
-        loss = loss_sc.mean()
-        loss.backward()
+        loss_model.grad_target = loss_sc.mean()
         return loss_model
