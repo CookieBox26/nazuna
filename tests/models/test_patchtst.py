@@ -6,9 +6,11 @@ import pytest
 
 
 @pytest.mark.parametrize('prep_type', ['none', 'diff'])
-def test_forward(device, dummy_data, prep_type):
+@pytest.mark.parametrize('revin_affine', [True, False])
+def test_forward(device, dummy_data, prep_type, revin_affine):
     model = PatchTST.create(
         device=device, seq_len=16, pred_len=4, c_in=3,
+        revin_affine=revin_affine,
         prep_type=prep_type,
     )
     batch = dummy_data((1, 16, 3))
@@ -17,10 +19,12 @@ def test_forward(device, dummy_data, prep_type):
 
 
 @pytest.mark.parametrize('prep_type', ['none', 'diff'])
-def test_get_loss(device, dummy_data, prep_type):
+@pytest.mark.parametrize('revin_affine', [True, False])
+def test_get_loss(device, dummy_data, prep_type, revin_affine):
     seq_len_input = 16 + (0 if (prep_type == 'none') else 1)
     model = PatchTST.create(
         device=device, seq_len=16, pred_len=4, c_in=3,
+        revin_affine=revin_affine,
         prep_type=prep_type,
     )
     batch = TimeSeriesDataset.TimeSeriesBatch(

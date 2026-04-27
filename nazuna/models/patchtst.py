@@ -1,4 +1,5 @@
 from nazuna.models._base import BasicBaseModel
+from nazuna.models.common import RevIN
 import math
 import torch
 import torch.nn.functional as F
@@ -120,9 +121,8 @@ class PatchTST(BasicBaseModel):
         d_model: int = 128, n_heads: int = 16, n_layers: int = 3,
         d_ff: int = 256, dropout: float = 0.2,
         attn_dropout: float = 0.0, head_dropout: float = 0.0, res_attention: bool = True,
-        revin: bool = True, revin_affine: bool = True, revin_eps: float = 1e-5,
-        scaler_cls: type | None = None,
-        scaler_params: dict | None = None,
+        revin: bool = True, revin_affine: bool = False, revin_eps: float = 1e-5,
+        scaler_cls: type | None = None, scaler_params: dict | None = None,
         prep_type: str = 'none',
     ) -> None:
         super()._setup(seq_len, pred_len, scaler_cls, scaler_params, prep_type=prep_type)
@@ -139,12 +139,8 @@ class PatchTST(BasicBaseModel):
         self.head_dropout = head_dropout
         self.res_attention = res_attention
         self.use_revin = revin
-        self.revin_affine = revin_affine
-        self.revin_eps = revin_eps
-
-        if self.use_revin and self.revin_affine:
-            self.revin_affine_weight = torch.nn.Parameter(torch.ones(c_in))
-            self.revin_affine_bias = torch.nn.Parameter(torch.zeros(c_in))
+        if self.use_revin:
+            self.revin = RevIN(c_in, affine=revin_affine, eps=revin_eps)
 
         assert seq_len >= self.patch_len, 'seq_len >= patch_len'
         self.n_patches = (seq_len - self.patch_len) // self.stride + 1
@@ -184,15 +180,8 @@ class PatchTST(BasicBaseModel):
     def forward(self, x):
         B, L, C = x.shape
 
-        # RevIN: instance normalization (per-sample, per-channel)
         if self.use_revin:
-            ri_mean = x.mean(dim=1, keepdim=True).detach()  # [B, 1, C]
-            ri_std = torch.sqrt(
-                x.var(dim=1, keepdim=True, unbiased=False) + self.revin_eps
-            ).detach()  # [B, 1, C]
-            x = (x - ri_mean) / ri_std
-            if self.revin_affine:
-                x = x * self.revin_affine_weight + self.revin_affine_bias
+            x, x_mean, x_std = self.revin.normalize(x)
 
         patches = self._patchify(x)  # [B, C, P, pl]
         P = patches.size(2)
@@ -211,12 +200,7 @@ class PatchTST(BasicBaseModel):
         yhat = self.head(z)  # [B, C, pred_len]
         yhat = yhat.transpose(1, 2)  # [B, H, C]
 
-        # RevIN: de-normalize
         if self.use_revin:
-            if self.revin_affine:
-                yhat = (yhat - self.revin_affine_bias) / (
-                    self.revin_affine_weight + self.revin_eps ** 2
-                )
-            yhat = yhat * ri_std + ri_mean
+            yhat = self.revin.denormalize(yhat, x_mean, x_std)
 
         return yhat, {}

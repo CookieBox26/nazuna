@@ -4,6 +4,31 @@ from nazuna.models.common.time_feature_embedding \
 import torch
 
 
+class RevIN(torch.nn.Module):
+    def __init__(self, c_in: int, affine: bool = True, eps: float = 1e-5):
+        super().__init__()
+        self.c_in = c_in
+        self.affine = affine
+        self.eps = eps
+        if self.affine:
+            self.affine_weight = torch.nn.Parameter(torch.ones(c_in))
+            self.affine_bias = torch.nn.Parameter(torch.zeros(c_in))
+
+    def normalize(self, x):
+        x_mean = x.mean(dim=1, keepdim=True).detach()  # [B, 1, C]
+        x_var = x.var(dim=1, keepdim=True, unbiased=False)  # [B, 1, C]
+        x_std = torch.sqrt(x_var + self.eps).detach()  # [B, 1, C]
+        x_normalized = (x - x_mean) / x_std
+        if self.affine:
+            x_normalized = x_normalized * self.affine_weight + self.affine_bias
+        return x_normalized, x_mean, x_std
+
+    def denormalize(self, y, x_mean, x_std):
+        if self.affine:
+            y = (y - self.affine_bias) / (self.affine_weight + self.eps ** 2)
+        return y * x_std + x_mean
+
+
 class SeriesDecomp(torch.nn.Module):
     """Moving average based series decomposition.
 
@@ -12,7 +37,6 @@ class SeriesDecomp(torch.nn.Module):
     For even kernel_size, pads ``kernel_size // 2`` steps on the front and
     ``(kernel_size - 1) // 2`` steps on the end (one extra step at the front).
     """
-
     def __init__(self, kernel_size, n_moving_avg=1):
         super().__init__()
         self.kernel_size = kernel_size
