@@ -4,8 +4,6 @@
 
 ::: nazuna.models.simple_average.SimpleAverageVariableDecay
 
-::: nazuna.models.simple_average.SimpleDiffAverage
-
 ::: nazuna.models.simple_average.SimpleAverageVariableDecayChannelwise
 
 

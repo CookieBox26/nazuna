@@ -24,9 +24,9 @@ params = { n_channel = 4, pred_len = 24 }
 cls_path = "nazuna.criteria.ImprovementRate"
 params = { n_channel = 4, pred_len = 24, error_type = "mae" }
 
-[definitions.SimpleDiffAverage]
-cls_path = "nazuna.models.simple_average.SimpleDiffAverage"
-params = { seq_len = 97, pred_len = 24, period_len = 24 }
+[definitions.SimpleAverage]
+cls_path = "nazuna.models.simple_average.SimpleAverage"
+params = { seq_len = 96, pred_len = 24, period_len = 24, prep_type = "diff" }
 
 [definitions.DLinear]
 cls_path = "nazuna.models.dlinear.DLinear"
@@ -56,7 +56,7 @@ task_type = "eval"
 name = "Eval Baseline"
 data_range_eval = "DataRangeEval"
 criterion = "MAE"
-model = "SimpleDiffAverage"
+model = "SimpleAverage"
 
 [[tasks]]
 task_type = "train"
@@ -95,6 +95,6 @@ task_type = "eval"
 name = "Eval ImpRate"
 data_range_eval = "DataRangeEval"
 criterion = "ImprovementRate"
-baseline_model = "SimpleDiffAverage"
+baseline_model = "SimpleAverage"
 model = "DLinear"
 model_state = { task_name = "Train" }
