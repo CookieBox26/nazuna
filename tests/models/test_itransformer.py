@@ -1,6 +1,8 @@
 from nazuna.data_manager import TimeSeriesDataset
 from nazuna.models.itransformer import iTransformer
 from nazuna.criteria import MSE
+import numpy as np
+import torch
 import pytest
 
 
@@ -19,8 +21,9 @@ def test_forward(device, dummy_data, prep_type, revin_affine):
         revin_affine=revin_affine,
         prep_type=prep_type,
     )
-    batch = dummy_data((1, 16, 3))
-    output, _ = model(batch)
+    x = dummy_data((1, 16, 3))
+    x_mark = torch.zeros(1, 16, 4, device=device)
+    output, _ = model((x, x_mark))
     assert list(output.size()) == [1, 4, 3]
 
 
@@ -41,7 +44,10 @@ def test_get_loss(device, dummy_data, prep_type, revin_affine):
         prep_type=prep_type,
     )
     batch = TimeSeriesDataset.TimeSeriesBatch(
-        tsta=None,
+        tsta=np.array([[
+            np.datetime64('2025-01-01') + np.timedelta64(i, 'D')
+            for i in range(seq_len_input)
+        ]]),
         tste=None,
         data=dummy_data((1, seq_len_input, 3)),
         tsta_future=None,

@@ -1,5 +1,6 @@
 from nazuna.models._base import BasicBaseModel
-from nazuna.models.common import RevIN
+from nazuna.models.common import RevIN, TimeFeatureEmbedding
+import numpy as np
 import torch
 
 
@@ -22,15 +23,22 @@ class iTransformer(BasicBaseModel):
         d_model: int = 128, n_heads: int = 4, d_ff: int = 256,
         e_layers: int = 3, dropout: float = 0.1,
         revin: bool = True, revin_affine: bool = False, revin_eps: float = 1e-5,
+        use_time_features: bool = True, freq: str = 'Hour',
+        norm: bool = True,
         scaler_cls: type | None = None,
         scaler_params: dict | None = None,
         prep_type: str = 'none',
     ) -> None:
         super()._setup(seq_len, pred_len, scaler_cls, scaler_params, prep_type=prep_type)
+        self.c_in = c_in
 
         self.use_revin = revin
         if self.use_revin:
             self.revin = RevIN(c_in, affine=revin_affine, eps=revin_eps)
+
+        self.use_time_features = use_time_features
+        if self.use_time_features:
+            self.tfe = TimeFeatureEmbedding(d_model, freq=freq)
 
         self.embed = torch.nn.Linear(seq_len, d_model)
         enc_layer = torch.nn.TransformerEncoderLayer(
@@ -41,17 +49,35 @@ class iTransformer(BasicBaseModel):
         self.encoder = torch.nn.TransformerEncoder(
             enc_layer, num_layers=e_layers, enable_nested_tensor=False,
         )
+        self.use_norm = norm
+        if self.use_norm:
+            self.enc_norm = torch.nn.LayerNorm(d_model)
         self.head = torch.nn.Linear(d_model, pred_len)
 
-    def forward(self, x):
-        # x: [B, L, C]
+    def _extract_input(self, batch):
+        x, current_value = super()._extract_input(batch)
+        x_mark = None
+        if self.use_time_features:
+            tsta = np.asarray(batch.tsta[:, -self.seq_len:])
+            x_mark = self.tfe.get_feats(tsta)
+            x_mark = torch.tensor(x_mark, dtype=torch.float32, device=x.device)
+        return (x, x_mark), current_value
+
+    def forward(self, input_):
+        x, x_mark = input_  # x: [B, L, C], x: [B, L, n_feat]
         if self.use_revin:
             x, x_mean, x_std = self.revin.normalize(x)
         # Invert: treat each variate as a token.
         h = x.transpose(1, 2)  # [B, C, L]
-        h = self.embed(h)  # [B, C, d_model]
-        h = self.encoder(h)  # [B, C, d_model]
-        yhat = self.head(h)  # [B, C, pred_len]
+        if x_mark is not None:
+            # Append time-feature tokens along the variate axis.
+            h = torch.cat([h, x_mark.transpose(1, 2)], dim=1)  # [B, C + n_feat, L]
+        h = self.embed(h)  # [B, C (+ n_feat), d_model]
+        h = self.encoder(h)
+        if self.use_norm:
+            h = self.enc_norm(h)
+        yhat = self.head(h)  # [B, C (+ n_feat), pred_len]
+        yhat = yhat[:, :self.c_in, :]  # drop time-feature tokens
         yhat = yhat.transpose(1, 2)  # [B, pred_len, C]
         if self.use_revin:
             yhat = self.revin.denormalize(yhat, x_mean, x_std)
