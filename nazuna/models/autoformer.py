@@ -231,7 +231,7 @@ class DecoderLayer(torch.nn.Module):
 
 class Autoformer(BasicBaseModel):
     """
-    !!! note "Original Research"
+    !!! info "Original Research"
         This model is based on the following research:
         > Haixu Wu, Jiehui Xu, Jianmin Wang, and Mingsheng Long.
           "Autoformer: Decomposition Transformers with Auto-Correlation
@@ -241,10 +241,39 @@ class Autoformer(BasicBaseModel):
           [Paper](https://proceedings.neurips.cc/paper/2021/hash/bcc0d400288793e8bdcd7c19a8ac0c2b-Abstract.html) |
           [arXiv](https://arxiv.org/abs/2106.13008) |
           [GitHub](https://github.com/thuml/Autoformer)
+
+    !!! tip "Standard parameter settings"
+        ```toml
+        [definitions.Autoformer]
+        cls_path = "nazuna.models.autoformer.Autoformer"
+        [definitions.Autoformer.params]
+        seq_len = 96  # task-dependent
+        pred_len = 24  # task-dependent
+        c_in = 10  # task-dependent
+        label_len = 48  # decoder input is label_len + pred_len (defaults to seq_len // 2)
+        freq = "hour"  # for time feature extraction
+        e_layers = 2  # number of encoder layers
+        d_layers = 1  # number of decoder layers
+        d_model = 512
+        n_heads = 8
+        d_ff = 2048
+        decomp_kernel = 25
+        n_moving_avg = 1
+        topk_factor = 3.0  # keep top-k = floor(topk_factor log (L+1)) lags
+        dropout_emb = 0.05  # dropout after embedding
+        dropout_aw = 0.1  # dropout on attention weights
+        dropout_ac = 0.1  # dropout on AutoCorrelation output
+        dropout_ff = [ 0.0, 0.1,]  # dropout before/after the intermediate layer
+        approx_durning_training = true  # whether to approximate AutoCorrelation during training
+        independent_heads = false  # whether to pick top-k lags per head
+        scaler_cls_path = "nazuna.models.common.IqrScaler"
+        scaler_params = { "stat_types" = [ "qtile_full", "saved",] }
+        prep_type = "none"
+        ```
     """
     def _setup(
         self, *, seq_len: int, pred_len: int, c_in: int, label_len: int = None,
-        freq: str = 'Hour', e_layers: int = 2, d_layers: int = 1,
+        freq: str = 'hour', e_layers: int = 2, d_layers: int = 1,
         d_model: int = 512, n_heads: int = 8, d_ff: int = 2048,
         decomp_kernel: int = 25, n_moving_avg: int = 1,
         topk_factor: float = 3.0, dropout_emb: float = 0.05,
@@ -267,8 +296,8 @@ class Autoformer(BasicBaseModel):
 
         self.enc_in_proj = ConvEmb(c_in, d_model, kernel_size=3)
         self.dec_in_proj = ConvEmb(c_in, d_model, kernel_size=3)
-        self.enc_tfe = TimeFeatureEmbedding(d_model, freq=freq)
-        self.dec_tfe = TimeFeatureEmbedding(d_model, freq=freq)
+        self.enc_tfe = TimeFeatureEmbedding(self.device, freq, d_model)
+        self.dec_tfe = TimeFeatureEmbedding(self.device, freq, d_model)
         self.decomp = SeriesDecomp(decomp_kernel, n_moving_avg)
         self.dropout_emb = torch.nn.Dropout(dropout_emb)
 
@@ -292,8 +321,8 @@ class Autoformer(BasicBaseModel):
         self.dec_norm = TokenNormSeriesDemean(d_model)
         self.out_proj = torch.nn.Linear(d_model, self.c_out)
 
-    def _build_marks(self, batch, device):
-        # Build encoder/decoder time-feature tensors from batch timestamps.
+    def _extract_input(self, batch):
+        x_enc, current_value = super()._extract_input(batch)
         tsta = np.asarray(batch.tsta[:, -self.seq_len:])
         tsta_dec = np.concatenate([
             tsta[:, -self.label_len:],
@@ -301,14 +330,6 @@ class Autoformer(BasicBaseModel):
         ], axis=1)
         x_mark_enc = self.enc_tfe.get_feats(tsta)
         x_mark_dec = self.dec_tfe.get_feats(tsta_dec)
-        return (
-             torch.tensor(x_mark_enc, dtype=torch.float32, device=device),
-             torch.tensor(x_mark_dec, dtype=torch.float32, device=device),
-        )
-
-    def _extract_input(self, batch):
-        x_enc, current_value = super()._extract_input(batch)
-        x_mark_enc, x_mark_dec = self._build_marks(batch, x_enc.device)
         return (x_enc, x_mark_enc, x_mark_dec), current_value
 
     def forward(self, input_):

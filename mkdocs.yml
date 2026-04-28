@@ -5,6 +5,7 @@ theme:
     primary: white
   features:
     - navigation.expand
+    - content.code.copy
 extra_css:
   - custom.css
 nav:

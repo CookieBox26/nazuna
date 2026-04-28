@@ -114,6 +114,33 @@ class PatchTST(BasicBaseModel):
           [Paper](https://openreview.net/forum?id=Jbdc0vTOcol) |
           [arXiv](https://arxiv.org/abs/2211.14730) |
           [GitHub](https://github.com/yuqinie98/PatchTST)
+
+    !!! tip "Standard parameter settings"
+        ```toml
+        [definitions.PatchTST]
+        cls_path = "nazuna.models.patchtst.PatchTST"
+        [definitions.PatchTST.params]
+        seq_len = 96  # task-dependent
+        pred_len = 24  # task-dependent
+        c_in = 10  # task-dependent
+        patch_len = 16
+        stride = 8
+        padding_patch = "end"
+        d_model = 128
+        n_heads = 16
+        n_layers = 3
+        d_ff = 256
+        dropout = 0.2
+        attn_dropout = 0.0
+        head_dropout = 0.0
+        res_attention = true
+        revin = true
+        revin_affine = false
+        revin_eps = 1e-5
+        scaler_cls_path = ""
+        scaler_params = {}
+        prep_type = "none"
+        ```
     """
     def _setup(
         self, seq_len: int, pred_len: int, c_in: int,

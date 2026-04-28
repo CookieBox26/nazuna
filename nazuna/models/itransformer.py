@@ -17,16 +17,38 @@ class iTransformer(BasicBaseModel):
           [Paper](https://openreview.net/forum?id=JePfAI8fah) |
           [arXiv](https://arxiv.org/abs/2310.06625) |
           [GitHub](https://github.com/thuml/iTransformer)
+
+    !!! tip "Standard parameter settings"
+        ```toml
+        [definitions.iTransformer]
+        cls_path = "nazuna.models.itransformer.iTransformer"
+        [definitions.iTransformer.params]
+        seq_len = 96  # task-dependent
+        pred_len = 24  # task-dependent
+        c_in = 10  # task-dependent
+        d_model = 128
+        n_heads = 4
+        d_ff = 256
+        e_layers = 3
+        dropout = 0.1
+        revin = true
+        revin_affine = false
+        revin_eps = 1e-5
+        use_time_features = true
+        freq = "hour"
+        norm = true
+        scaler_cls_path = ""
+        scaler_params = {}
+        prep_type = "none"
+        ```
     """
     def _setup(
         self, seq_len: int, pred_len: int, c_in: int,
         d_model: int = 128, n_heads: int = 4, d_ff: int = 256,
         e_layers: int = 3, dropout: float = 0.1,
         revin: bool = True, revin_affine: bool = False, revin_eps: float = 1e-5,
-        use_time_features: bool = True, freq: str = 'Hour',
-        norm: bool = True,
-        scaler_cls: type | None = None,
-        scaler_params: dict | None = None,
+        use_time_features: bool = True, freq: str = 'hour', norm: bool = True,
+        scaler_cls: type | None = None, scaler_params: dict | None = None,
         prep_type: str = 'none',
     ) -> None:
         super()._setup(seq_len, pred_len, scaler_cls, scaler_params, prep_type=prep_type)
@@ -38,13 +60,12 @@ class iTransformer(BasicBaseModel):
 
         self.use_time_features = use_time_features
         if self.use_time_features:
-            self.tfe = TimeFeatureEmbedding(d_model, freq=freq)
+            self.tfe = TimeFeatureEmbedding(self.device, freq, d_model)
 
         self.embed = torch.nn.Linear(seq_len, d_model)
         enc_layer = torch.nn.TransformerEncoderLayer(
             d_model=d_model, nhead=n_heads, dim_feedforward=d_ff,
-            dropout=dropout, batch_first=True, norm_first=False,
-            activation='gelu',
+            dropout=dropout, batch_first=True, norm_first=False, activation='gelu',
         )
         self.encoder = torch.nn.TransformerEncoder(
             enc_layer, num_layers=e_layers, enable_nested_tensor=False,
@@ -60,7 +81,6 @@ class iTransformer(BasicBaseModel):
         if self.use_time_features:
             tsta = np.asarray(batch.tsta[:, -self.seq_len:])
             x_mark = self.tfe.get_feats(tsta)
-            x_mark = torch.tensor(x_mark, dtype=torch.float32, device=x.device)
         return (x, x_mark), current_value
 
     def forward(self, input_):

@@ -14,6 +14,20 @@ class DLinear(BasicBaseModel):
           (AAAI 2023), vol. 37, pp. 11121-11128, 2023.
           [arXiv](https://arxiv.org/abs/2205.13504) |
           [GitHub](https://github.com/cure-lab/LTSF-Linear)
+
+    !!! tip "Standard parameter settings"
+        ```toml
+        [definitions.DLinear]
+        cls_path = "nazuna.models.dlinear.DLinear"
+        [definitions.DLinear.params]
+        seq_len = 96  # task-dependent
+        pred_len = 24  # task-dependent
+        kernel_size = 25
+        bias = true
+        n_moving_avg = 1
+        scaler_cls_path = "nazuna.models.common.IqrScaler"
+        scaler_params = { "stat_types" = [ "qtile_full", "saved",] }
+        ```
     """
     def _setup(
         self,
