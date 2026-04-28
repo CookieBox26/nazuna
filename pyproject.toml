@@ -29,6 +29,9 @@ classifiers = [
 torch-cpu = [
     "torch==2.10.0",
 ]
+torch-cu130 = [
+    "torch==2.10.0+cu130",
+]
 torch-cu126 = [
     "torch==2.9.1+cu126",
 ]
@@ -67,12 +70,24 @@ select = [ "F401", "F821", "F841", "E722",]
 conflicts = [
     [
         { extra = "torch-cpu" },
+        { extra = "torch-cu130" },
         { extra = "torch-cu126" },
     ],
 ]
 sources = { "torch" = [
+    { extra = "torch-cpu", index = "idx_torch-cpu" },
+    { extra = "torch-cu130", index = "idx_torch-cu130" },
     { extra = "torch-cu126", index = "idx_torch-cu126" },
 ] }
 [[tool.uv.index]]
+name = "idx_torch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+[[tool.uv.index]]
+name = "idx_torch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true
+[[tool.uv.index]]
 name = "idx_torch-cu126"
 url = "https://download.pytorch.org/whl/cu126"
+explicit = true

@@ -16,26 +16,20 @@ Installing with uv from a cloned GitHub repository is recommended.
 git clone https://github.com/CookieBox26/nazuna.git
 cd nazuna
 
-# If you want to install the CUDA 12.6 version of PyTorch:
-uv sync --extra torch-cu126
-uv sync --extra torch-cu126 --extra dev  # if you want to test
-
-# If you want to install the CPU-only version of PyTorch:
-uv sync --extra torch-cpu
-uv sync --extra torch-cpu --extra dev  # if you want to test
+# Choose according to your environment's GPU
+uv sync --extra torch-cu130  # CUDA 13.0
+uv sync --extra torch-cu126  # CUDA 12.6
+uv sync --extra torch-cpu  # CPU
 ```
 
 ??? info "Installation with pip from a GitHub URL"
 
     If you prefer installing with pip from a GitHub URL, use the following:
     ```bash
-    pip install git+https://github.com/CookieBox26/nazuna.git  # main branch HEAD
-    pip install git+https://github.com/CookieBox26/nazuna.git@<revision>  # specific revision
 
-    # If you want to install the CUDA 12.6 version of PyTorch:
+    # Choose according to your environment's GPU
+    pip install "nazuna[torch-cu130] @ git+https://github.com/CookieBox26/nazuna.git"
     pip install "nazuna[torch-cu126] @ git+https://github.com/CookieBox26/nazuna.git"
-
-    # If you want to install the CPU-only version of PyTorch:
     pip install "nazuna[torch-cpu] @ git+https://github.com/CookieBox26/nazuna.git"
     ```
 

@@ -41,11 +41,10 @@ This repository mainly consists of the following files:
 git clone https://github.com/CookieBox26/nazuna.git
 cd nazuna
 
-# If you want to install the CUDA 12.6 version of PyTorch:
-uv sync --extra torch-cu126
-
-# If you want to install the CPU-only version of PyTorch:
-uv sync --extra torch-cpu
+# Choose according to your environment's GPU
+uv sync --extra torch-cu130  # CUDA 13.0
+uv sync --extra torch-cu126  # CUDA 12.6
+uv sync --extra torch-cpu  # CPU
 ```
 
 ### Usage
@@ -60,6 +59,8 @@ uv run nazuna config.toml
 
 ### Development Guide (for Developers)
 ```sh
+# Choose according to your environment's GPU
+uv sync --extra torch-cu130 --extra dev --extra docs  # CUDA 13.0
 uv sync --extra torch-cu126 --extra dev --extra docs  # CUDA 12.6
 uv sync --extra torch-cpu --extra dev --extra docs  # CPU
 
