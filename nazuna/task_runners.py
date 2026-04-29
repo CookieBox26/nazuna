@@ -291,7 +291,9 @@ class EvalTaskRunner(BaseTaskRunner):
             self.baseline_model = self.baseline_model_cls.create(
                 self.device, **self.baseline_model_params,
             )
-        self.model = self.model_cls.create(self.device, self.model_state_path, **self.model_params)
+        self.model = self.model_cls.create(
+            self.device, self.model_state_path, **self.model_params,
+        )
         loss_eval = self.eval()
         if self.inspector_params is not None:
             inspected = Inspector.inspect(

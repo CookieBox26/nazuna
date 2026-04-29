@@ -56,20 +56,17 @@ class PatchTST(BasicBaseModel):
     ) -> None:
         assert seq_len >= patch_len, 'seq_len >= patch_len'
         super()._setup(seq_len, pred_len, scaler_cls, scaler_params, prep_type=prep_type)
-        self.patch_len = patch_len
-        self.stride = stride
-        self.padding_patch = padding_patch
-        self.res_attention = res_attention
-
         self.use_revin = revin
         if self.use_revin:
             self.revin = RevIN(c_in, affine=revin_affine, eps=revin_eps)
 
+        self.patch_len = patch_len
+        self.stride = stride
+        self.padding_patch = padding_patch
         self.n_patches = (seq_len - self.patch_len) // self.stride + 1
         if self.padding_patch == 'end':
             self.n_patches += 1
         self.patch_proj = torch.nn.Linear(self.patch_len, d_model)
-
         self.pos_enc = torch.nn.Parameter(torch.empty(self.n_patches, d_model))
         torch.nn.init.uniform_(self.pos_enc, -0.02, 0.02)
         self.dropout_emb = torch.nn.Dropout(dropout_emb)
@@ -85,6 +82,7 @@ class PatchTST(BasicBaseModel):
             )
             for _ in range(e_layers)
         ])
+        self.res_attention = res_attention
 
         self.out_proj = torch.nn.Linear(d_model * self.n_patches, self.pred_len)
 
