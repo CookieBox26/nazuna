@@ -37,7 +37,7 @@ class ConvEmb(torch.nn.Module):
         return x.transpose(2, 1)  # [B, L', C_out]
 
 
-class AutoCorrelationLayer(torch.nn.Module):
+class AutoCorrelation(torch.nn.Module):
     def __init__(
         self, d_model: int, n_heads: int,
         topk_factor: float = 1.0, dropout: float = 0.1,
@@ -157,12 +157,12 @@ class EncoderLayer(torch.nn.Module):
         self, d_model: int, n_heads: int, d_ff: int,
         decomp_kernel: int, n_moving_avg: int = 1, topk_factor: float = 1.0,
         dropout_aw: float = 0.1, dropout_ac: float = 0.1,
-        dropout_ff: tuple[float, float] = (0.0, 0.3),
+        dropout_ff: tuple[float, float] = (0.0, 0.1),
         approx_durning_training: bool = True,
         independent_heads: bool = False,
     ):
         super().__init__()
-        self.ac = AutoCorrelationLayer(
+        self.ac = AutoCorrelation(
             d_model, n_heads, topk_factor=topk_factor, dropout=dropout_aw,
             approx_durning_training=approx_durning_training,
             independent_heads=independent_heads,
@@ -191,17 +191,17 @@ class DecoderLayer(torch.nn.Module):
         self, d_model: int, n_heads: int, d_ff: int, c_out: int,
         decomp_kernel: int, n_moving_avg: int = 1, topk_factor: float = 1.0,
         dropout_aw: float = 0.1, dropout_ac: float = 0.1,
-        dropout_ff: tuple[float, float] = (0.0, 0.3),
+        dropout_ff: tuple[float, float] = (0.0, 0.1),
         approx_durning_training: bool = True,
         independent_heads: bool = False,
     ):
         super().__init__()
-        self.self_ac = AutoCorrelationLayer(
+        self.self_ac = AutoCorrelation(
             d_model, n_heads, topk_factor=topk_factor, dropout=dropout_aw,
             approx_durning_training=approx_durning_training,
             independent_heads=independent_heads,
         )
-        self.cross_ac = AutoCorrelationLayer(
+        self.cross_ac = AutoCorrelation(
             d_model, n_heads, topk_factor=topk_factor, dropout=dropout_aw,
             approx_durning_training=approx_durning_training,
             independent_heads=independent_heads,
@@ -263,7 +263,7 @@ class Autoformer(BasicBaseModel):
         dropout_emb = 0.05  # dropout after embedding
         dropout_aw = 0.1  # dropout on attention weights
         dropout_ac = 0.1  # dropout on AutoCorrelation output
-        dropout_ff = [ 0.0, 0.1,]  # dropout before/after the intermediate layer
+        dropout_ff = [ 0.0, 0.1,]  # dropout before and after the FFN intermediate layer
         approx_durning_training = true  # whether to approximate AutoCorrelation during training
         independent_heads = false  # whether to pick top-k lags per head
         scaler_cls_path = "nazuna.models.common.IqrScaler"

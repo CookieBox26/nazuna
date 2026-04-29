@@ -198,6 +198,9 @@ class Workflow:
 
 
 class WorkflowTemplateResolver:
+    """
+    Resolves a template into tasks when a template is specified instead of tasks.
+    """
     Type = Enum('Type', [
         'train_with_baseline',
         'train_with_baseline_multiseeds',

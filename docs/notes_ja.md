@@ -95,19 +95,14 @@ Nazuna では `Workflow` インスタンスを生成して実行することを�
 
 #### モデル構造の詳細
 
-[こちらのページ](https://cookiebox26.github.io/cookipedia/articles/haixu_wu_et_al_2021.html)を参照。
+公式実装の詳細は[こちら](https://cookiebox26.github.io/cookipedia/articles/haixu_wu_et_al_2021.html)を参照。
 
 - バッチから **x_enc** (B, L_in, C), **x_mark_enc** (B, L_in, 4), **x_mark_dec** (B, L_label+L_out, n_feat) を抽出する。ただし、x_mark_enc, x_mark_dec はタイムスタンプの hour, day of week, day of month, day of year などの特徴を -0.5～0.5 の値に正規化したものである (抽出する特徴は時間間隔による)。
 - x_enc を各時点ごとに `Conv1d(c_in, d_model, kernel_size=3, keep_len=True, padding_mode='circular')` で埋め込み、それに x_mark_enc を `Linear(4, d_model)` で埋め込んだものを加算し、ドロップアウトして**エンコーダ入力** (B, C, d_model) とする。
 - x_enc を SeriesDecomp 層で分解する。その内トレンド成分 (B, L_in, C) の末尾側 L_label ステップに、x_enc の時間平均値を L_out ステップ繰り返したもの (B, L_out, C) を concat して**デコーダ入力のトレンド成分** (B, L_label+L_out, C) とする。季節成分 (B, L_in, C) の末尾側 L_label ステップに、L_out ステップ分のゼロテンソルを concat して**デコーダ入力の季節成分** (B, L_label+L_out, C) とする。
 - **エンコーダ** &ndash; 以下のエンコーダ層を e_layers 層積み重ねる。
 
-#### Nazuna 版の実装上の相違点
-
-- 原版は **x_dec** を受け取るが、形状しか参照されないため Nazuna では受け取らない。
-- 原版では `DataEmbedding_wo_pos`層がタイムスタンプ埋込み
-
-#### Nazuna 版の機能上の相違点
+#### Nazuna 版の相違点
 
 - 以下の相違点があるが、既定のハイパーパラメータでは公式実装の実験設定と同じである。
     - 系列分解層は移動平均を重ね掛けもできる。
@@ -127,15 +122,20 @@ Nazuna では `Workflow` インスタンスを生成して実行することを�
 
 #### モデル構造の詳細
 
-[こちらのページ](https://cookiebox26.github.io/cookipedia/articles/yuqi_nie_et_al_2023.html)を参照。
+公式実装の詳細は[こちら](https://cookiebox26.github.io/cookipedia/articles/yuqi_nie_et_al_2023.html)を参照。
 
-#### Nazuna 版の実装上の相違点
-
-#### Nazuna 版の機能上の相違点
-
-- 
-
+#### Nazuna 版の相違点
 
 ### `iTransformer` クラス
 
+公式実装 [c2426e6](https://github.com/thuml/iTransformer/tree/c2426e68ca13f74aaec08045c5c724d8ad328124) に倣っている。
 
+#### モデル構造の詳細
+
+公式実装の詳細は[こちら](https://cookiebox26.github.io/cookipedia/articles/yong_liu_et_al_2024.html)を参照。
+
+#### Nazuna 版の相違点
+
+## その他
+
+- 各タスクの `result.toml` の `env` キーにそのタスクを実行したホスト名、PyTorch のバージョン、デバイス名のリストを記録するが、GPU 環境で敢えて CPU 実行したとしてもデバイス名には GPU 名のリストが記録される。

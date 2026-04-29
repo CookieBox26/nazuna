@@ -4,6 +4,11 @@ from nazuna.criteria import MSE
 import numpy as np
 import torch
 import pytest
+from tests.utils import create_from_doc
+
+
+def test_doc(device):
+    _ = create_from_doc(iTransformer, device)
 
 
 @pytest.mark.parametrize('prep_type', ['none', 'diff'])

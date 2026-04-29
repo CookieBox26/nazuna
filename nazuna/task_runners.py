@@ -18,7 +18,7 @@ from nazuna.analysis.optuna_utils import OptunaUtils
 from nazuna.analysis.diagnoser import Diagnoser
 from nazuna.analysis.inspector import Inspector
 from nazuna.utils import (
-    fix_seed, load_class, measure_time, get_timestamp
+    fix_seed, load_class, measure_time, get_timestamp, get_env_info,
 )
 
 
@@ -75,6 +75,7 @@ class BaseTaskRunner(ABC):
         if self.log_path.exists():
             self.log_path.unlink()
         self._log('Started')
+        self.result['env'] = get_env_info()
         with measure_time(self.result):
             fix_seed(self.seed)
             self._run()
@@ -133,10 +134,10 @@ class EvalTaskRunner(BaseTaskRunner):
             assert (p in params_required) or (p in params_optional), p
 
     @classmethod
-    def _extract_model_config(cls, conf):
+    def extract_model_config(cls, conf):
         cls_, params_ = load_class(conf['cls_path']), conf['params']
-        scaler_cls_path = params_.pop('scaler_cls_path', None)
-        if scaler_cls_path is not None:
+        scaler_cls_path = params_.pop('scaler_cls_path', '')
+        if scaler_cls_path:
             params_['scaler_cls'] = load_class(scaler_cls_path)
             cls._validate_params(params_['scaler_cls'].__init__, params_['scaler_params'])
         cls._validate_params(cls_._setup, params_)
@@ -155,9 +156,9 @@ class EvalTaskRunner(BaseTaskRunner):
         self.eval_improvement = issubclass(self.criterion_cls, BaseImprovement)
         if self.eval_improvement:
             self.baseline_model_cls, self.baseline_model_params = \
-                self._extract_model_config(self.baseline_model)
+                self.extract_model_config(self.baseline_model)
 
-        self.model_cls, self.model_params = self._extract_model_config(self.model)
+        self.model_cls, self.model_params = self.extract_model_config(self.model)
 
         criterion_n_channel = self.criterion_params.get('n_channel', None)
         assert (criterion_n_channel is None) or (criterion_n_channel == self.dm.n_channel)

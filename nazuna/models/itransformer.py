@@ -6,7 +6,7 @@ import torch
 
 class iTransformer(BasicBaseModel):
     """
-    !!! note "Original Research"
+    !!! info "Original Research"
         This model is based on the following research:
         > Yong Liu, Tengge Hu, Haoran Zhang, Haixu Wu,
           Shiyu Wang, Lintao Ma, and Mingsheng Long.

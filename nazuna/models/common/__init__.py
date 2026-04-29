@@ -1,6 +1,11 @@
 from nazuna.models.common.scalers import IqrScaler as IqrScaler
-from nazuna.models.common.time_feature_embedding \
-    import TimeFeatureEmbedding as TimeFeatureEmbedding
+from nazuna.models.common.time_feature_embedding import (
+    TimeFeatureEmbedding as TimeFeatureEmbedding,
+)
+from nazuna.models.common.transformer import (
+    MultiheadAttention as MultiheadAttention,
+    TransformerEncoderLayer as TransformerEncoderLayer,
+)
 import torch
 
 
@@ -59,3 +64,15 @@ class SeriesDecomp(torch.nn.Module):
             moving_mean = self.moving_avg(moving_mean)
         res = x - moving_mean
         return res, moving_mean
+
+
+class BatchSeriesNorm(torch.nn.Module):
+    def __init__(self, d_model):
+        super().__init__()
+        self.batch_norm = torch.nn.BatchNorm1d(d_model)
+
+    def forward(self, x):
+        x = x.transpose(1, 2)
+        x = self.batch_norm(x)
+        x = x.transpose(1, 2)
+        return x

@@ -1,4 +1,4 @@
-from nazuna.utils import as_path_if_length_safe
+from nazuna.utils import as_path_if_length_safe, get_env_info
 from pathlib import Path
 import pytest
 
@@ -18,3 +18,10 @@ def test_as_path_if_length_safe(s, expected):
         assert isinstance(p, Path)
     else:
         assert p is None
+
+
+def test_get_env_info():
+    info = get_env_info()
+    assert 'hostname' in info
+    assert 'torch_version' in info
+    assert 'device_names' in info

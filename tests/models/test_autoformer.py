@@ -1,10 +1,14 @@
 from nazuna.data_manager import TimeSeriesDataset
-from nazuna.models.autoformer import AutoCorrelationLayer, Autoformer
+from nazuna.models.autoformer import AutoCorrelation, Autoformer
 from nazuna.criteria import MSE
 import numpy as np
 import torch
 import pytest
-from tests.utils import set_training
+from tests.utils import set_training, create_from_doc
+
+
+def test_doc(device):
+    _ = create_from_doc(Autoformer, device)
 
 
 @pytest.mark.parametrize('independent_heads, mean_corr', [
@@ -32,7 +36,7 @@ from tests.utils import set_training
 def test_ac_lagged_aggregation_approx(independent_heads, mean_corr):
     d_model = 8
     n_heads = 2
-    ac = AutoCorrelationLayer(
+    ac = AutoCorrelation(
         d_model=d_model, n_heads=n_heads,
         independent_heads=independent_heads,
     )

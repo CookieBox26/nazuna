@@ -6,6 +6,7 @@ import torch
 import time
 from contextlib import contextmanager
 import datetime
+import socket
 
 
 def fix_seed(seed=0):
@@ -55,3 +56,14 @@ def measure_time(info):
 
 def get_timestamp():
     return datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
+
+
+def get_env_info():
+    return {
+        'hostname': socket.gethostname(),
+        'torch_version': torch.__version__,
+        'device_names': [
+            torch.cuda.get_device_name(i)
+            for i in range(torch.cuda.device_count())
+        ],
+    }
