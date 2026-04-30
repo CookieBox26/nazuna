@@ -1,20 +1,10 @@
 from nazuna.models._base import BasicBaseModel
-from nazuna.models.common import IqrScaler, TimeFeatureEmbedding, SeriesDecomp
+from nazuna.models.common import \
+    IqrScaler, TimeFeatureEmbedding, MovingAverageDecomp, TokenNormSeriesDemean, \
+    TransformerEncoderLayer
 import numpy as np
 import torch
 import math
-
-
-class TokenNormSeriesDemean(torch.nn.Module):
-    """
-    Normalize each token, then remove mean over series
-    """
-    def __init__(self, d_model: int):
-        super().__init__()
-        self.norm = torch.nn.LayerNorm(d_model)
-    def forward(self, x):
-        x = self.norm(x)
-        return x - x.mean(dim=1, keepdim=True)
 
 
 class ConvEmb(torch.nn.Module):
@@ -39,10 +29,8 @@ class ConvEmb(torch.nn.Module):
 
 class AutoCorrelation(torch.nn.Module):
     def __init__(
-        self, d_model: int, n_heads: int,
-        topk_factor: float = 1.0, dropout: float = 0.1,
-        approx_durning_training: bool = True,
-        independent_heads: bool = False,
+        self, d_model, n_heads, topk_factor=3.0, dropout_aw=0.1,
+        approx_durning_training=True, independent_heads=False,
     ):
         super().__init__()
         assert d_model % n_heads == 0
@@ -54,19 +42,21 @@ class AutoCorrelation(torch.nn.Module):
         self.k_proj = torch.nn.Linear(d_model, d_model)
         self.v_proj = torch.nn.Linear(d_model, d_model)
         self.out_proj = torch.nn.Linear(d_model, d_model)
-        self.dropout = torch.nn.Dropout(dropout)
+        self.dropout_aw = torch.nn.Dropout(dropout_aw)
         self.approx_durning_training = approx_durning_training
         self.independent_heads = independent_heads
 
-    def _lagged_aggregation_approx(self, b, mean_corr, topk, v):
+    def _lagged_aggregation_approx(self, b, mean_corr, topk, v, prev_attn_scores=None):
         # mean_corr: [B, L] or [B, H, L]
         _, indices = torch.topk(
             mean_corr.mean(dim=0, keepdim=True), topk, dim=-1,
         )  # [1, (H,) topk]
         indices = indices.expand(*(mean_corr.shape[:-1] + (-1,))) # [B, (H,) topk]
-        w = torch.gather(mean_corr, dim=-1, index=indices)  # [B, (H,) topk]
-        w = torch.softmax(w, dim=-1)
-        w = self.dropout(w)
+        scores = torch.gather(mean_corr, dim=-1, index=indices)  # [B, (H,) topk]
+        if prev_attn_scores is not None:
+            scores = scores + prev_attn_scores
+        w = torch.softmax(scores, dim=-1)
+        w = self.dropout_aw(w)
         agg = torch.zeros_like(v)
         if self.independent_heads:
             for h in range(self.n_heads):
@@ -79,14 +69,16 @@ class AutoCorrelation(torch.nn.Module):
             for i in range(topk):
                 shifted = torch.roll(v, -int(indices[0, i]), dims=2)
                 agg = agg + shifted * w[:, i].view(b, 1, 1, 1)
-        return agg
+        return agg, scores
 
-    def _lagged_aggregation(self, b, mean_corr, topk, v, l):
+    def _lagged_aggregation(self, b, mean_corr, topk, v, l, prev_attn_scores=None):
         # mean_corr: [B, L] or [B, H, L]
         # w, indices: [B, topk] or [B, H, topk]
-        w, indices = torch.topk(mean_corr, topk, dim=-1)
-        w = torch.softmax(w, dim=-1)
-        w = self.dropout(w)
+        scores, indices = torch.topk(mean_corr, topk, dim=-1)
+        if prev_attn_scores is not None:
+            scores = scores + prev_attn_scores
+        w = torch.softmax(scores, dim=-1)
+        w = self.dropout_aw(w)
         agg = torch.zeros_like(v)
         v_rep = torch.cat([v, v], dim=2)  # [B, H, 2L, d_head]
         init_index = (
@@ -99,134 +91,78 @@ class AutoCorrelation(torch.nn.Module):
             )
             shifted = v_rep.gather(dim=2, index=idx)
             agg = agg + shifted * w[..., i].view(b, -1, 1, 1)
-        return agg
+        return agg, scores
 
-    def _autocorrelation(self, q, k, v, l):
+    def _autocorrelation(self, q, k, v, l, prev_attn_scores=None):
         b = q.shape[0]
         qf = torch.fft.rfft(q, dim=2)
         kf = torch.fft.rfft(k, dim=2)
         corr = torch.fft.irfft(qf * torch.conj(kf), n=l, dim=2)
         topk = max(1, int(self.topk_factor * math.log(l + 1)))
-
         if self.independent_heads:
-            mean_corr = corr.mean(dim=-1)  # [B, H, L]
-            if self.training and self.approx_durning_training:
-                agg = self._lagged_aggregation_approx(b, mean_corr, topk, v)
-            else:
-                agg = self._lagged_aggregation(b, mean_corr, topk, v, l)
+            mean_corr = corr.mean(dim=-1)  # (B, H, L)
         else:
-            mean_corr = corr.mean(dim=1).mean(dim=-1)  # [B, L]
-            if self.training and self.approx_durning_training:
-                agg = self._lagged_aggregation_approx(b, mean_corr, topk, v)
-            else:
-                agg = self._lagged_aggregation(b, mean_corr, topk, v, l)
-        return agg
+            mean_corr = corr.mean(dim=1).mean(dim=-1)  # (B, L)
+        if self.training and self.approx_durning_training:
+            return self._lagged_aggregation_approx(b, mean_corr, topk, v, prev_attn_scores)
+        return self._lagged_aggregation(b, mean_corr, topk, v, l, prev_attn_scores)
 
     def _reshape_heads(self, x):
-        # [B, L, D] -> [B, H, L, d_head]
+        # (B, L, D) -> (B, H, L, d_head)
         b, l, _ = x.shape
         return x.view(b, l, self.n_heads, self.d_head).transpose(1, 2)
 
-    def forward(self, q_in, k_in, v_in):
-        # q_in: [B, Lq, D]; k_in, v_in: [B, Lk, D].
+    def forward(self, q, k, v, prev_attn_scores=None):
+        # q_in: (B, Lq, D); k_in, v_in: (B, Lk, D)
         # When Lq != Lk, align lengths by zero-padding or truncating k/v to Lq
         # (official Autoformer behavior for cross-correlation).
-        b, lq, _ = q_in.shape
-        lk = k_in.shape[1]
+        b, lq, _ = q.shape
+        lk = k.shape[1]
         if lk < lq:
-            pad = torch.zeros(
-                b, lq - lk, self.d_model,
-                device=k_in.device, dtype=k_in.dtype,
-            )
-            k_in = torch.cat([k_in, pad], dim=1)
-            v_in = torch.cat([v_in, pad], dim=1)
+            pad = torch.zeros(b, lq - lk, self.d_model, device=k.device, dtype=k.dtype)
+            k = torch.cat([k, pad], dim=1)
+            v = torch.cat([v, pad], dim=1)
         elif lk > lq:
-            k_in = k_in[:, :lq, :]
-            v_in = v_in[:, :lq, :]
-        l = lq
-        q = self._reshape_heads(self.q_proj(q_in))
-        k = self._reshape_heads(self.k_proj(k_in))
-        v = self._reshape_heads(self.v_proj(v_in))
-        agg = self._autocorrelation(q, k, v, l)
-        agg = agg.transpose(1, 2).contiguous().view(b, l, self.d_model)
-        return self.out_proj(agg)
+            k = k[:, :lq, :]
+            v = v[:, :lq, :]
+        q = self._reshape_heads(self.q_proj(q))
+        k = self._reshape_heads(self.k_proj(k))
+        v = self._reshape_heads(self.v_proj(v))
+        agg, scores = self._autocorrelation(q, k, v, lq, prev_attn_scores)
+        agg = agg.transpose(1, 2).contiguous().view(b, lq, self.d_model)
+        return self.out_proj(agg), scores
 
 
-class EncoderLayer(torch.nn.Module):
+class AutoformerDecoderLayer(torch.nn.Module):
     def __init__(
-        self, d_model: int, n_heads: int, d_ff: int,
-        decomp_kernel: int, n_moving_avg: int = 1, topk_factor: float = 1.0,
-        dropout_aw: float = 0.1, dropout_ac: float = 0.1,
-        dropout_ff: tuple[float, float] = (0.0, 0.1),
-        approx_durning_training: bool = True,
-        independent_heads: bool = False,
+        self, self_ac, cross_ac, d_model, d_ff, c_out, decomp_0, decomp_1, decomp_2,
+        dropout_ac=0.1, dropout_ff=(0.0, 0.1), bias=False,
     ):
         super().__init__()
-        self.ac = AutoCorrelation(
-            d_model, n_heads, topk_factor=topk_factor, dropout=dropout_aw,
-            approx_durning_training=approx_durning_training,
-            independent_heads=independent_heads,
-        )
+        self.self_ac = self_ac
+        self.cross_ac = cross_ac
         self.dropout_ac = torch.nn.Dropout(dropout_ac)
-        self.decomp1 = SeriesDecomp(decomp_kernel, n_moving_avg)
+        self.decomp_0, self.decomp_1, self.decomp_2 = decomp_0, decomp_1, decomp_2
         self.ff = torch.nn.Sequential(
-            torch.nn.Linear(d_model, d_ff, bias=False),
+            torch.nn.Linear(d_model, d_ff, bias=bias),
             torch.nn.GELU(),
             torch.nn.Dropout(dropout_ff[0]),
-            torch.nn.Linear(d_ff, d_model, bias=False),
-            torch.nn.Dropout(dropout_ff[1]),
-        )
-        self.decomp2 = SeriesDecomp(decomp_kernel, n_moving_avg)
-
-    def forward(self, x):
-        y = self.dropout_ac(self.ac(x, x, x))
-        s, _ = self.decomp1(x + y)
-        y = self.ff(s)
-        x, _ = self.decomp2(s + y)
-        return x
-
-
-class DecoderLayer(torch.nn.Module):
-    def __init__(
-        self, d_model: int, n_heads: int, d_ff: int, c_out: int,
-        decomp_kernel: int, n_moving_avg: int = 1, topk_factor: float = 1.0,
-        dropout_aw: float = 0.1, dropout_ac: float = 0.1,
-        dropout_ff: tuple[float, float] = (0.0, 0.1),
-        approx_durning_training: bool = True,
-        independent_heads: bool = False,
-    ):
-        super().__init__()
-        self.self_ac = AutoCorrelation(
-            d_model, n_heads, topk_factor=topk_factor, dropout=dropout_aw,
-            approx_durning_training=approx_durning_training,
-            independent_heads=independent_heads,
-        )
-        self.cross_ac = AutoCorrelation(
-            d_model, n_heads, topk_factor=topk_factor, dropout=dropout_aw,
-            approx_durning_training=approx_durning_training,
-            independent_heads=independent_heads,
-        )
-        self.dropout_ac = torch.nn.Dropout(dropout_ac)
-        self.decomp1 = SeriesDecomp(decomp_kernel, n_moving_avg)
-        self.decomp2 = SeriesDecomp(decomp_kernel, n_moving_avg)
-        self.decomp3 = SeriesDecomp(decomp_kernel, n_moving_avg)
-        self.ff = torch.nn.Sequential(
-            torch.nn.Linear(d_model, d_ff, bias=False),
-            torch.nn.GELU(),
-            torch.nn.Dropout(dropout_ff[0]),
-            torch.nn.Linear(d_ff, d_model, bias=False),
+            torch.nn.Linear(d_ff, d_model, bias=bias),
             torch.nn.Dropout(dropout_ff[1]),
         )
         self.out_proj = ConvEmb(d_model, c_out, kernel_size=3)
 
-    def forward(self, x, cross):
-        y = self.dropout_ac(self.self_ac(x, x, x))
-        x, trend1 = self.decomp1(x + y)
-        y = self.dropout_ac(self.cross_ac(x, cross, cross))
-        x, trend2 = self.decomp2(x + y)
+    def forward(self, x, cross, prev_self_ac_scores=None, prev_cross_ac_scores=None):
+        # Residual attention is implemented, but unused with a single decoder layer.
+        y, self_ac_scores = self.self_ac(x, x, x, prev_self_ac_scores)
+        y = self.dropout_ac(y)
+        x, trend_0 = self.decomp_0(x + y)
+        y, cross_ac_scores = self.cross_ac(x, cross, cross, prev_cross_ac_scores)
+        y = self.dropout_ac(y)
+        x, trend_1 = self.decomp_1(x + y)
         y = self.ff(x)
-        x, trend3 = self.decomp3(x + y)
-        return x, self.out_proj(trend1 + trend2 + trend3)
+        x, trend_2 = self.decomp_2(x + y)
+        return x, self.out_proj(trend_0 + trend_1 + trend_2), self_ac_scores, cross_ac_scores
 
 
 class Autoformer(BasicBaseModel):
@@ -264,11 +200,15 @@ class Autoformer(BasicBaseModel):
         dropout_aw = 0.1  # dropout on attention weights
         dropout_ac = 0.1  # dropout on AutoCorrelation output
         dropout_ff = [ 0.0, 0.1,]  # dropout before and after the FFN intermediate layer
+        res_attention = false
         approx_durning_training = true  # whether to approximate AutoCorrelation during training
         independent_heads = false  # whether to pick top-k lags per head
         scaler_cls_path = "nazuna.models.common.IqrScaler"
         scaler_params = { "stat_types" = [ "qtile_full", "saved",] }
         prep_type = "none"
+        use_revin = false
+        revin_affine = false
+        revin_eps = 1e-5
         ```
     """
     def _setup(
@@ -276,20 +216,23 @@ class Autoformer(BasicBaseModel):
         freq: str = 'hour', e_layers: int = 2, d_layers: int = 1,
         d_model: int = 512, n_heads: int = 8, d_ff: int = 2048,
         decomp_kernel: int = 25, n_moving_avg: int = 1,
-        topk_factor: float = 3.0, dropout_emb: float = 0.05,
+        topk_factor: float = 3.0, dropout_emb: float = 0.1,
         dropout_aw: float = 0.1, dropout_ac: float = 0.1,
-        dropout_ff: tuple[float, float] = (0.0, 0.1),
+        dropout_ff: tuple[float, float] = (0.0, 0.2), res_attention: bool = False,
         approx_durning_training: bool = True,
         independent_heads: bool = False,
         scaler_cls: type | None = IqrScaler,
         scaler_params: dict | None = {'stat_types': ('qtile_full', 'saved')},
         prep_type: str = 'none',
+        use_revin: bool = False, revin_affine: bool = False, revin_eps: float = 1e-5,
     ) -> None:
-        super()._setup(seq_len, pred_len, scaler_cls, scaler_params, prep_type=prep_type)
-        self.c_in = c_in
-        self.c_out = c_in
-        self.d_model = d_model
-        self.freq = freq
+        super()._setup(
+            seq_len, pred_len, scaler_cls, scaler_params, prep_type=prep_type,
+            use_revin=use_revin, revin_eps=revin_eps,
+            revin_affine=revin_affine, c_in=c_in,
+        )
+        c_out = c_in
+        self.res_attention = res_attention
         self.label_len = label_len
         if self.label_len is None:
             self.label_len = self.seq_len // 2
@@ -298,31 +241,50 @@ class Autoformer(BasicBaseModel):
         self.dec_in_proj = ConvEmb(c_in, d_model, kernel_size=3)
         self.enc_tfe = TimeFeatureEmbedding(self.device, freq, d_model)
         self.dec_tfe = TimeFeatureEmbedding(self.device, freq, d_model)
-        self.decomp = SeriesDecomp(decomp_kernel, n_moving_avg)
+        self.decomp = MovingAverageDecomp(decomp_kernel, n_moving_avg)
         self.dropout_emb = torch.nn.Dropout(dropout_emb)
 
         self.encoder_layers = torch.nn.ModuleList([
-            EncoderLayer(
-                d_model, n_heads, d_ff,
-                decomp_kernel, n_moving_avg, topk_factor,
-                dropout_aw, dropout_ac, dropout_ff,
-                approx_durning_training, independent_heads,
+            TransformerEncoderLayer(
+                self_attn=AutoCorrelation(
+                    d_model, n_heads, topk_factor=topk_factor, dropout_aw=dropout_aw,
+                    approx_durning_training=approx_durning_training,
+                    independent_heads=independent_heads,
+                ),
+                d_model=d_model, d_ff=d_ff,
+                norm_0=MovingAverageDecomp(decomp_kernel, n_moving_avg, True),
+                norm_1=MovingAverageDecomp(decomp_kernel, n_moving_avg, True),
+                activation=torch.nn.GELU(),
+                dropout_sa=dropout_ac, dropout_ff=dropout_ff, bias=False,
             ) for _ in range(e_layers)
         ])
+        self.enc_norm = TokenNormSeriesDemean(d_model)
+
         self.decoder_layers = torch.nn.ModuleList([
-            DecoderLayer(
-                d_model, n_heads, d_ff, self.c_out,
-                decomp_kernel, n_moving_avg, topk_factor,
-                dropout_aw, dropout_ac, dropout_ff,
-                approx_durning_training, independent_heads,
+            AutoformerDecoderLayer(
+                self_ac=AutoCorrelation(
+                    d_model, n_heads, topk_factor=topk_factor, dropout_aw=dropout_aw,
+                    approx_durning_training=approx_durning_training,
+                    independent_heads=independent_heads,
+                ),
+                cross_ac=AutoCorrelation(
+                    d_model, n_heads, topk_factor=topk_factor, dropout_aw=dropout_aw,
+                    approx_durning_training=approx_durning_training,
+                    independent_heads=independent_heads,
+                ),
+                d_model=d_model, d_ff=d_ff, c_out=c_out,
+                decomp_0=MovingAverageDecomp(decomp_kernel, n_moving_avg),
+                decomp_1=MovingAverageDecomp(decomp_kernel, n_moving_avg),
+                decomp_2=MovingAverageDecomp(decomp_kernel, n_moving_avg),
+                dropout_ac=dropout_ac, dropout_ff=dropout_ff,
             ) for _ in range(d_layers)
         ])
-        self.enc_norm = TokenNormSeriesDemean(d_model)
         self.dec_norm = TokenNormSeriesDemean(d_model)
-        self.out_proj = torch.nn.Linear(d_model, self.c_out)
+
+        self.out_proj = torch.nn.Linear(d_model, c_out)
 
     def _extract_input(self, batch):
-        x_enc, current_value = super()._extract_input(batch)
+        x_enc, prep_info = super()._extract_input(batch)
         tsta = np.asarray(batch.tsta[:, -self.seq_len:])
         tsta_dec = np.concatenate([
             tsta[:, -self.label_len:],
@@ -330,18 +292,20 @@ class Autoformer(BasicBaseModel):
         ], axis=1)
         x_mark_enc = self.enc_tfe.get_feats(tsta)
         x_mark_dec = self.dec_tfe.get_feats(tsta_dec)
-        return (x_enc, x_mark_enc, x_mark_dec), current_value
+        return (x_enc, x_mark_enc, x_mark_dec), prep_info
 
     def forward(self, input_):
         x_enc, x_mark_enc, x_mark_dec = input_
         B, L, C = x_enc.shape
         dtype = x_enc.dtype
 
-        # Encoder
         enc_h = self.enc_in_proj(x_enc) + self.enc_tfe(x_mark_enc)
         enc_h = self.dropout_emb(enc_h)
+
+        # Encoder
+        scores = None
         for layer in self.encoder_layers:
-            enc_h = layer(enc_h)
+            enc_h, scores = layer(enc_h, (scores if self.res_attention else None))
         enc_h = self.enc_norm(enc_h)
 
         # Decoder input initialization
@@ -354,13 +318,19 @@ class Autoformer(BasicBaseModel):
             trend_init[:, -self.label_len:, :],
             x_enc.mean(dim=1, keepdim=True).repeat(1, self.pred_len, 1),
         ], dim=1)
-
-        # Decoder
         dec_h = self.dec_in_proj(seasonal_init) + self.dec_tfe(x_mark_dec)
         dec_h = self.dropout_emb(dec_h)
+
+        # Decoder
+        self_ac_scores = None
+        cross_ac_scores = None
         trend = trend_init
         for layer in self.decoder_layers:
-            dec_h, residual_trend = layer(dec_h, enc_h)
+            dec_h, residual_trend, self_ac_scores, cross_ac_scores = layer(
+                dec_h, enc_h,
+                (self_ac_scores if self.res_attention else None),
+                (cross_ac_scores if self.res_attention else None),
+            )
             trend = trend + residual_trend
         dec_h = self.dec_norm(dec_h)
 

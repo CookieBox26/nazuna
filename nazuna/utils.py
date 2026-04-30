@@ -61,7 +61,7 @@ def get_timestamp():
 def get_env_info():
     return {
         'hostname': socket.gethostname(),
-        'torch_version': torch.__version__,
+        'torch_version': str(torch.__version__),
         'device_names': [
             torch.cuda.get_device_name(i)
             for i in range(torch.cuda.device_count())

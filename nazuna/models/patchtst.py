@@ -1,6 +1,6 @@
 from nazuna.models._base import BasicBaseModel
 from nazuna.models.common import \
-    RevIN, MultiheadAttention, TransformerEncoderLayer, BatchSeriesNorm
+    MultiheadAttention, TransformerEncoderLayer, BatchSeriesNorm
 import torch
 import torch.nn.functional as F
 
@@ -31,34 +31,35 @@ class PatchTST(BasicBaseModel):
         n_heads = 16
         d_ff = 256
         e_layers = 2
-        dropout_emb = 0.2
+        dropout_emb = 0.1
         dropout_aw = 0.1
         dropout_sa = 0.1
-        dropout_ff = [ 0.0, 0.1,]
+        dropout_ff = [ 0.0, 0.2,]
         res_attention = true
-        revin = true
-        revin_affine = false
-        revin_eps = 1e-5
         scaler_cls_path = ""
         scaler_params = {}
         prep_type = "none"
+        use_revin = true
+        revin_affine = false
+        revin_eps = 1e-5
         ```
     """
     def _setup(
         self, seq_len: int, pred_len: int, c_in: int,
         patch_len: int = 16, stride: int = 8, padding_patch: str | None = 'end',
         d_model: int = 128, n_heads: int = 16, d_ff: int = 256, e_layers: int = 2,
-        dropout_emb: float = 0.2, dropout_aw: float = 0.1, dropout_sa: float = 0.1,
-        dropout_ff: tuple[float, float] = (0.0, 0.1), res_attention: bool = True,
-        revin: bool = True, revin_affine: bool = False, revin_eps: float = 1e-5,
+        dropout_emb: float = 0.1, dropout_aw: float = 0.1, dropout_sa: float = 0.1,
+        dropout_ff: tuple[float, float] = (0.0, 0.2), res_attention: bool = True,
         scaler_cls: type | None = None, scaler_params: dict | None = None,
         prep_type: str = 'none',
+        use_revin: bool = True, revin_affine: bool = False, revin_eps: float = 1e-5,
     ) -> None:
         assert seq_len >= patch_len, 'seq_len >= patch_len'
-        super()._setup(seq_len, pred_len, scaler_cls, scaler_params, prep_type=prep_type)
-        self.use_revin = revin
-        if self.use_revin:
-            self.revin = RevIN(c_in, affine=revin_affine, eps=revin_eps)
+        super()._setup(
+            seq_len, pred_len, scaler_cls, scaler_params, prep_type=prep_type,
+            use_revin=use_revin, revin_eps=revin_eps,
+            revin_affine=revin_affine, c_in=c_in,
+        )
 
         self.patch_len = patch_len
         self.stride = stride
@@ -95,9 +96,6 @@ class PatchTST(BasicBaseModel):
 
     def forward(self, x):
         B, L, C = x.shape
-        if self.use_revin:
-            x, x_mean, x_std = self.revin.normalize(x)
-
         patches = self._patchify(x)  # (B, C, P, patch_len)
         P = patches.size(2)
         z = patches.reshape(B * C, P, self.patch_len)  # (B*C, P, patch_len)
@@ -114,7 +112,4 @@ class PatchTST(BasicBaseModel):
         z = z.reshape(B, C, -1)  # (B, C, d_model * P)
         y = self.out_proj(z)  # (B, C, pred_len)
         y = y.transpose(1, 2)  # (B, pred_len, C)
-
-        if self.use_revin:
-            y = self.revin.denormalize(y, x_mean, x_std)
         return y, {}

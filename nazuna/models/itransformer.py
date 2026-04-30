@@ -1,6 +1,6 @@
 from nazuna.models._base import BasicBaseModel
 from nazuna.models.common import \
-    RevIN, TimeFeatureEmbedding, MultiheadAttention, TransformerEncoderLayer
+    TimeFeatureEmbedding, MultiheadAttention, TransformerEncoderLayer
 import numpy as np
 import torch
 
@@ -27,39 +27,40 @@ class iTransformer(BasicBaseModel):
         seq_len = 96  # task-dependent
         pred_len = 24  # task-dependent
         c_in = 10  # task-dependent
-        d_model = 128
-        n_heads = 4
-        d_ff = 256
+        d_model = 512
+        n_heads = 8
+        d_ff = 512
         e_layers = 2
-        dropout_emb = 0.2
+        dropout_emb = 0.1
         dropout_aw = 0.1
         dropout_sa = 0.1
-        dropout_ff = [0.0, 0.1]
+        dropout_ff = [0.0, 0.2]
         res_attention = false
-        revin = true
-        revin_affine = false
-        revin_eps = 1e-5
         use_time_features = true
         freq = "hour"
         scaler_cls_path = ""
         scaler_params = {}
         prep_type = "none"
+        use_revin = true
+        revin_affine = false
+        revin_eps = 1e-5
         ```
     """
     def _setup(
         self, seq_len: int, pred_len: int, c_in: int,
-        d_model: int = 128, n_heads: int = 4, d_ff: int = 256, e_layers: int = 2,
-        dropout_emb: float = 0.2, dropout_aw: float = 0.1, dropout_sa: float = 0.1,
-        dropout_ff: tuple[float, float] = (0.0, 0.1), res_attention: bool = False,
-        revin: bool = True, revin_affine: bool = False, revin_eps: float = 1e-5,
+        d_model: int = 512, n_heads: int = 8, d_ff: int = 512, e_layers: int = 2,
+        dropout_emb: float = 0.1, dropout_aw: float = 0.1, dropout_sa: float = 0.1,
+        dropout_ff: tuple[float, float] = (0.0, 0.2), res_attention: bool = False,
         use_time_features: bool = True, freq: str = 'hour',
         scaler_cls: type | None = None, scaler_params: dict | None = None,
         prep_type: str = 'none',
+        use_revin: bool = True, revin_affine: bool = False, revin_eps: float = 1e-5,
     ) -> None:
-        super()._setup(seq_len, pred_len, scaler_cls, scaler_params, prep_type=prep_type)
-        self.use_revin = revin
-        if self.use_revin:
-            self.revin = RevIN(c_in, affine=revin_affine, eps=revin_eps)
+        super()._setup(
+            seq_len, pred_len, scaler_cls, scaler_params, prep_type=prep_type,
+            use_revin=use_revin, revin_eps=revin_eps,
+            revin_affine=revin_affine, c_in=c_in,
+        )
 
         self.use_time_features = use_time_features
         if self.use_time_features:
@@ -83,18 +84,16 @@ class iTransformer(BasicBaseModel):
         self.out_proj = torch.nn.Linear(d_model, pred_len)
 
     def _extract_input(self, batch):
-        x, current_value = super()._extract_input(batch)
+        x, prep_info = super()._extract_input(batch)
         x_mark = None
         if self.use_time_features:
             tsta = np.asarray(batch.tsta[:, -self.seq_len:])
             x_mark = self.tfe.get_feats(tsta)
-        return (x, x_mark), current_value
+        return (x, x_mark), prep_info
 
     def forward(self, input_):
         x, x_mark = input_  # x: (B, L, C), x: (B, L, n_feat)
         _, _, C = x.shape
-        if self.use_revin:
-            x, x_mean, x_std = self.revin.normalize(x)
 
         h = x.transpose(1, 2)  # (B, C, L)
         if x_mark is not None:
@@ -109,7 +108,4 @@ class iTransformer(BasicBaseModel):
         y = self.out_proj(h)  # (B, C + n_feat, pred_len)
         y = y[:, :C, :]  # (B, C, pred_len)
         y = y.transpose(1, 2)  # (B, pred_len, C)
-
-        if self.use_revin:
-            y = self.revin.denormalize(y, x_mean, x_std)
         return y, {}

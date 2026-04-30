@@ -16,9 +16,11 @@
 
 ::: nazuna.models.dlinear.DLinear
 
+::: nazuna.models.dlinear.DLinearChannelwise
+
 ::: nazuna.models.dlinear.NLinear
 
-::: nazuna.models.dlinear.DLinearChannelwise
+::: nazuna.models.dlinear.NLinearChannelwise
 
 
 ## PatchTST

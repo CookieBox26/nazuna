@@ -10,12 +10,12 @@ import torch
 
 
 class RevIN(torch.nn.Module):
-    def __init__(self, c_in: int, affine: bool = True, eps: float = 1e-5):
+    def __init__(self, eps=1e-5, affine=False, c_in=None):
         super().__init__()
-        self.c_in = c_in
-        self.affine = affine
         self.eps = eps
+        self.affine = affine
         if self.affine:
+            assert c_in is not None
             self.affine_weight = torch.nn.Parameter(torch.ones(c_in))
             self.affine_bias = torch.nn.Parameter(torch.zeros(c_in))
 
@@ -34,7 +34,7 @@ class RevIN(torch.nn.Module):
         return y * x_std + x_mean
 
 
-class SeriesDecomp(torch.nn.Module):
+class MovingAverageDecomp(torch.nn.Module):
     """Moving average based series decomposition.
 
     Pads the input by repeating edge values, then applies average pooling.
@@ -42,11 +42,12 @@ class SeriesDecomp(torch.nn.Module):
     For even kernel_size, pads ``kernel_size // 2`` steps on the front and
     ``(kernel_size - 1) // 2`` steps on the end (one extra step at the front).
     """
-    def __init__(self, kernel_size, n_moving_avg=1):
+    def __init__(self, kernel_size, n_moving_avg=1, drop_moving_average=False):
         super().__init__()
         self.kernel_size = kernel_size
         self.n_moving_avg = n_moving_avg
         self.avg = torch.nn.AvgPool1d(kernel_size=kernel_size, stride=1, padding=0)
+        self.drop_moving_average = drop_moving_average
 
     def moving_avg(self, x):
         pad_len_front = self.kernel_size // 2
@@ -63,7 +64,20 @@ class SeriesDecomp(torch.nn.Module):
         for _ in range(self.n_moving_avg):
             moving_mean = self.moving_avg(moving_mean)
         res = x - moving_mean
+        if self.drop_moving_average:
+            return res
         return res, moving_mean
+
+
+class TokenNormSeriesDemean(torch.nn.Module):
+    """Normalize each token, then remove mean over series
+    """
+    def __init__(self, d_model: int):
+        super().__init__()
+        self.norm = torch.nn.LayerNorm(d_model)
+    def forward(self, x):
+        x = self.norm(x)
+        return x - x.mean(dim=1, keepdim=True)
 
 
 class BatchSeriesNorm(torch.nn.Module):

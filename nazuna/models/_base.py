@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from nazuna.criteria import TimeSeriesError
+from nazuna.models.common import RevIN
 from enum import Enum
 from typing import Self, IO, Any
 import torch
@@ -118,6 +119,7 @@ class BasicBaseModel(BaseModel):
         self, seq_len, pred_len,
         scaler_cls=None, scaler_params=None, rescale_loss=True,
         prep_type: str = 'none',
+        use_revin=False, revin_eps=1e-5, revin_affine=False, c_in=None,
     ):
         self.seq_len = seq_len
         self.pred_len = pred_len
@@ -129,25 +131,36 @@ class BasicBaseModel(BaseModel):
         self.seq_len_required = self.seq_len
         if self.prep_type == type(self).PrepType.diff:
             self.seq_len_required += 1
+        self.use_revin = use_revin
+        if self.use_revin:
+            self.revin = RevIN(eps=revin_eps, affine=revin_affine, c_in=c_in)
 
     def extract_true(self, batch):
         return batch.data_future[:, :self.pred_len]
 
     def _extract_input(self, batch):
+        prep_info = {}
         input_ = batch.data[:, -self.seq_len_required:]
         if self.scaler:
             input_ = self.scaler.scale(input_, batch)
-        current_value = None  # used only for inverse when differencing
         if self.prep_type == type(self).PrepType.diff:
-            current_value = input_[:, -1:, :]
+            prep_info['current_value'] = input_[:, -1:, :]
             input_ = input_[:, 1:, :] - input_[:, :-1, :]
-        return input_, current_value
+        if self.use_revin:
+            input_, revin_mean, revin_std = self.revin.normalize(input_)
+            prep_info['revin_mean'] = revin_mean
+            prep_info['revin_std'] = revin_std
+        return input_, prep_info
 
     def _get_output(self, batch, rescale):
-        input_, current_value = self._extract_input(batch)
+        input_, prep_info = self._extract_input(batch)
         output, info = self.forward(input_)
+        if self.use_revin:
+            revin_mean = prep_info['revin_mean']
+            revin_std = prep_info['revin_std']
+            output = self.revin.denormalize(output, revin_mean, revin_std)
         if self.prep_type == type(self).PrepType.diff:
-            output = current_value + torch.cumsum(output, dim=1)
+            output = prep_info['current_value'] + torch.cumsum(output, dim=1)
         if rescale:
             output = self.scaler.rescale(output, batch)
         return output, info
