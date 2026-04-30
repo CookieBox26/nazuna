@@ -16,7 +16,7 @@ class PatchTST(BasicBaseModel):
           [arXiv](https://arxiv.org/abs/2211.14730) |
           [GitHub](https://github.com/yuqinie98/PatchTST)
 
-    !!! tip "Standard parameter settings"
+    !!! tip "Example parameter configurations"
         ```toml
         [definitions.PatchTST]
         cls_path = "nazuna.models.patchtst.PatchTST"

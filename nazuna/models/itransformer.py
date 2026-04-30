@@ -19,7 +19,7 @@ class iTransformer(BasicBaseModel):
           [arXiv](https://arxiv.org/abs/2310.06625) |
           [GitHub](https://github.com/thuml/iTransformer)
 
-    !!! tip "Standard parameter settings"
+    !!! tip "Example parameter configurations"
         ```toml
         [definitions.iTransformer]
         cls_path = "nazuna.models.itransformer.iTransformer"

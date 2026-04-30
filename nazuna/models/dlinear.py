@@ -14,7 +14,7 @@ class DLinear(BasicBaseModel):
           [arXiv](https://arxiv.org/abs/2205.13504) |
           [GitHub](https://github.com/cure-lab/LTSF-Linear)
 
-    !!! tip "Standard parameter settings"
+    !!! tip "Example parameter configurations"
         ```toml
         [definitions.DLinear]
         cls_path = "nazuna.models.dlinear.DLinear"
@@ -70,7 +70,7 @@ class DLinear(BasicBaseModel):
 
 class DLinearChannelwise(BasicBaseModel):
     """
-    !!! tip "Standard parameter settings"
+    !!! tip "Example parameter configurations"
         ```toml
         [definitions.DLinearChannelwise]
         cls_path = "nazuna.models.dlinear.DLinearChannelwise"
@@ -142,7 +142,7 @@ class DLinearChannelwise(BasicBaseModel):
 
 class NLinear(BasicBaseModel):
     """
-    !!! tip "Standard parameter settings"
+    !!! tip "Example parameter configurations"
         ```toml
         [definitions.NLinear]
         cls_path = "nazuna.models.dlinear.NLinear"
@@ -191,7 +191,7 @@ class NLinear(BasicBaseModel):
 
 class NLinearChannelwise(BasicBaseModel):
     """
-    !!! tip "Standard parameter settings"
+    !!! tip "Example parameter configurations"
         ```toml
         [definitions.NLinearChannelwise]
         cls_path = "nazuna.models.dlinear.NLinearChannelwise"

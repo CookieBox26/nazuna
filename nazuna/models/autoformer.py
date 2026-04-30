@@ -178,7 +178,7 @@ class Autoformer(BasicBaseModel):
           [arXiv](https://arxiv.org/abs/2106.13008) |
           [GitHub](https://github.com/thuml/Autoformer)
 
-    !!! tip "Standard parameter settings"
+    !!! tip "Example parameter configurations"
         ```toml
         [definitions.Autoformer]
         cls_path = "nazuna.models.autoformer.Autoformer"

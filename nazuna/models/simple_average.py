@@ -11,6 +11,19 @@ class BaseSimpleAverage(BasicBaseModel):
 
 
 class SimpleAverage(BaseSimpleAverage):
+    """
+    !!! tip "Example parameter configurations"
+        ```toml
+        [definitions.SimpleAverage]
+        cls_path = "nazuna.models.simple_average.SimpleAverage"
+        [definitions.SimpleAverage.params]
+        seq_len = 96  # task-dependent
+        pred_len = 24  # task-dependent
+        period_len = 24  # task-dependent
+        decay_rate = 1.0
+        prep_type = "none"
+        ```
+    """
     def _setup(
         self,
         seq_len: int,
@@ -19,13 +32,6 @@ class SimpleAverage(BaseSimpleAverage):
         decay_rate: float = 1.0,
         prep_type: str = 'none',
     ) -> None:
-        """
-        Args:
-            seq_len: Input sequence length (must be divisible by `period_len`)
-            pred_len: Prediction length
-            period_len: Length of one period (e.g., 24 for hourly data with daily periodicity)
-            decay_rate: Weight decay rate for older periods (default: 1.0, meaning equal weights)
-        """
         super()._setup(seq_len, pred_len, period_len, prep_type=prep_type)
         self.decay_rate = decay_rate
         w = torch.tensor(
@@ -41,13 +47,26 @@ class SimpleAverage(BaseSimpleAverage):
 
 
 class SimpleAverageVariableDecay(BaseSimpleAverage):
+    """
+    !!! tip "Example parameter configurations"
+        ```toml
+        [definitions.SimpleAverageVariableDecay]
+        cls_path = "nazuna.models.simple_average.SimpleAverageVariableDecay"
+        [definitions.SimpleAverageVariableDecay.params]
+        seq_len = 96  # task-dependent
+        pred_len = 24  # task-dependent
+        period_len = 24  # task-dependent
+        prep_type = "none"
+        ```
+    """
     def _setup(
         self,
         seq_len: int,
         pred_len: int,
         period_len: int,
+        prep_type: str = 'none',
     ) -> None:
-        super()._setup(seq_len, pred_len, period_len)
+        super()._setup(seq_len, pred_len, period_len, prep_type=prep_type)
         self.decay_rate = torch.nn.Parameter(torch.tensor(0.7))  # Initial decay rate
 
     def forward(self, x):
@@ -62,16 +81,30 @@ class SimpleAverageVariableDecay(BaseSimpleAverage):
 
 
 class SimpleAverageVariableDecayChannelwise(BaseSimpleAverage):
+    """
+    !!! tip "Example parameter configurations"
+        ```toml
+        [definitions.SimpleAverageVariableDecayChannelwise]
+        cls_path = "nazuna.models.simple_average.SimpleAverageVariableDecayChannelwise"
+        [definitions.SimpleAverageVariableDecayChannelwise.params]
+        seq_len = 96  # task-dependent
+        pred_len = 24  # task-dependent
+        period_len = 24  # task-dependent
+        n_channel = 7  # task-dependent
+        prep_type = "none"
+        ```
+    """
     def _setup(
         self,
         seq_len: int,
         pred_len: int,
         period_len: int,
         n_channel: int,
+        prep_type: str = 'none',
     ) -> None:
-        super()._setup(seq_len, pred_len, period_len)
+        super()._setup(seq_len, pred_len, period_len, prep_type=prep_type)
         self.n_channel = n_channel
-        self.decay_rate = torch.nn.Parameter(torch.full((n_channel,), 0.7))  # Initial decay rate per channel
+        self.decay_rate = torch.nn.Parameter(torch.full((n_channel,), 0.7))  # Initial decay rate
 
     def forward(self, x):
         batch_size, _, n_channel = x.shape  # batch_size, seq_len, n_channel
