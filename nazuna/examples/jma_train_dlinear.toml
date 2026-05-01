@@ -37,6 +37,9 @@ kernel_size = 25
 bias = true
 scaler_cls_path = "nazuna.models.common.IqrScaler"
 scaler_params = { stat_types = [ "qtile_full", "saved",] }
+use_lc = true
+lc_end_epoch = 20
+lc_rate = 0.9
 
 [definitions.BatchSamplerShuffle]
 cls_path = "nazuna.batch_samplers.BatchSamplerShuffle"
@@ -44,11 +47,11 @@ params = { batch_size = 32 }
 
 [definitions.Adam]
 cls_path = "torch.optim.Adam"
-params = { lr = 0.001 }
+params = { lr = 0.0001 }
 
 [definitions.CosineAnnealingLR]
 cls_path = "torch.optim.lr_scheduler.CosineAnnealingLR"
-params = { T_max = 5 }
+params = { T_max = 100 }
 
 # =============== tasks ===============
 [[tasks]]

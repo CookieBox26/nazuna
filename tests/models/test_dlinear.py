@@ -50,7 +50,7 @@ def test_get_loss(device, dummy_data):
     )
     criterion = MSE.create(device, n_channel=3, pred_len=2)
     loss = model.get_loss(batch, criterion)
-    assert loss.batch_mean.item() > 0.0
+    assert loss.each_sample.mean().item() > 0.0
 
 
 def test_channelwise_forward(device, dummy_data):
@@ -93,7 +93,7 @@ def test_channelwise_get_loss(device, dummy_data):
     )
     criterion = MSE.create(device, n_channel=3, pred_len=2)
     loss = model.get_loss(batch, criterion)
-    assert loss.batch_mean.item() > 0.0
+    assert loss.each_sample.mean().item() > 0.0
 
 
 def test_nlinear_forward(device, dummy_data):
@@ -131,7 +131,7 @@ def test_nlinear_get_loss(device, dummy_data):
     )
     criterion = MSE.create(device, n_channel=3, pred_len=2)
     loss = model.get_loss(batch, criterion)
-    assert loss.batch_mean.item() > 0.0
+    assert loss.each_sample.mean().item() > 0.0
 
 
 def test_nlinear_channelwise_forward(device, dummy_data):
@@ -171,4 +171,4 @@ def test_nlinear_channelwise_get_loss(device, dummy_data):
     )
     criterion = MSE.create(device, n_channel=3, pred_len=2)
     loss = model.get_loss(batch, criterion)
-    assert loss.batch_mean.item() > 0.0
+    assert loss.each_sample.mean().item() > 0.0

@@ -49,7 +49,7 @@ class ResidualModel(BasicBaseModel):
 
 
 class ResidualModel1(ResidualModel):
-    def get_loss(self, batch, criterion) -> TimeSeriesError:
+    def get_loss(self, batch, criterion, i_epoch=None) -> TimeSeriesError:
         output, info = self._get_output(batch, False)
         target = self.extract_true(batch)
         output = self.scaler.rescale(output, batch)
@@ -57,13 +57,13 @@ class ResidualModel1(ResidualModel):
 
         loss_model = criterion(output, target)
         loss_naive = criterion(naive, target)
-        loss_model_sc = loss_model.each_sample_channel  # batch_size, n_channel
-        loss_naive_sc = loss_naive.each_sample_channel  # batch_size, n_channel
-        penalty_sc = torch.clamp(loss_model_sc - loss_naive_sc, min=0.0)
+        loss_model_c = loss_model.each_channel  # batch_size, n_channel
+        loss_naive_c = loss_naive.each_channel  # batch_size, n_channel
+        penalty_c = torch.clamp(loss_model_c - loss_naive_c, min=0.0)
 
         alpha = 1.0
-        loss_sc = loss_model_sc + alpha * penalty_sc
-        loss_model.grad_target = loss_sc.mean()
+        loss_c = loss_model_c + alpha * penalty_c
+        loss_model.grad_target = loss_c.mean()
         return loss_model
 
 
@@ -104,7 +104,7 @@ class ResidualModel2(ResidualModel):
 
 
 class ResidualModel3(ResidualModel2):
-    def get_loss(self, batch, criterion) -> TimeSeriesError:
+    def get_loss(self, batch, criterion, i_epoch=None) -> TimeSeriesError:
         output, info = self._get_output(batch, False)
         target = self.extract_true(batch)
         output = self.scaler.rescale(output, batch)
@@ -112,11 +112,11 @@ class ResidualModel3(ResidualModel2):
 
         loss_model = criterion(output, target)
         loss_naive = criterion(naive, target)
-        loss_model_sc = loss_model.each_sample_channel  # batch_size, n_channel
-        loss_naive_sc = loss_naive.each_sample_channel  # batch_size, n_channel
-        penalty_sc = torch.clamp(loss_model_sc - loss_naive_sc, min=0.0)
+        loss_model_c = loss_model.each_channel  # batch_size, n_channel
+        loss_naive_c = loss_naive.each_channel  # batch_size, n_channel
+        penalty_c = torch.clamp(loss_model_c - loss_naive_c, min=0.0)
 
         alpha = 1.0
-        loss_sc = loss_model_sc + alpha * penalty_sc
-        loss_model.grad_target = loss_sc.mean()
+        loss_c = loss_model_c + alpha * penalty_c
+        loss_model.grad_target = loss_c.mean()
         return loss_model

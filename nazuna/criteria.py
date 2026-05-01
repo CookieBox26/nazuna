@@ -5,20 +5,14 @@ import torch
 
 @dataclasses.dataclass
 class TimeSeriesError:
-    batch_size: int
-    batch_mean: torch.Tensor
-    each_sample: torch.Tensor
-    each_sample_channel: torch.Tensor | None = None
+    each_sample: torch.Tensor  # (B,)
+    each_channel: torch.Tensor  # (B, C)
+    each_point: torch.Tensor | None = None  # (B, L, C)
     grad_target: torch.Tensor | None = None
     info: dict = dataclasses.field(default_factory=dict)
 
-    def batch_sum(self) -> float:
-        return self.each_sample.shape[0] * self.batch_mean.item()
-
-    def get_grad_target(self) -> torch.Tensor:
-        if self.grad_target is not None:
-            return self.grad_target
-        return self.batch_mean
+    def get_sum(self) -> float:
+        return self.each_sample.sum().item()
 
 
 class BaseError(torch.nn.Module, ABC):
@@ -97,14 +91,13 @@ class MSE(BaseError):
         return error ** 2
 
     def forward(self, pred, true):
-        error = self.get_error(pred, true)  # batch_size, pred_len, n_channel
-        error_of_each_sample_channel = torch.einsum('j,ijk->ik', (self.w_seq, error))
-        error_of_each_sample = torch.einsum('k,ik->i', (self.w_channel, error_of_each_sample_channel))
+        error_of_each_point = self.get_error(pred, true)  # (B, L, C)
+        error_of_each_channel = torch.einsum('j,ijk->ik', (self.w_seq, error_of_each_point))  # (B, C)
+        error_of_each_sample = torch.einsum('k,ik->i', (self.w_channel, error_of_each_channel))  # (B,)
         return TimeSeriesError(
-            true.shape[0],
-            error_of_each_sample.mean(),  # (scalar)
-            error_of_each_sample,  # batch_size
-            error_of_each_sample_channel,  # batch_size, n_channel
+            error_of_each_sample,  # (B,)
+            error_of_each_channel,  # (B, C)
+            error_of_each_point,  # (B, L, C)
         )
 
 
@@ -186,29 +179,24 @@ class ImprovementRate(BaseImprovement):
         Returns:
             TimeSeriesError: Aggregated improvement rates
         """
-        baseline_error = self.get_raw_error(baseline, true)  # (batch_size, pred_len, n_channel)
-        pred_error = self.get_raw_error(pred, true)  # (batch_size, pred_len, n_channel)
+        error_baseline = self.get_raw_error(baseline, true)  # (B, L, C)
+        error = self.get_raw_error(pred, true)  # (B, L, C)
 
-        # (batch_size, n_channel)
-        error_of_each_sample_channel_baseline = torch.einsum('j,ijk->ik', self.w_seq, baseline_error)
-        error_of_each_sample_channel = torch.einsum('j,ijk->ik', self.w_seq, pred_error)
+        error_of_each_channel_baseline = torch.einsum('j,ijk->ik', self.w_seq, error_baseline)  # (B, C)
+        error_of_each_channel = torch.einsum('j,ijk->ik', self.w_seq, error)  # (B, C)
+        imp_each_channel = 1 - (
+            error_of_each_channel / (error_of_each_channel_baseline + self.epsilon)
+        )  # (B, C)
 
-        improvement_each_sample_channel = 1 - (
-            error_of_each_sample_channel / (error_of_each_sample_channel_baseline + self.epsilon)
-        )
-
-        # (batch_size,)
-        improvement_each_sample = torch.einsum('k,ik->i', self.w_channel, improvement_each_sample_channel)
-
-        improvement_batch_mean = improvement_each_sample.mean()
+        imp_each_sample = torch.einsum('k,ik->i', self.w_channel, imp_each_channel)  # (B,)
 
         return TimeSeriesError(
-            batch_size=true.shape[0],
-            batch_mean=improvement_batch_mean,
-            each_sample=improvement_each_sample,
-            each_sample_channel=improvement_each_sample_channel,
+            imp_each_sample,
+            imp_each_channel,
+            None,
+            None,
             info={
-                "error_baseline": error_of_each_sample_channel_baseline,
-                "error_pred": error_of_each_sample_channel,
+                "error_baseline": error_of_each_channel_baseline,
+                "error_pred": error_of_each_channel,
             },
         )

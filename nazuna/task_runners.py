@@ -202,9 +202,9 @@ class EvalTaskRunner(BaseTaskRunner):
                 else:
                     baseline = None
                     loss = self.criterion(pred, true)
-                loss_total += loss.batch_sum()
-                if output_loss_per_channel and loss.each_sample_channel is not None:
-                    batch_channel_sum = loss.each_sample_channel.sum(dim=0)
+                loss_total += loss.get_sum()
+                if output_loss_per_channel and loss.each_channel is not None:
+                    batch_channel_sum = loss.each_channel.sum(dim=0)
                     if loss_per_channel_total is None:
                         loss_per_channel_total = batch_channel_sum
                     else:
@@ -224,11 +224,11 @@ class EvalTaskRunner(BaseTaskRunner):
                         loss_s = self.criterion(baseline_s, pred_s, true_s)
                     else:
                         loss_s = self.criterion(pred_s, true_s)
-                    loss_scaled_total += loss_s.batch_sum()
+                    loss_scaled_total += loss_s.get_sum()
                     if (output_loss_per_channel
-                            and loss_s.each_sample_channel is not None):
+                            and loss_s.each_channel is not None):
                         batch_channel_sum_s = \
-                            loss_s.each_sample_channel.sum(dim=0)
+                            loss_s.each_channel.sum(dim=0)
                         if loss_scaled_per_channel_total is None:
                             loss_scaled_per_channel_total = batch_channel_sum_s
                         else:
@@ -380,14 +380,14 @@ class TrainTaskRunner(EvalTaskRunner):
     def save_model(self, filename):
         torch.save(self.model.state_dict(), self.out_path / filename)
 
-    def train(self, i_epoch=-1):  # i_epoch is used for saving the model.
+    def train(self, i_epoch=-1):  # i_epoch is for model saving and the loss curriculum
         data_loader = self.data_loader_train
         loss_total = 0.0
         self.model.train()
         for i_batch, batch in enumerate(data_loader):
             self.optimizer.zero_grad()
-            loss = self.model.get_loss_and_backward(batch, self.criterion)
-            loss_total += loss.batch_sum()
+            loss = self.model.get_loss_and_backward(batch, self.criterion, i_epoch)
+            loss_total += loss.get_sum()
             if self.save_model_state_every_epoch and (i_epoch == 0):
                 self.save_model('model_state_ini.pth')
             self.optimizer.step()

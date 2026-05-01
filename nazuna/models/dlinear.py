@@ -30,6 +30,9 @@ class DLinear(BasicBaseModel):
         use_revin = false
         revin_affine = false
         revin_eps = 1e-5
+        use_lc = false
+        lc_end_epoch = 20
+        lc_rate = 0.9
         ```
     """
     def _setup(
@@ -44,11 +47,14 @@ class DLinear(BasicBaseModel):
         prep_type: str = 'none',
         use_revin: bool = False, revin_affine: bool = False, revin_eps: float = 1e-5,
         c_in: int | None = None,
+        use_lc: bool = False,
+        lc_end_epoch: int | None = None, lc_rate: float | None = None,
     ) -> None:
         super()._setup(
             seq_len, pred_len, scaler_cls, scaler_params, prep_type=prep_type,
             use_revin=use_revin, revin_eps=revin_eps,
             revin_affine=revin_affine, c_in=c_in,
+            use_lc=use_lc, lc_end_epoch=lc_end_epoch, lc_rate=lc_rate,
         )
         self.decomp = MovingAverageDecomp(kernel_size, n_moving_avg)
         self.Linear_Seasonal = torch.nn.Linear(seq_len, pred_len, bias=bias)
@@ -156,6 +162,9 @@ class NLinear(BasicBaseModel):
         use_revin = false
         revin_affine = false
         revin_eps = 1e-5
+        use_lc = false
+        lc_end_epoch = 20
+        lc_rate = 0.9
         ```
     """
     def _setup(
@@ -168,11 +177,14 @@ class NLinear(BasicBaseModel):
         prep_type: str = 'none',
         use_revin: bool = False, revin_affine: bool = False, revin_eps: float = 1e-5,
         c_in: int | None = None,
+        use_lc: bool = False,
+        lc_end_epoch: int | None = None, lc_rate: float | None = None,
     ) -> None:
         super()._setup(
             seq_len, pred_len, scaler_cls, scaler_params, prep_type=prep_type,
             use_revin=use_revin, revin_eps=revin_eps,
             revin_affine=revin_affine, c_in=c_in,
+            use_lc=use_lc, lc_end_epoch=lc_end_epoch, lc_rate=lc_rate,
         )
         self.Linear = torch.nn.Linear(seq_len, pred_len, bias=bias)
         w = 1.0 / seq_len

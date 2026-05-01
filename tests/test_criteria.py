@@ -22,12 +22,12 @@ def test_mse_loss(device):
     # ( 1^2 + 2^2 + 3^2 + 4^2 ) / 4 = 30 / 4 = 7.5
     # ( 2^2 + 4^2 + 6^2 + 8^2 ) / 4 = 120 / 4 = 30
     expected = torch.tensor([[7.5, 30., 7.5]], device=device)
-    assert torch.allclose(loss.each_sample_channel, expected)
+    assert torch.allclose(loss.each_channel, expected)
 
     # (7.5 + 30 + 7.5) / 3 = 15
     expected = torch.tensor([15.], device=device)
     assert torch.allclose(loss.each_sample, expected)
-    assert torch.allclose(loss.batch_mean, expected[0])
+    assert torch.allclose(loss.each_sample.mean(), expected[0])
 
     criterion = load_class('nazuna.criteria.MSE').create(device, n_channel=3, pred_len=2)
     loss = criterion(batch_0, batch_1)
@@ -35,7 +35,7 @@ def test_mse_loss(device):
     # ( 1^2 + 2^2 ) / 2 = 5 / 2 = 2.5
     # ( 2^2 + 4^2 ) / 2 = 20 / 2 = 10
     expected = torch.tensor([[2.5, 10., 2.5]], device=device)
-    assert torch.allclose(loss.each_sample_channel, expected)
+    assert torch.allclose(loss.each_channel, expected)
 
 
 def test_mse_loss_tolerance(device):
@@ -64,7 +64,7 @@ def test_mse_loss_tolerance(device):
     )
     loss = criterion(batch_0, batch_1)
     expected = torch.tensor([[7.25, 30., 7.25]], device=device)
-    assert torch.allclose(loss.each_sample_channel, expected)
+    assert torch.allclose(loss.each_channel, expected)
 
     # tolerance=0: default behavior (same as no tolerance)
     criterion = load_class('nazuna.criteria.MSE').create(
@@ -72,7 +72,7 @@ def test_mse_loss_tolerance(device):
     )
     loss = criterion(batch_0, batch_1)
     expected = torch.tensor([[7.5, 30., 7.5]], device=device)  # Same as original test
-    assert torch.allclose(loss.each_sample_channel, expected)
+    assert torch.allclose(loss.each_channel, expected)
 
 
 def test_mae_loss_tolerance(device):
@@ -101,7 +101,7 @@ def test_mae_loss_tolerance(device):
     )
     loss = criterion(batch_0, batch_1)
     expected = torch.tensor([[2.25, 5., 2.25]], device=device)
-    assert torch.allclose(loss.each_sample_channel, expected)
+    assert torch.allclose(loss.each_channel, expected)
 
     # tolerance=0: default behavior (same as no tolerance)
     # channel 0: (1 + 2 + 3 + 4) / 4 = 10 / 4 = 2.5
@@ -112,7 +112,7 @@ def test_mae_loss_tolerance(device):
     )
     loss = criterion(batch_0, batch_1)
     expected = torch.tensor([[2.5, 5., 2.5]], device=device)
-    assert torch.allclose(loss.each_sample_channel, expected)
+    assert torch.allclose(loss.each_channel, expected)
 
 
 def test_improvement_rate(device):
@@ -154,13 +154,13 @@ def test_improvement_rate(device):
     # channel 0: 1 - 7.5 / 30 = 1 - 0.25 = 0.75
     # channel 1: 1 - 30 / 120 = 1 - 0.25 = 0.75
     # channel 2: 1 - 7.5 / 30 = 1 - 0.25 = 0.75
-    expected_each_sample_channel = torch.tensor([[0.75, 0.75, 0.75]], device=device)
-    assert torch.allclose(result.each_sample_channel, expected_each_sample_channel)
+    expected_each_channel = torch.tensor([[0.75, 0.75, 0.75]], device=device)
+    assert torch.allclose(result.each_channel, expected_each_channel)
 
     # average over channels: (0.75 + 0.75 + 0.75) / 3 = 0.75
     expected_each_sample = torch.tensor([0.75], device=device)
     assert torch.allclose(result.each_sample, expected_each_sample)
-    assert torch.allclose(result.batch_mean, expected_each_sample[0])
+    assert torch.allclose(result.each_sample.mean(), expected_each_sample[0])
 
     # check info contains intermediate errors
     assert "error_baseline" in result.info
@@ -201,8 +201,8 @@ def test_improvement_rate_mae(device):
     # improvement rate per channel = 1 - pred_error / baseline_error
     # channel 0: 1 - 3 / 6 = 0.5
     # channel 1: 1 - 6 / 12 = 0.5
-    expected_each_sample_channel = torch.tensor([[0.5, 0.5]], device=device)
-    assert torch.allclose(result.each_sample_channel, expected_each_sample_channel)
+    expected_each_channel = torch.tensor([[0.5, 0.5]], device=device)
+    assert torch.allclose(result.each_channel, expected_each_channel)
 
     # average over channels: 0.5
     expected_each_sample = torch.tensor([0.5], device=device)
@@ -238,5 +238,5 @@ def test_improvement_rate_negative(device):
     # channel 1: (2^2 + 2^2) / 2 = 4
     #
     # improvement rate = 1 - 4 / 1 = -3 (negative = worse than baseline)
-    expected_each_sample_channel = torch.tensor([[-3., -3.]], device=device)
-    assert torch.allclose(result.each_sample_channel, expected_each_sample_channel)
+    expected_each_channel = torch.tensor([[-3., -3.]], device=device)
+    assert torch.allclose(result.each_channel, expected_each_channel)

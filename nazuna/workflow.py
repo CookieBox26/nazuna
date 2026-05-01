@@ -73,11 +73,13 @@ class Workflow:
             str(torch.device('cuda' if torch.cuda.is_available() else 'cpu'))
         assert self.tasks is not None
         self.out_paths = {}
+        self.task_names = []  # To use when analyzing results
         for i_task, _ in enumerate(self.tasks):
             self.tasks[i_task].setdefault('name', f'Task {i_task}')
             name = self.tasks[i_task]['name']
             if name in self.out_paths:
                 raise ValueError(f'Duplicate task name: {self.tasks[i_task]["name"]}')
+            self.task_names.append(name)
             out_dir_default = (self.out_path / type(self)._to_snake(name)).as_posix()
             self.tasks[i_task].setdefault('out_dir', out_dir_default)
             self.out_paths[name] = Path(self.tasks[i_task]['out_dir'])
@@ -149,19 +151,20 @@ class Workflow:
         assert [field.name for field in dataclasses.fields(self)] == \
             ['out_dir', 'exist_ok', 'data', 'device', 'definitions', 'tasks'], \
             'Update the custom TOML stringification when fields are changed.'
-        header = {
-            'out_dir': self.out_dir,
-            'exist_ok': self.exist_ok,
-            'device': self.device,
-        }
+        header = {'out_dir': self.out_dir, 'exist_ok': self.exist_ok, 'device': self.device}
         toml_str = toml.dumps(header) + '\n'
         toml_str += '# =============== data ===============\n'
         toml_str += toml.dumps({'data': self.data}) + '\n'
         if self.definitions:
             toml_str += '# =============== definitions ===============\n'
+            toml_str += '[definitions]\n'
             for k, v in self.definitions.items():
-                s = toml.dumps({'definitions': {k: v}}).replace('\n\n', '\n')
-                toml_str += s + '\n'
+                if not isinstance(v, dict):
+                    toml_str += toml.dumps({k: v})
+            toml_str += '\n'
+            for k, v in self.definitions.items():
+                if isinstance(v, dict):
+                    toml_str += toml.dumps({'definitions': {k: v}}).replace('\n\n', '\n') + '\n'
         toml_str += '# =============== tasks ===============\n'
         for i_task, task in enumerate(self.tasks):
             toml_str += f'# ------------- task {i_task} -------------\n'
@@ -205,6 +208,7 @@ class WorkflowTemplateResolver:
         'train_with_baseline',
         'train_with_baseline_multiseeds',
         'train_with_baseline_multimodels',
+        'train_with_baseline_multiparams',
     ])
 
     @classmethod
@@ -222,18 +226,17 @@ class WorkflowTemplateResolver:
         return cls.update(task, d, keys, rename)
 
     @classmethod
-    def get_task_pilot(cls, d, i_trial=0):
+    def get_task_pilot(cls, d, i_trial=0, seed=0):
         task = {'task_type': 'train', 'name': f'Pilot {i_trial}', 'early_stop': True}
         keys = ['data_range_train_pilot', 'data_range_eval_pilot', 'criterion'] + \
-            ['model', 'batch_sampler', 'optimizer', 'lr_scheduler', 'n_epoch']
+            ['model', 'batch_sampler', 'optimizer', 'lr_scheduler', 'n_epoch', 'patience']
         rename = {f'data_range_{t}_pilot': f'data_range_{t}' for t in ['train', 'eval']}
         return cls.update(task, d, keys, rename)
 
     @classmethod
-    def get_task_train(cls, d, i_trial=0, seed=0, i_trial_pilot=None):
-        i_trial_pilot = i_trial_pilot if (i_trial_pilot is not None) else i_trial
+    def get_task_train(cls, d, i_trial=0, seed=0):
         task = {'task_type': 'train', 'name': f'Train {i_trial}'}
-        task['n_epoch'] = {'task_name': f'Pilot {i_trial_pilot}'}
+        task['n_epoch'] = {'task_name': f'Pilot {i_trial}'}
         task['seed'] = seed
         keys = ['data_range_train', 'criterion'] + \
             ['model', 'batch_sampler', 'optimizer', 'lr_scheduler']
@@ -266,10 +269,11 @@ class WorkflowTemplateResolver:
 
     @classmethod
     def get_tasks_train_with_baseline_multiseeds(cls, d):
-        tasks = [cls.get_task_eval_baseline(d), cls.get_task_pilot(d)]
+        tasks = [cls.get_task_eval_baseline(d)]
         for i_trial, seed in enumerate(d['seeds']):
             tasks += [
-                cls.get_task_train(d, i_trial, seed, i_trial_pilot=0),
+                cls.get_task_pilot(d, i_trial, seed),
+                cls.get_task_train(d, i_trial, seed),
                 cls.get_task_eval(d, i_trial),
                 cls.get_task_eval_imprate(d, i_trial),
             ]

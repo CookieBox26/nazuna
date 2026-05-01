@@ -48,7 +48,7 @@ def test_get_loss(device, dummy_data):
     )
     criterion = MSE.create(device, n_channel=3, pred_len=4)
     loss = model.get_loss(batch, criterion)
-    assert loss.batch_mean.item() > 0.0
+    assert loss.each_sample.mean().item() > 0.0
 
 
 def test_residual_model2_forward(device, dummy_data):
@@ -156,5 +156,5 @@ def test_residual_model3_get_loss_and_backward(device, dummy_data):
     batch = _make_batch_for_residual3(device, dummy_data, n_channel)
     criterion = MSE.create(device, n_channel=n_channel, pred_len=4)
     loss = model.get_loss_and_backward(batch, criterion)
-    assert loss.batch_mean.item() > 0.0
+    assert loss.each_sample.mean().item() > 0.0
     assert model.w_naive.grad is not None

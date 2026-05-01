@@ -79,13 +79,13 @@ class BaseModel(torch.nn.Module, ABC):
         """
         pass
 
-    def get_loss_and_backward(self, batch, criterion) -> TimeSeriesError:
+    def get_loss_and_backward(self, batch, criterion, i_epoch=None) -> TimeSeriesError:
         """
         Compute loss, set gradients based on target (default: batch mean),
         and return the loss.
         """
-        loss = self.get_loss(batch, criterion)
-        loss.get_grad_target().backward()
+        loss = self.get_loss(batch, criterion, i_epoch)
+        loss.grad_target.backward()
         return loss
 
     @classmethod
@@ -112,14 +112,14 @@ class BasicBaseModel(BaseModel):
     Base class for models that have seq_len and pred_len attributes
     and predict an output sequence from an input sequence.
     """
-    # preprocessing type (applied after scaling)
-    PrepType = Enum('PrepType', ['none', 'diff'])
+    PrepType = Enum('PrepType', ['none', 'diff'])  # preprocessing type (applied after scaling)
 
     def _setup(
         self, seq_len, pred_len,
         scaler_cls=None, scaler_params=None, rescale_loss=True,
         prep_type: str = 'none',
         use_revin=False, revin_eps=1e-5, revin_affine=False, c_in=None,
+        use_lc=False, lc_end_epoch=20, lc_rate=0.9,  # loss curriculum
     ):
         self.seq_len = seq_len
         self.pred_len = pred_len
@@ -134,6 +134,9 @@ class BasicBaseModel(BaseModel):
         self.use_revin = use_revin
         if self.use_revin:
             self.revin = RevIN(eps=revin_eps, affine=revin_affine, c_in=c_in)
+        self.use_lc = use_lc
+        self.lc_end_epoch = lc_end_epoch
+        self.lc_rate = lc_rate
 
     def extract_true(self, batch):
         return batch.data_future[:, :self.pred_len]
@@ -168,18 +171,26 @@ class BasicBaseModel(BaseModel):
     def predict(self, batch):
         return self._get_output(batch, (self.scaler is not None))
 
-    def _get_loss_impl(self, batch, criterion, rescale_loss) -> TimeSeriesError:
+    def get_loss(self, batch, criterion, i_epoch=None) -> TimeSeriesError:
         output, info = self._get_output(batch, False)
         target = self.extract_true(batch)
         if self.scaler:
-            if rescale_loss:  # compute loss in original space
+            if self.rescale_loss:  # compute loss in original space
                 output = self.scaler.rescale(output, batch)
             else:  # compute loss in scaled space
                 target = self.scaler.scale(target, batch)
 
         loss = criterion(output, target)
+        if self.use_lc and i_epoch < self.lc_end_epoch:
+            d = self.lc_end_epoch - i_epoch
+            r = (criterion.decay_rate or 1.0) * (self.lc_rate ** d)
+            idx = torch.arange(self.pred_len, dtype=torch.float, device=self.device)
+            w = torch.pow(torch.tensor(r, dtype=torch.float, device=self.device), idx)
+            w_seq = w / w.sum()
+            error_channel = torch.einsum('j,ijk->ik', (w_seq, loss.each_point))
+            error_sample = torch.einsum('k,ik->i', (criterion.w_channel, error_channel))
+            loss.grad_target = error_sample.mean()
+        else:
+            loss.grad_target = loss.each_sample.mean()
         loss.info.update(info)
         return loss
-
-    def get_loss(self, batch, criterion) -> TimeSeriesError:
-        return self._get_loss_impl(batch, criterion, self.rescale_loss)

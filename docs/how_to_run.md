@@ -24,7 +24,7 @@ The following options are also available:
 
 Specify the arguments for the [`nazuna.workflow.Workflow`](reference_workflow.md) class and the arguments for each [task runner class](reference_task_runners.md).
 
-### Config File Examples
+### Examples of Config Files
 
 #### Example 1 (Defining tasks explicitly)
 
@@ -158,3 +158,12 @@ n_epoch = "NEpoch"
 ```
 
 Additional templates are also available for running the above scenario with multiple random seeds or multiple model configurations (documentation in progress).
+
+
+### Examples of Learning Rate Scheduler Definitions
+
+```toml
+[definitions.CosineAnnealingLR]
+cls_path = "torch.optim.lr_scheduler.CosineAnnealingLR"
+params = { T_max = 20 }
+```

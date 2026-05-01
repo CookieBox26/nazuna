@@ -209,6 +209,9 @@ class Autoformer(BasicBaseModel):
         use_revin = false
         revin_affine = false
         revin_eps = 1e-5
+        use_lc = false
+        lc_end_epoch = 20
+        lc_rate = 0.9
         ```
     """
     def _setup(
@@ -225,11 +228,14 @@ class Autoformer(BasicBaseModel):
         scaler_params: dict | None = {'stat_types': ('qtile_full', 'saved')},
         prep_type: str = 'none',
         use_revin: bool = False, revin_affine: bool = False, revin_eps: float = 1e-5,
+        use_lc: bool = False,
+        lc_end_epoch: int | None = None, lc_rate: float | None = None,
     ) -> None:
         super()._setup(
             seq_len, pred_len, scaler_cls, scaler_params, prep_type=prep_type,
             use_revin=use_revin, revin_eps=revin_eps,
             revin_affine=revin_affine, c_in=c_in,
+            use_lc=use_lc, lc_end_epoch=lc_end_epoch, lc_rate=lc_rate,
         )
         c_out = c_in
         self.res_attention = res_attention

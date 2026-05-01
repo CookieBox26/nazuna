@@ -1,4 +1,5 @@
 from nazuna.workflow import Workflow, load_config_from_path, run
+import toml
 import pytest
 
 
@@ -95,6 +96,7 @@ batch_sampler = "BatchSamplerShuffle"
 optimizer = "Adam"
 lr_scheduler = "CosineAnnealingLR"
 n_epoch = 5
+patience = 5
 '''
 
 
@@ -114,6 +116,7 @@ batch_sampler = "BatchSamplerShuffle"
 optimizer = "Adam"
 lr_scheduler = "CosineAnnealingLR"
 n_epoch = 5
+patience = 5
 seeds = [ 0, 1, 2,]
 '''
 
@@ -122,6 +125,7 @@ def validate_outputs(out_dir):
     assert out_dir.is_dir()
     assert (out_dir / 'config.toml').is_file()
     assert (out_dir / 'report.md').is_file()
+    return toml.loads((out_dir / 'config.toml').read_text(encoding='utf8'))
 
 
 def test_run_tasks_0(tmp_path):
@@ -146,7 +150,12 @@ def test_run_template_train_with_baseline_multiseeds(tmp_path):
     conf = f'out_dir = "{out_dir.as_posix()}"\n' + premise + \
         template_train_with_baseline_multiseeds
     run(conf)
-    validate_outputs(out_dir)
+    conf = validate_outputs(out_dir)
+    for task in conf['tasks']:
+        if task['name'] == 'Train 1':
+            assert task['n_epoch']['task_name'] == 'Pilot 1'
+        if task['name'] == 'Train 2':
+            assert task['n_epoch']['task_name'] == 'Pilot 2'
 
 
 def test_load_config_from_path(tmp_path):

@@ -102,4 +102,4 @@ def test_get_loss(device, dummy_data, training, independent_heads, prep_type):
         model.scaler.q3s = torch.tensor([[[20., 20., 20.]]], device=device)
 
     loss = model.get_loss(batch, criterion)
-    assert loss.batch_mean.item() > 0.0
+    assert loss.each_sample.mean().item() > 0.0
