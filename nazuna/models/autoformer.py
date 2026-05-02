@@ -204,6 +204,7 @@ class Autoformer(BasicBaseModel):
         res_attention = false
         approx_durning_training = true  # whether to approximate AutoCorrelation during training
         independent_heads = false  # whether to pick top-k lags per head
+        use_last_value_as_trend_init = false
         scaler_cls_path = "nazuna.models.common.IqrScaler"
         scaler_params = { "stat_types" = [ "qtile_full", "saved",] }
         prep_type = "none"
@@ -226,6 +227,7 @@ class Autoformer(BasicBaseModel):
         dropout_ff: tuple[float, float] = (0.0, 0.2), res_attention: bool = False,
         approx_durning_training: bool = True,
         independent_heads: bool = False,
+        use_last_value_as_trend_init: bool = False,
         scaler_cls: type | None = IqrScaler,
         scaler_params: dict | None = {'stat_types': ('qtile_full', 'saved')},
         prep_type: str = 'none',
@@ -240,6 +242,7 @@ class Autoformer(BasicBaseModel):
             use_lc=use_lc, lc_end_epoch=lc_end_epoch, lc_rate=lc_rate,
         )
         c_out = c_in
+        self.use_last_value_as_trend_init = use_last_value_as_trend_init
         self.res_attention = res_attention
         self.label_len = label_len
         if self.label_len is None:
@@ -330,7 +333,11 @@ class Autoformer(BasicBaseModel):
         ], dim=1)
         trend_init = torch.cat([
             trend_init[:, -self.label_len:, :],
-            x_enc.mean(dim=1, keepdim=True).repeat(1, self.pred_len, 1),
+            (
+                trend_init[:, -1:, :].repeat(1, self.pred_len, 1)
+                if self.use_last_value_as_trend_init
+                else x_enc.mean(dim=1, keepdim=True).repeat(1, self.pred_len, 1)
+            ),
         ], dim=1)
         dec_h = self.dec_in_proj(seasonal_init)
         if self.use_time_features:

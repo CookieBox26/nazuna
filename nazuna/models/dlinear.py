@@ -117,8 +117,8 @@ class DLinearChannelwise(BasicBaseModel):
         self.seasonal_weight = torch.nn.Parameter(torch.empty(c_in, seq_len, pred_len))
         self.trend_weight = torch.nn.Parameter(torch.empty(c_in, seq_len, pred_len))
         if bias:
-            self.seasonal_bias = torch.nn.Parameter(torch.zeros(c_in, pred_len))
-            self.trend_bias = torch.nn.Parameter(torch.zeros(c_in, pred_len))
+            self.seasonal_bias = torch.nn.Parameter(torch.zeros(pred_len, c_in))
+            self.trend_bias = torch.nn.Parameter(torch.zeros(pred_len, c_in))
         else:
             self.seasonal_bias = None
             self.trend_bias = None
@@ -130,19 +130,14 @@ class DLinearChannelwise(BasicBaseModel):
         # x: [Batch, seq_len, n_channel]
         seasonal_init, trend_init = self.decomp(x)
 
-        # [Batch, n_channel, seq_len]
-        seasonal_init = seasonal_init.permute(0, 2, 1)
-        trend_init = trend_init.permute(0, 2, 1)
-
-        # einsum: (B, C, S) x (C, S, P) -> (B, C, P)
-        seasonal_output = torch.einsum('bcs,csp->bcp', seasonal_init, self.seasonal_weight)
-        trend_output = torch.einsum('bcs,csp->bcp', trend_init, self.trend_weight)
+        # einsum: (B, S, C) x (C, S, P) -> (B, P, C)
+        seasonal_output = torch.einsum('bsc,csp->bpc', seasonal_init, self.seasonal_weight)
+        trend_output = torch.einsum('bsc,csp->bpc', trend_init, self.trend_weight)
         if self.seasonal_bias is not None:
             seasonal_output = seasonal_output + self.seasonal_bias
             trend_output = trend_output + self.trend_bias
 
         x = seasonal_output + trend_output
-        x = x.permute(0, 2, 1)  # to [Batch, pred_len, n_channel]
         return x, {'seasonal': seasonal_output, 'trend': trend_output}
 
 
@@ -238,7 +233,7 @@ class NLinearChannelwise(BasicBaseModel):
         )
         self.weight = torch.nn.Parameter(torch.empty(c_in, seq_len, pred_len))
         if bias:
-            self.bias = torch.nn.Parameter(torch.zeros(c_in, pred_len))
+            self.bias = torch.nn.Parameter(torch.zeros(pred_len, c_in))
         else:
             self.bias = None
         w = 1.0 / seq_len
@@ -248,11 +243,64 @@ class NLinearChannelwise(BasicBaseModel):
         # x: [B, L, C]
         x_last = x[:, -1:, :]  # [B, 1, C]
         x = x - x_last
-        x = x.permute(0, 2, 1)  # [B, C, L]
-        # einsum: (B, C, S) x (C, S, P) -> (B, C, P)
-        x = torch.einsum('bcs,csp->bcp', x, self.weight)
+        # einsum: (B, S, C) x (C, S, P) -> (B, P, C)
+        y = torch.einsum('bsc,csp->bpc', x, self.weight)
         if self.bias is not None:
-            x = x + self.bias
-        x = x.permute(0, 2, 1)  # [B, T, C]
-        x = x + x_last
-        return x, {}
+            y = y + self.bias
+        return y + x_last, {}
+
+
+class NLinearChannelCross(BasicBaseModel):
+    """
+    !!! tip "Example parameter configurations"
+        ```toml
+        [definitions.NLinearChannelCross]
+        cls_path = "nazuna.models.dlinear.NLinearChannelCross"
+        [definitions.NLinearChannelCross.params]
+        seq_len = 96  # task-dependent
+        pred_len = 24  # task-dependent
+        c_in = 7  # task-dependent
+        bias = true
+        scaler_cls_path = "nazuna.models.common.IqrScaler"
+        scaler_params = { "stat_types" = [ "qtile_full", "saved",] }
+        prep_type = "none"
+        use_revin = false
+        revin_affine = false
+        revin_eps = 1e-5
+        ```
+    """
+    def _setup(
+        self,
+        seq_len: int,
+        pred_len: int,
+        c_in: int,
+        bias: bool,
+        scaler_cls: type | None = IqrScaler,
+        scaler_params: dict | None = {'stat_types': ('qtile_full', 'saved')},
+        prep_type: str = 'none',
+        use_revin: bool = False, revin_affine: bool = False, revin_eps: float = 1e-5,
+    ) -> None:
+        super()._setup(
+            seq_len, pred_len, scaler_cls, scaler_params, prep_type=prep_type,
+            use_revin=use_revin, revin_eps=revin_eps,
+            revin_affine=revin_affine, c_in=c_in,
+        )
+        self.weight = torch.nn.Parameter(
+            torch.empty(c_in, c_in, seq_len, pred_len)
+        )
+        if bias:
+            self.bias = torch.nn.Parameter(torch.zeros(pred_len, c_in))
+        else:
+            self.bias = None
+        w = 1.0 / (seq_len * c_in)
+        self.weight.data.fill_(w)
+
+    def forward(self, x):
+        # x: [B, L, C]
+        x_last = x[:, -1:, :]  # [B, 1, C]
+        x = x - x_last
+        # einsum: (B, S, C) x (C, C, S, P) -> (B, P, C)
+        y = torch.einsum('bsc,ocsp->bpo', x, self.weight)
+        if self.bias is not None:
+            y = y + self.bias
+        return y + x_last, {}
