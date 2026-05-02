@@ -187,6 +187,7 @@ class Autoformer(BasicBaseModel):
         pred_len = 24  # task-dependent
         c_in = 10  # task-dependent
         label_len = 48  # decoder input is label_len + pred_len (defaults to seq_len // 2)
+        use_time_features = true
         freq = "hour"  # for time feature extraction
         e_layers = 2  # number of encoder layers
         d_layers = 1  # number of decoder layers
@@ -216,7 +217,8 @@ class Autoformer(BasicBaseModel):
     """
     def _setup(
         self, *, seq_len: int, pred_len: int, c_in: int, label_len: int = None,
-        freq: str = 'hour', e_layers: int = 2, d_layers: int = 1,
+        use_time_features: bool = True, freq: str = 'hour',
+        e_layers: int = 2, d_layers: int = 1,
         d_model: int = 512, n_heads: int = 8, d_ff: int = 2048,
         decomp_kernel: int = 25, n_moving_avg: int = 1,
         topk_factor: float = 3.0, dropout_emb: float = 0.1,
@@ -245,8 +247,10 @@ class Autoformer(BasicBaseModel):
 
         self.enc_in_proj = ConvEmb(c_in, d_model, kernel_size=3)
         self.dec_in_proj = ConvEmb(c_in, d_model, kernel_size=3)
-        self.enc_tfe = TimeFeatureEmbedding(self.device, freq, d_model)
-        self.dec_tfe = TimeFeatureEmbedding(self.device, freq, d_model)
+        self.use_time_features = use_time_features
+        if self.use_time_features:
+            self.enc_tfe = TimeFeatureEmbedding(self.device, freq, d_model)
+            self.dec_tfe = TimeFeatureEmbedding(self.device, freq, d_model)
         self.decomp = MovingAverageDecomp(decomp_kernel, n_moving_avg)
         self.dropout_emb = torch.nn.Dropout(dropout_emb)
 
@@ -291,6 +295,8 @@ class Autoformer(BasicBaseModel):
 
     def _extract_input(self, batch):
         x_enc, prep_info = super()._extract_input(batch)
+        if not self.use_time_features:
+            return (x_enc, None, None), prep_info
         tsta = np.asarray(batch.tsta[:, -self.seq_len:])
         tsta_dec = np.concatenate([
             tsta[:, -self.label_len:],
@@ -305,7 +311,9 @@ class Autoformer(BasicBaseModel):
         B, L, C = x_enc.shape
         dtype = x_enc.dtype
 
-        enc_h = self.enc_in_proj(x_enc) + self.enc_tfe(x_mark_enc)
+        enc_h = self.enc_in_proj(x_enc)
+        if self.use_time_features:
+            enc_h = enc_h + self.enc_tfe(x_mark_enc)
         enc_h = self.dropout_emb(enc_h)
 
         # Encoder
@@ -324,7 +332,9 @@ class Autoformer(BasicBaseModel):
             trend_init[:, -self.label_len:, :],
             x_enc.mean(dim=1, keepdim=True).repeat(1, self.pred_len, 1),
         ], dim=1)
-        dec_h = self.dec_in_proj(seasonal_init) + self.dec_tfe(x_mark_dec)
+        dec_h = self.dec_in_proj(seasonal_init)
+        if self.use_time_features:
+            dec_h = dec_h + self.dec_tfe(x_mark_dec)
         dec_h = self.dropout_emb(dec_h)
 
         # Decoder

@@ -49,12 +49,17 @@ def test_ac_lagged_aggregation_approx(independent_heads, mean_corr):
 @pytest.mark.parametrize('independent_heads', [False, True])
 @pytest.mark.parametrize('training', [True, False])
 @pytest.mark.parametrize('prep_type', ['none', 'diff'])
-def test_forward(device, dummy_data, training, independent_heads, prep_type):
+@pytest.mark.parametrize('use_time_features', [True, False])
+def test_forward(
+    device, dummy_data, training, independent_heads, prep_type,
+    use_time_features,
+):
     model = Autoformer.create(
         device=device, seq_len=16, pred_len=4, c_in=3,
         d_model=8, n_heads=2, d_ff=32, decomp_kernel=5,
         independent_heads=independent_heads,
         prep_type=prep_type,
+        use_time_features=use_time_features,
     )
     set_training(model, training)
 
@@ -69,7 +74,11 @@ def test_forward(device, dummy_data, training, independent_heads, prep_type):
 @pytest.mark.parametrize('independent_heads', [False, True])
 @pytest.mark.parametrize('training', [True, False])
 @pytest.mark.parametrize('prep_type', ['none', 'diff'])
-def test_get_loss(device, dummy_data, training, independent_heads, prep_type):
+@pytest.mark.parametrize('use_time_features', [True, False])
+def test_get_loss(
+    device, dummy_data, training, independent_heads, prep_type,
+    use_time_features,
+):
     seq_len_input = 16 + (0 if (prep_type == 'none') else 1)
     tsta = np.array([[
         np.datetime64('2025-01-01') + np.timedelta64(i, 'D')
@@ -94,6 +103,7 @@ def test_get_loss(device, dummy_data, training, independent_heads, prep_type):
         d_model=8, n_heads=2, d_ff=32, decomp_kernel=5,
         independent_heads=independent_heads,
         prep_type=prep_type,
+        use_time_features=use_time_features,
     )
     set_training(model, training)
     if not training:
