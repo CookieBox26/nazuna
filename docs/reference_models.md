@@ -32,3 +32,8 @@
 
 ::: nazuna.models.itransformer.iTransformer
 
+
+## Gateformer
+
+::: nazuna.models.gateformer.Gateformer
+

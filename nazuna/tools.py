@@ -47,14 +47,22 @@ class WorkflowResult(Workflow):
         conf_dict['exist_ok'] = True
         for task in conf_dict['tasks']:
             task['exist_ok'] = True
-        return cls(**conf_dict)
+        obj = cls(**conf_dict)
+        obj.rename = None
+        return obj
 
     def get_conf_and_result(self, task_name, as_sn=False):
         if task_name not in self.task_names:
             return None if as_sn else (None, None)
         i_task = self.task_names.index(task_name)
         _, conf = self.parse_task_runner_config(i_task)
-        result_path = self.out_paths[task_name] / 'result.toml'
+        out_path = self.out_paths[task_name]
+        if self.rename is not None:
+            out_path = out_path.as_posix()
+            for k, v in self.rename.items():
+                out_path = out_path.replace(k, v)
+            out_path = Path(out_path)
+        result_path = out_path / 'result.toml'
         result = toml.loads(result_path.read_text(encoding='utf8'))
         if as_sn:
             return types.SimpleNamespace(conf=conf, result=result)
