@@ -3,6 +3,13 @@ import toml
 import pytest
 
 
+def validate_outputs(out_dir):
+    assert out_dir.is_dir()
+    assert (out_dir / 'config.toml').is_file()
+    assert (out_dir / 'report.md').is_file()
+    return toml.loads((out_dir / 'config.toml').read_text(encoding='utf8'))
+
+
 premise = '''
 exist_ok = true
 
@@ -19,6 +26,10 @@ white_list = [ "temp_avg_nagoya", "temp_avg_fukuoka",]
 cls_path = "nazuna.criteria.MSE"
 params = { n_channel = 2, pred_len = 7 }
 
+[definitions.MAE]
+cls_path = "nazuna.criteria.MAE"
+params = { n_channel = 2, pred_len = 7 }
+
 [definitions.ImprovementRate]
 cls_path = "nazuna.criteria.ImprovementRate"
 params = { n_channel = 2, pred_len = 7, error_type = "mse" }
@@ -31,17 +42,29 @@ params = { seq_len = 28, pred_len = 7, period_len = 7 }
 cls_path = "nazuna.models.simple_average.SimpleAverageVariableDecay"
 params = { seq_len = 28, pred_len = 7, period_len = 7 }
 
-[definitions.BatchSamplerShuffle]
+[definitions.SimpleAverageVariableDecayChannelwise]
+cls_path = "nazuna.models.simple_average.SimpleAverageVariableDecayChannelwise"
+params = { seq_len = 28, pred_len = 7, period_len = 7, n_channel = 2 }
+
+[definitions.BS]
 cls_path = "nazuna.batch_samplers.BatchSamplerShuffle"
 params = { batch_size = 32 }
 
+[definitions.BS64]
+cls_path = "nazuna.batch_samplers.BatchSamplerShuffle"
+params = { batch_size = 64 }
+
 [definitions.Adam]
 cls_path = "torch.optim.Adam"
-params = { lr = 0.001 }
+params = { lr = 0.0001 }
 
 [definitions.CosineAnnealingLR]
 cls_path = "torch.optim.lr_scheduler.CosineAnnealingLR"
 params = { T_max = 5 }
+
+[definitions.ExponentialLR]
+cls_path = "torch.optim.lr_scheduler.ExponentialLR"
+params = { gamma = 0.95 }
 '''
 
 
@@ -61,7 +84,7 @@ data_range_train = [ 0.0, 0.6,]
 data_range_eval = [ 0.6, 0.8,]
 criterion = "MSE"
 model = "SimpleAverageVariableDecay"
-batch_sampler = "BatchSamplerShuffle"
+batch_sampler = "BS"
 optimizer = "Adam"
 lr_scheduler = "CosineAnnealingLR"
 n_epoch = 5
@@ -73,59 +96,11 @@ name = "Train"
 data_range_train = [ 0.0, 0.8,]
 criterion = "MSE"
 model = "SimpleAverageVariableDecay"
-batch_sampler = "BatchSamplerShuffle"
+batch_sampler = "BS"
 optimizer = "Adam"
 lr_scheduler = "CosineAnnealingLR"
 n_epoch = { task_name = "Pilot" }
 '''
-
-
-template_train_with_baseline = '''
-# =============== template ===============
-[template]
-template_type = "train_with_baseline"
-criterion = "MSE"
-criterion_imprate = "ImprovementRate"
-baseline_model = "SimpleAverage"
-model = "SimpleAverageVariableDecay"
-data_range_train = [ 0.0, 0.8,]
-data_range_eval = [ 0.8, 1.0,]
-data_range_train_pilot = [ 0.0, 0.6,]
-data_range_eval_pilot = [ 0.6, 0.8,]
-batch_sampler = "BatchSamplerShuffle"
-optimizer = "Adam"
-lr_scheduler = "CosineAnnealingLR"
-n_epoch = 5
-patience = 5
-'''
-
-
-template_train_with_baseline_multiseeds = '''
-# =============== template ===============
-[template]
-template_type = "train_with_baseline_multiseeds"
-criterion = "MSE"
-criterion_imprate = "ImprovementRate"
-baseline_model = "SimpleAverage"
-model = "SimpleAverageVariableDecay"
-data_range_train = [ 0.0, 0.8,]
-data_range_eval = [ 0.8, 1.0,]
-data_range_train_pilot = [ 0.0, 0.6,]
-data_range_eval_pilot = [ 0.6, 0.8,]
-batch_sampler = "BatchSamplerShuffle"
-optimizer = "Adam"
-lr_scheduler = "CosineAnnealingLR"
-n_epoch = 5
-patience = 5
-seeds = [ 0, 1, 2,]
-'''
-
-
-def validate_outputs(out_dir):
-    assert out_dir.is_dir()
-    assert (out_dir / 'config.toml').is_file()
-    assert (out_dir / 'report.md').is_file()
-    return toml.loads((out_dir / 'config.toml').read_text(encoding='utf8'))
 
 
 def test_run_tasks_0(tmp_path):
@@ -133,6 +108,28 @@ def test_run_tasks_0(tmp_path):
     conf = f'out_dir = "{out_dir.as_posix()}"\n' + premise + tasks_0
     run(conf)
     validate_outputs(out_dir)
+
+
+template_train_with_baseline = '''
+# =============== template ===============
+[template]
+template_type = "train_with_baseline"
+criterion_target = "MSE"
+criterion_eval = "MSE"
+criterion_imprate = "ImprovementRate"
+criteria_additional = [ "MAE",]
+baseline_model = "SimpleAverage"
+model = "SimpleAverageVariableDecay"
+data_range_train = [ 0.0, 0.8,]
+data_range_eval = [ 0.8, 1.0,]
+data_range_train_pilot = [ 0.0, 0.6,]
+data_range_eval_pilot = [ 0.6, 0.8,]
+batch_sampler = "BS"
+optimizer = "Adam"
+lr_scheduler = "CosineAnnealingLR"
+n_epoch = 5
+patience = 5
+'''
 
 
 @pytest.mark.slow
@@ -144,6 +141,28 @@ def test_run_template_train_with_baseline(tmp_path):
     validate_outputs(out_dir)
 
 
+template_train_with_baseline_multiseeds = '''
+# =============== template ===============
+[template]
+template_type = "train_with_baseline_multiseeds"
+criterion_target = "MSE"
+criterion_eval = "MSE"
+criterion_imprate = "ImprovementRate"
+baseline_model = "SimpleAverage"
+model = "SimpleAverageVariableDecay"
+data_range_train = [ 0.0, 0.8,]
+data_range_eval = [ 0.8, 1.0,]
+data_range_train_pilot = [ 0.0, 0.6,]
+data_range_eval_pilot = [ 0.6, 0.8,]
+batch_sampler = "BS"
+optimizer = "Adam"
+lr_scheduler = "CosineAnnealingLR"
+n_epoch = 5
+patience = 5
+seeds = [ 0, 1, 2,]
+'''
+
+
 @pytest.mark.slow
 def test_run_template_train_with_baseline_multiseeds(tmp_path):
     out_dir = tmp_path / 'template_train_with_baseline_multiseeds'
@@ -151,11 +170,88 @@ def test_run_template_train_with_baseline_multiseeds(tmp_path):
         template_train_with_baseline_multiseeds
     run(conf)
     conf = validate_outputs(out_dir)
-    for task in conf['tasks']:
-        if task['name'] == 'Train 1':
-            assert task['n_epoch']['task_name'] == 'Pilot 1'
-        if task['name'] == 'Train 2':
-            assert task['n_epoch']['task_name'] == 'Pilot 2'
+    assert conf['tasks'][1 + 1 * 4 + 1]['name'] == 'Train 1'
+    assert conf['tasks'][1 + 1 * 4 + 1]['seed'] == 1
+    assert conf['tasks'][1 + 1 * 4 + 1]['n_epoch']['task_name'] == 'Pilot 1'
+    assert conf['tasks'][1 + 2 * 4 + 1]['name'] == 'Train 2'
+    assert conf['tasks'][1 + 2 * 4 + 1]['seed'] == 2
+    assert conf['tasks'][1 + 2 * 4 + 1]['n_epoch']['task_name'] == 'Pilot 2'
+
+
+template_train_with_baseline_multimodels = '''
+# =============== template ===============
+[template]
+template_type = "train_with_baseline_multimodels"
+criterion_target = "MSE"
+criterion_eval = "MSE"
+criterion_imprate = "ImprovementRate"
+baseline_model = "SimpleAverage"
+model = ""
+data_range_train = [ 0.0, 0.8,]
+data_range_eval = [ 0.8, 1.0,]
+data_range_train_pilot = [ 0.0, 0.6,]
+data_range_eval_pilot = [ 0.6, 0.8,]
+batch_sampler = "BS"
+optimizer = "Adam"
+lr_scheduler = "CosineAnnealingLR"
+n_epoch = 5
+patience = 5
+models = [ "SimpleAverageVariableDecay", "SimpleAverageVariableDecayChannelwise",]
+'''
+
+
+@pytest.mark.slow
+def test_run_template_train_with_baseline_multimodels(tmp_path):
+    out_dir = tmp_path / 'template_train_with_baseline_multimodels'
+    conf = f'out_dir = "{out_dir.as_posix()}"\n' + premise + \
+        template_train_with_baseline_multimodels
+    run(conf)
+    conf = validate_outputs(out_dir)
+    assert conf['tasks'][1 + 0 * 4 + 1]['name'] == 'Train 0'
+    assert conf['tasks'][1 + 0 * 4 + 1]['model'] == 'SimpleAverageVariableDecay'
+    assert conf['tasks'][1 + 1 * 4 + 1]['name'] == 'Train 1'
+    assert conf['tasks'][1 + 1 * 4 + 1]['model'] == 'SimpleAverageVariableDecayChannelwise'
+
+
+template_train_with_baseline_multiparams = '''
+# =============== template ===============
+[template]
+template_type = "train_with_baseline_multiparams"
+criterion_target = "MSE"
+criterion_eval = "MSE"
+criterion_imprate = "ImprovementRate"
+baseline_model = "SimpleAverage"
+model = "SimpleAverageVariableDecay"
+data_range_train = [ 0.0, 0.8,]
+data_range_eval = [ 0.8, 1.0,]
+data_range_train_pilot = [ 0.0, 0.6,]
+data_range_eval_pilot = [ 0.6, 0.8,]
+batch_sampler = "BS"
+optimizer = "Adam"
+lr_scheduler = "CosineAnnealingLR"
+n_epoch = 5
+patience = 5
+[[template.params]]
+batch_sampler = "BS"
+lr_scheduler = "CosineAnnealingLR"
+[[template.params]]
+batch_sampler = "BS64"
+lr_scheduler = "ExponentialLR"
+'''
+
+
+@pytest.mark.slow
+def test_run_template_train_with_baseline_multiparams(tmp_path):
+    out_dir = tmp_path / 'template_train_with_baseline_multiparams'
+    conf = f'out_dir = "{out_dir.as_posix()}"\n' + premise + \
+        template_train_with_baseline_multiparams
+    run(conf)
+    conf = validate_outputs(out_dir)
+    assert conf['tasks'][1 + 0 * 4 + 1]['name'] == 'Train 0'
+    assert conf['tasks'][1 + 0 * 4 + 1]['batch_sampler'] == 'BS'
+    assert conf['tasks'][1 + 0 * 4 + 1]['lr_scheduler'] == 'CosineAnnealingLR'
+    assert conf['tasks'][1 + 1 * 4 + 1]['name'] == 'Train 1'
+    assert conf['tasks'][1 + 1 * 4 + 1]['lr_scheduler'] == 'ExponentialLR'
 
 
 def test_load_config_from_path(tmp_path):

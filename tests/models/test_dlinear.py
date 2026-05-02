@@ -1,7 +1,7 @@
 from nazuna.data_manager import TimeSeriesDataset
 from nazuna.models.dlinear import (
     DLinear, DLinearChannelwise, NLinear, NLinearChannelwise,
-    NLinearChannelCross,
+    NLinearCrossChannel,
 )
 from nazuna.criteria import MSE
 import torch
@@ -13,7 +13,7 @@ def test_doc(device):
     _ = create_from_doc(DLinearChannelwise, device)
     _ = create_from_doc(NLinear, device)
     _ = create_from_doc(NLinearChannelwise, device)
-    _ = create_from_doc(NLinearChannelCross, device)
+    _ = create_from_doc(NLinearCrossChannel, device)
 
 
 def test_forward(device, dummy_data):
@@ -177,7 +177,7 @@ def test_nlinear_channelwise_get_loss(device, dummy_data):
 
 
 def test_nlinear_channelcross_get_loss(device, dummy_data):
-    model = NLinearChannelCross.create(
+    model = NLinearCrossChannel.create(
         device=device,
         seq_len=4,
         pred_len=2,

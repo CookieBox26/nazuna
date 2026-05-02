@@ -221,33 +221,35 @@ class WorkflowTemplateResolver:
     @classmethod
     def get_task_eval_baseline(cls, d):
         task = {'task_type': 'eval', 'name': 'Eval Baseline'}
-        keys = ['data_range_eval', 'criterion', 'baseline_model']
-        rename = {'baseline_model': 'model'}
+        keys = ['data_range_eval', 'criterion_eval', 'baseline_model']
+        rename = {'criterion_eval': 'criterion', 'baseline_model': 'model'}
         return cls.update(task, d, keys, rename)
 
     @classmethod
-    def get_task_pilot(cls, d, i_trial=0, seed=0):
+    def get_task_pilot(cls, d, i_trial=0):
         task = {'task_type': 'train', 'name': f'Pilot {i_trial}', 'early_stop': True}
-        keys = ['data_range_train_pilot', 'data_range_eval_pilot', 'criterion'] + \
+        keys = ['data_range_train_pilot', 'data_range_eval_pilot', 'criterion_target'] + \
             ['model', 'batch_sampler', 'optimizer', 'lr_scheduler', 'n_epoch', 'patience']
         rename = {f'data_range_{t}_pilot': f'data_range_{t}' for t in ['train', 'eval']}
+        rename |= {'criterion_target': 'criterion'}
         return cls.update(task, d, keys, rename)
 
     @classmethod
-    def get_task_train(cls, d, i_trial=0, seed=0):
+    def get_task_train(cls, d, i_trial=0):
         task = {'task_type': 'train', 'name': f'Train {i_trial}'}
         task['n_epoch'] = {'task_name': f'Pilot {i_trial}'}
-        task['seed'] = seed
-        keys = ['data_range_train', 'criterion'] + \
+        keys = ['data_range_train', 'criterion_target'] + \
             ['model', 'batch_sampler', 'optimizer', 'lr_scheduler']
-        return cls.update(task, d, keys)
+        rename = {'criterion_target': 'criterion'}
+        return cls.update(task, d, keys, rename)
 
     @classmethod
     def get_task_eval(cls, d, i_trial=0):
         task = {'task_type': 'eval', 'name': f'Eval {i_trial}'}
         task['model_state'] = {'task_name': f'Train {i_trial}'}
-        keys = ['data_range_eval', 'criterion', 'model']
-        return cls.update(task, d, keys)
+        keys = ['data_range_eval', 'criterion_eval', 'model']
+        rename = {'criterion_eval': 'criterion'}
+        return cls.update(task, d, keys, rename)
 
     @classmethod
     def get_task_eval_imprate(cls, d, i_trial=0):
@@ -258,40 +260,56 @@ class WorkflowTemplateResolver:
         return cls.update(task, d, keys, rename)
 
     @classmethod
-    def get_tasks_train_with_baseline(cls, d):
-        return [
-            cls.get_task_eval_baseline(d),
-            cls.get_task_pilot(d),
-            cls.get_task_train(d),
-            cls.get_task_eval(d),
-            cls.get_task_eval_imprate(d),
+    def get_trial(cls, d, i_trial=0):
+        tasks = [
+            cls.get_task_pilot(d, i_trial),
+            cls.get_task_train(d, i_trial),
+            cls.get_task_eval(d, i_trial),
         ]
+        if 'critaria_additional' in d:
+            for criterion in d['critaria_additional']:
+                task = cls.get_task_eval(d, i_trial)
+                task['name'] = f'Eval {criterion} {i_trial}'
+                task['criterion'] = criterion
+                tasks.append(task)
+        if 'criterion_imprate' in d:
+            tasks.append(cls.get_task_eval_imprate(d, i_trial))
+        return tasks
+
+    @classmethod
+    def get_tasks_train_with_baseline(cls, d):
+        return [cls.get_task_eval_baseline(d)] + cls.get_trial(d)
 
     @classmethod
     def get_tasks_train_with_baseline_multiseeds(cls, d):
         tasks = [cls.get_task_eval_baseline(d)]
         for i_trial, seed in enumerate(d['seeds']):
-            tasks += [
-                cls.get_task_pilot(d, i_trial, seed),
-                cls.get_task_train(d, i_trial, seed),
-                cls.get_task_eval(d, i_trial),
-                cls.get_task_eval_imprate(d, i_trial),
-            ]
+            tasks_ = cls.get_trial(d, i_trial)
+            tasks_[0]['seed'] = seed
+            tasks_[1]['seed'] = seed
+            tasks += tasks_
         return tasks
-
 
     @classmethod
     def get_tasks_train_with_baseline_multimodels(cls, d):
         tasks = [cls.get_task_eval_baseline(d)]
         for i_trial, model in enumerate(d['models']):
-            tasks_ = [
-                cls.get_task_pilot(d, i_trial),
-                cls.get_task_train(d, i_trial),
-                cls.get_task_eval(d, i_trial),
-                cls.get_task_eval_imprate(d, i_trial),
-            ]
-            for i_task in range(4):
+            tasks_ = cls.get_trial(d, i_trial)
+            for i_task in range(len(tasks_)):
                 tasks_[i_task]['model'] = model
+            tasks += tasks_
+        return tasks
+
+
+    @classmethod
+    def get_tasks_train_with_baseline_multiparams(cls, d):
+        tasks = [cls.get_task_eval_baseline(d)]
+        for i_trial, params in enumerate(d['params']):
+            tasks_ = cls.get_trial(d, i_trial)
+            for k, v in params.items():
+                for i_task in range(len(tasks_)):
+                    if k in tasks_[i_task]:
+                        tasks_[i_task][k] = v
             tasks += tasks_
         return tasks
 
@@ -310,6 +328,8 @@ class WorkflowTemplateResolver:
             d['tasks'] = cls.get_tasks_train_with_baseline_multiseeds(d_tmpl)
         if type_ == cls.Type.train_with_baseline_multimodels:
             d['tasks'] = cls.get_tasks_train_with_baseline_multimodels(d_tmpl)
+        if type_ == cls.Type.train_with_baseline_multiparams:
+            d['tasks'] = cls.get_tasks_train_with_baseline_multiparams(d_tmpl)
         return d
 
 

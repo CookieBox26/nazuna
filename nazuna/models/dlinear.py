@@ -250,13 +250,13 @@ class NLinearChannelwise(BasicBaseModel):
         return y + x_last, {}
 
 
-class NLinearChannelCross(BasicBaseModel):
+class NLinearCrossChannel(BasicBaseModel):
     """
     !!! tip "Example parameter configurations"
         ```toml
-        [definitions.NLinearChannelCross]
-        cls_path = "nazuna.models.dlinear.NLinearChannelCross"
-        [definitions.NLinearChannelCross.params]
+        [definitions.NLinearCrossChannel]
+        cls_path = "nazuna.models.dlinear.NLinearCrossChannel"
+        [definitions.NLinearCrossChannel.params]
         seq_len = 96  # task-dependent
         pred_len = 24  # task-dependent
         c_in = 7  # task-dependent
