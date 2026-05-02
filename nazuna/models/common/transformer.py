@@ -17,18 +17,19 @@ class MultiheadAttention(torch.nn.Module):
         self.dropout_aw = torch.nn.Dropout(dropout_aw)
 
     def forward(self, q, k, v, prev_attn_scores=None):
-        B, L, _ = q.shape  # (B, L, d_m)
+        B, Lq, _ = q.shape  # (B, Lq, d_m)
+        Lk = k.size(1)
         H, d_h = self.n_heads, self.d_head
-        q = self.q_proj(q).view(B, L, H, d_h).transpose(1, 2)  # (B, H, L, d_h)
-        k = self.k_proj(k).view(B, L, H, d_h).transpose(1, 2)  # (B, H, L, d_h)
-        v = self.v_proj(v).view(B, L, H, d_h).transpose(1, 2)  # (B, H, L, d_h)
+        q = self.q_proj(q).view(B, Lq, H, d_h).transpose(1, 2)  # (B, H, Lq, d_h)
+        k = self.k_proj(k).view(B, Lk, H, d_h).transpose(1, 2)  # (B, H, Lk, d_h)
+        v = self.v_proj(v).view(B, Lk, H, d_h).transpose(1, 2)  # (B, H, Lk, d_h)
         attn_scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(d_h)
         if prev_attn_scores is not None:
             attn_scores = attn_scores + prev_attn_scores
         attn_weights = F.softmax(attn_scores, dim=-1)
         attn_weights = self.dropout_aw(attn_weights)
-        output = torch.matmul(attn_weights, v)  # [B, H, L, d_h]
-        output = output.transpose(1, 2).contiguous().view(B, L, self.d_model)
+        output = torch.matmul(attn_weights, v)  # [B, H, Lq, d_h]
+        output = output.transpose(1, 2).contiguous().view(B, Lq, self.d_model)
         output = self.out_proj(output)
         return output, attn_scores
 

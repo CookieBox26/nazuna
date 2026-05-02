@@ -6,13 +6,19 @@ import torch
 import pytest
 
 
-def test_multiheadattention(device):
+@pytest.mark.parametrize('l_q, l_kv', [
+    (5, 5),
+    (5, 7),
+    (7, 5),
+])
+def test_multiheadattention(device, l_q, l_kv):
     mha = MultiheadAttention(d_model=16, n_heads=2)
     mha.to(device)
-    x = torch.ones(8, 5, 16, device=device)
-    x, attn_scores = mha(x, x, x)
-    assert x.shape == (8, 5, 16)
-    assert attn_scores.shape == (8, 2, 5, 5)
+    q = torch.ones(8, l_q, 16, device=device)
+    kv = torch.ones(8, l_kv, 16, device=device)
+    x, attn_scores = mha(q, kv, kv)
+    assert x.shape == (8, l_q, 16)
+    assert attn_scores.shape == (8, 2, l_q, l_kv)
 
 
 @pytest.mark.parametrize('self_attn_cls, norm_cls', [
