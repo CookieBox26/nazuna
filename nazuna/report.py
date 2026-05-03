@@ -35,10 +35,16 @@ def _plot_sample(sample_path: Path, graph_path: Path) -> None:
     plt.close(fig)
 
 
-def _plot_pred(pred_path: Path, graph_path: Path) -> None:
-    """Plot prediction vs true (and baseline if available) for the first channel."""
+def _plot_pred(pred_path: Path, graph_path: Path) -> str | None:
+    """Plot prediction vs true (and baseline if available) for the first channel.
+
+    Returns a message string when plotting is skipped, otherwise None.
+    """
     npz = np.load(pred_path, allow_pickle=True)
-    data = npz['data'][:, 0]
+    if 'seq_len' not in npz.files:
+        return 'Skipped: model reference length (seq_len) is unknown.'
+    seq_len = int(npz['seq_len'])
+    data = npz['data'][-seq_len:, 0]
     data_future = npz['data_future'][:, 0]
     pred = npz['pred'][:, 0]
     has_baseline = 'baseline' in npz.files
@@ -49,7 +55,6 @@ def _plot_pred(pred_path: Path, graph_path: Path) -> None:
         ts = str(npz['timestamp'])
         title = f'Eval sample {sample_idx} ({ts})'
 
-    seq_len = len(data)
     pred_len = len(pred)
     true_all = np.concatenate([data, data_future])
 
@@ -74,6 +79,7 @@ def _plot_pred(pred_path: Path, graph_path: Path) -> None:
     ax.grid(True, linestyle='--', linewidth=0.5)
     fig.savefig(graph_path, format='svg', bbox_inches='tight')
     plt.close(fig)
+    return None
 
 
 def _plot_train_loss(history_path: Path, graph_path: Path) -> None:
@@ -171,16 +177,22 @@ def report(
             pred_path = task_runner.out_path / 'pred_first.npz'
             if pred_path.exists():
                 graph_path = task_runner.out_path / 'pred_first.svg'
-                _plot_pred(pred_path, graph_path)
-                rel_path = graph_path.relative_to(report_path.parent)
-                f.write(f'![pred]({rel_path.as_posix()})\n\n')
+                msg = _plot_pred(pred_path, graph_path)
+                if msg is None:
+                    rel_path = graph_path.relative_to(report_path.parent)
+                    f.write(f'![pred]({rel_path.as_posix()})\n\n')
+                else:
+                    f.write(f'{msg}\n\n')
 
             pred_last_path = task_runner.out_path / 'pred_last.npz'
             if pred_last_path.exists():
                 graph_last_path = task_runner.out_path / 'pred_last.svg'
-                _plot_pred(pred_last_path, graph_last_path)
-                rel_path = graph_last_path.relative_to(report_path.parent)
-                f.write(f'![pred_last]({rel_path.as_posix()})\n\n')
+                msg = _plot_pred(pred_last_path, graph_last_path)
+                if msg is None:
+                    rel_path = graph_last_path.relative_to(report_path.parent)
+                    f.write(f'![pred_last]({rel_path.as_posix()})\n\n')
+                else:
+                    f.write(f'{msg}\n\n')
 
             result = toml.loads(
                 (task_runner.out_path / 'result.toml').read_text(encoding='utf8'),

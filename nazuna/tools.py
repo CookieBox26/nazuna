@@ -49,6 +49,7 @@ class WorkflowResult(Workflow):
             task['exist_ok'] = True
         obj = cls(**conf_dict)
         obj.rename = None
+        obj.criteria_additional = []
         return obj
 
     def get_conf_and_result(self, task_name, as_sn=False):
@@ -72,12 +73,15 @@ class WorkflowResult(Workflow):
         d = {}
         suffix = '' if i_trial is None else f' {i_trial}'
         d['baseline'] = self.get_conf_and_result('Eval Baseline', as_sn=True)
-        if f'Pilot{suffix}' in self.task_names:
-            d['pilot'] = self.get_conf_and_result(f'Pilot{suffix}', as_sn=True)
-        else:
-            d['pilot'] = self.get_conf_and_result(f'Pilot 0', as_sn=True)
+        d['pilot'] = self.get_conf_and_result(f'Pilot{suffix}', as_sn=True)
         d['train'] = self.get_conf_and_result(f'Train{suffix}', as_sn=True)
         d['eval'] = self.get_conf_and_result(f'Eval{suffix}', as_sn=True)
+        d['criteria_additional'] = self.criteria_additional
+        for criterion_a in self.criteria_additional:
+            d[f'eval_baseline_{criterion_a.lower()}'] = \
+                self.get_conf_and_result(f'Eval Baseline {criterion_a}', as_sn=True)
+            d[f'eval_{criterion_a.lower()}'] = \
+                self.get_conf_and_result(f'Eval {criterion_a}{suffix}', as_sn=True)
         d['imprate'] = self.get_conf_and_result(f'Eval ImpRate{suffix}', as_sn=True)
         return types.SimpleNamespace(**d)
 
@@ -101,16 +105,23 @@ class WorkflowResult(Workflow):
             trial.eval, trial.imprate,
         ]):
             return None
+        criterion = cls.cls_path_to_name(trial.eval.conf['criterion']['cls_path'])
         row = collections.OrderedDict([
             ('index', index_),
             ('model', cls.cls_path_to_name(trial.train.conf['model']['cls_path'])),
-            ('criterion', cls.cls_to_str(trial.eval.conf['criterion'])),
-            ('loss(bl)', trial.baseline.result['loss_per_sample']),
-            ('loss(mo)', trial.eval.result['loss_per_sample']),
-            ('imprate', trial.imprate.result['loss_per_sample']),
-            ('seed', trial.train.conf.get('seed', 0)),
-            ('n_epoch', trial.pilot.result['i_epoch_best'] + 1),
+            # ('criterion', cls.cls_to_str()),
+            (f'{criterion}(bl)', trial.baseline.result['loss_per_sample']),
+            (f'{criterion}(mo)', trial.eval.result['loss_per_sample']),
         ])
+        for criterion_a in trial.criteria_additional:
+            row[f'{criterion_a}(bl)'] = \
+                getattr(trial, f'eval_baseline_{criterion_a.lower()}').result['loss_per_sample']
+            row[f'{criterion_a}(mo)'] = \
+                getattr(trial, f'eval_{criterion_a.lower()}').result['loss_per_sample']
+        row['imprate'] = trial.imprate.result['loss_per_sample']
+        row['seed'] = trial.train.conf.get('seed', 0)
+        row['n_epoch'] = str(trial.pilot.result['i_epoch_best'] + 1) + ' / ' + \
+            str(trial.pilot.conf['n_epoch'])
         row_model = collections.OrderedDict([('index', index_)])
         for k, v in trial.train.conf['model']['params'].items():
             if k == 'scaler_cls_path':

@@ -260,14 +260,25 @@ class WorkflowTemplateResolver:
         return cls.update(task, d, keys, rename)
 
     @classmethod
+    def get_baseline(cls, d):
+        tasks = [cls.get_task_eval_baseline(d)]
+        if 'criteria_additional' in d:
+            for criterion in d['criteria_additional']:
+                task = cls.get_task_eval_baseline(d)
+                task['name'] = f'Eval Baseline {criterion}'
+                task['criterion'] = criterion
+                tasks.append(task)
+        return tasks
+
+    @classmethod
     def get_trial(cls, d, i_trial=0):
         tasks = [
             cls.get_task_pilot(d, i_trial),
             cls.get_task_train(d, i_trial),
             cls.get_task_eval(d, i_trial),
         ]
-        if 'critaria_additional' in d:
-            for criterion in d['critaria_additional']:
+        if 'criteria_additional' in d:
+            for criterion in d['criteria_additional']:
                 task = cls.get_task_eval(d, i_trial)
                 task['name'] = f'Eval {criterion} {i_trial}'
                 task['criterion'] = criterion
@@ -278,11 +289,11 @@ class WorkflowTemplateResolver:
 
     @classmethod
     def get_tasks_train_with_baseline(cls, d):
-        return [cls.get_task_eval_baseline(d)] + cls.get_trial(d)
+        return cls.get_baseline(d) + cls.get_trial(d)
 
     @classmethod
     def get_tasks_train_with_baseline_multiseeds(cls, d):
-        tasks = [cls.get_task_eval_baseline(d)]
+        tasks = cls.get_baseline(d)
         for i_trial, seed in enumerate(d['seeds']):
             tasks_ = cls.get_trial(d, i_trial)
             tasks_[0]['seed'] = seed
@@ -292,7 +303,7 @@ class WorkflowTemplateResolver:
 
     @classmethod
     def get_tasks_train_with_baseline_multimodels(cls, d):
-        tasks = [cls.get_task_eval_baseline(d)]
+        tasks = cls.get_baseline(d)
         for i_trial, model in enumerate(d['models']):
             tasks_ = cls.get_trial(d, i_trial)
             for i_task in range(len(tasks_)):
@@ -300,10 +311,9 @@ class WorkflowTemplateResolver:
             tasks += tasks_
         return tasks
 
-
     @classmethod
     def get_tasks_train_with_baseline_multiparams(cls, d):
-        tasks = [cls.get_task_eval_baseline(d)]
+        tasks = cls.get_baseline(d)
         for i_trial, params in enumerate(d['params']):
             tasks_ = cls.get_trial(d, i_trial)
             for k, v in params.items():
@@ -312,7 +322,6 @@ class WorkflowTemplateResolver:
                         tasks_[i_task][k] = v
             tasks += tasks_
         return tasks
-
 
     @classmethod
     def resolve(cls, d: dict) -> dict:

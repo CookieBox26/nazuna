@@ -116,8 +116,8 @@ template_train_with_baseline = '''
 template_type = "train_with_baseline"
 criterion_target = "MSE"
 criterion_eval = "MSE"
-criterion_imprate = "ImprovementRate"
 criteria_additional = [ "MAE",]
+criterion_imprate = "ImprovementRate"
 baseline_model = "SimpleAverage"
 model = "SimpleAverageVariableDecay"
 data_range_train = [ 0.0, 0.8,]
@@ -138,7 +138,8 @@ def test_run_template_train_with_baseline(tmp_path):
     conf = f'out_dir = "{out_dir.as_posix()}"\n' + premise + \
         template_train_with_baseline
     run(conf)
-    validate_outputs(out_dir)
+    conf = validate_outputs(out_dir)
+    assert conf['tasks'][4]['name'] == 'Eval MAE 0'
 
 
 template_train_with_baseline_multiseeds = '''

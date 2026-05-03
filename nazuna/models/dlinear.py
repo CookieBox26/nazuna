@@ -45,10 +45,9 @@ class DLinear(BasicBaseModel):
         scaler_cls: type | None = IqrScaler,
         scaler_params: dict | None = {'stat_types': ('qtile_full', 'saved')},
         prep_type: str = 'none',
-        use_revin: bool = False, revin_affine: bool = False, revin_eps: float = 1e-5,
-        c_in: int | None = None,
-        use_lc: bool = False,
-        lc_end_epoch: int | None = None, lc_rate: float | None = None,
+        use_revin: bool = False, revin_affine: bool = False,
+        revin_eps: float = 1e-5, c_in: int | None = None,
+        use_lc: bool = False, lc_end_epoch: int | None = None, lc_rate: float | None = None,
     ) -> None:
         super()._setup(
             seq_len, pred_len, scaler_cls, scaler_params, prep_type=prep_type,
@@ -107,6 +106,7 @@ class DLinearChannelwise(BasicBaseModel):
         scaler_params: dict | None = {'stat_types': ('qtile_full', 'saved')},
         prep_type: str = 'none',
         use_revin: bool = False, revin_affine: bool = False, revin_eps: float = 1e-5,
+        use_lc: bool = False, lc_end_epoch: int | None = None, lc_rate: float | None = None,
     ) -> None:
         super()._setup(
             seq_len, pred_len, scaler_cls, scaler_params, prep_type=prep_type,
@@ -170,10 +170,9 @@ class NLinear(BasicBaseModel):
         scaler_cls: type | None = IqrScaler,
         scaler_params: dict | None = {'stat_types': ('qtile_full', 'saved')},
         prep_type: str = 'none',
-        use_revin: bool = False, revin_affine: bool = False, revin_eps: float = 1e-5,
-        c_in: int | None = None,
-        use_lc: bool = False,
-        lc_end_epoch: int | None = None, lc_rate: float | None = None,
+        use_revin: bool = False, revin_affine: bool = False,
+        revin_eps: float = 1e-5, c_in: int | None = None,
+        use_lc: bool = False, lc_end_epoch: int | None = None, lc_rate: float | None = None,
     ) -> None:
         super()._setup(
             seq_len, pred_len, scaler_cls, scaler_params, prep_type=prep_type,
@@ -225,6 +224,7 @@ class NLinearChannelwise(BasicBaseModel):
         scaler_params: dict | None = {'stat_types': ('qtile_full', 'saved')},
         prep_type: str = 'none',
         use_revin: bool = False, revin_affine: bool = False, revin_eps: float = 1e-5,
+        use_lc: bool = False, lc_end_epoch: int | None = None, lc_rate: float | None = None,
     ) -> None:
         super()._setup(
             seq_len, pred_len, scaler_cls, scaler_params, prep_type=prep_type,
@@ -279,6 +279,7 @@ class NLinearCrossChannel(BasicBaseModel):
         scaler_params: dict | None = {'stat_types': ('qtile_full', 'saved')},
         prep_type: str = 'none',
         use_revin: bool = False, revin_affine: bool = False, revin_eps: float = 1e-5,
+        use_lc: bool = False, lc_end_epoch: int | None = None, lc_rate: float | None = None,
     ) -> None:
         super()._setup(
             seq_len, pred_len, scaler_cls, scaler_params, prep_type=prep_type,

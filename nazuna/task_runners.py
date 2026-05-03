@@ -234,6 +234,8 @@ class EvalTaskRunner(BaseTaskRunner):
                         else:
                             loss_scaled_per_channel_total += batch_channel_sum_s
 
+                model_seq_len = getattr(self.model, 'seq_len', None)
+
                 if not sample_saved:
                     save_data = {
                         'pred': pred[0].cpu().numpy(),
@@ -244,6 +246,8 @@ class EvalTaskRunner(BaseTaskRunner):
                     }
                     if baseline is not None:
                         save_data['baseline'] = baseline[0].cpu().numpy()
+                    if model_seq_len is not None:
+                        save_data['seq_len'] = np.array(model_seq_len)
                     np.savez(self.out_path / 'pred_first.npz', **save_data)
                     sample_saved = True
 
@@ -257,6 +261,8 @@ class EvalTaskRunner(BaseTaskRunner):
                 }
                 if baseline is not None:
                     last_save_data['baseline'] = baseline[-1].cpu().numpy()
+                if model_seq_len is not None:
+                    last_save_data['seq_len'] = np.array(model_seq_len)
 
         np.savez(self.out_path / 'pred_last.npz', **last_save_data)
 
