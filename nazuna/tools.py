@@ -85,6 +85,17 @@ class WorkflowResult(Workflow):
         d['imprate'] = self.get_conf_and_result(f'Eval ImpRate{suffix}', as_sn=True)
         return types.SimpleNamespace(**d)
 
+    def get_trials(self, prefix, target_trials=None):
+        if target_trials is None:
+            target_trials = list(range(10))
+        trials = {}
+        for i_trial in target_trials:
+            trial = self.get_trial(i_trial)
+            if trial.pilot is None:
+                break
+            trials[f'{prefix}({i_trial})'] = trial
+        return trials
+
     @classmethod
     def cls_path_to_name(cls, cls_path):
         return cls_path.rsplit('.', 1)[-1]
@@ -99,6 +110,11 @@ class WorkflowResult(Workflow):
         return cls.cls_path_to_name(conf['cls_path']) + cls.params_to_str(conf['params'])
 
     @classmethod
+    def shorten_time(cls, s):
+        m = re.fullmatch(r'(\d+) min (\d+) sec', s)
+        return f'{int(m.group(1)):2d}m{int(m.group(2)):2d}s'
+
+    @classmethod
     def get_row(cls, trial, index_):
         if any(k is None for k in [
             trial.baseline, trial.pilot, trial.train,
@@ -110,18 +126,20 @@ class WorkflowResult(Workflow):
             ('index', index_),
             ('model', cls.cls_path_to_name(trial.train.conf['model']['cls_path'])),
             # ('criterion', cls.cls_to_str()),
-            (f'{criterion}(bl)', trial.baseline.result['loss_per_sample']),
-            (f'{criterion}(mo)', trial.eval.result['loss_per_sample']),
+            (f'{criterion}_bl', trial.baseline.result['loss_per_sample']),
+            (f'{criterion}_mo', trial.eval.result['loss_per_sample']),
         ])
         for criterion_a in trial.criteria_additional:
-            row[f'{criterion_a}(bl)'] = \
+            row[f'{criterion_a}_bl'] = \
                 getattr(trial, f'eval_baseline_{criterion_a.lower()}').result['loss_per_sample']
-            row[f'{criterion_a}(mo)'] = \
+            row[f'{criterion_a}_mo'] = \
                 getattr(trial, f'eval_{criterion_a.lower()}').result['loss_per_sample']
         row['imprate'] = trial.imprate.result['loss_per_sample']
         row['seed'] = trial.train.conf.get('seed', 0)
         row['n_epoch'] = str(trial.pilot.result['i_epoch_best'] + 1) + ' / ' + \
             str(trial.pilot.conf['n_epoch'])
+        row['elapse_p'] = cls.shorten_time(trial.pilot.result['elapsed'])
+        row['elapse_t'] = cls.shorten_time(trial.train.result['elapsed'])
         row_model = collections.OrderedDict([('index', index_)])
         for k, v in trial.train.conf['model']['params'].items():
             if k == 'scaler_cls_path':

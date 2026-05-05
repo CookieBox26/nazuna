@@ -311,6 +311,7 @@ class EvalTaskRunner(BaseTaskRunner):
             loss_eval.update(inspected)
         self.result['cols_org'] = dict(zip(self.dm.cols, self.dm.cols_org))
         self.result['data_range_eval'] = self.data_loader_eval.dataset.info
+        self.result['parameters_trainable'] = self.model.count_trainable_parameters()
         self.result.update(loss_eval)
 
 

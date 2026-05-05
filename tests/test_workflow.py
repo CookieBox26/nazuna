@@ -139,7 +139,7 @@ def test_run_template_train_with_baseline(tmp_path):
         template_train_with_baseline
     run(conf)
     conf = validate_outputs(out_dir)
-    assert conf['tasks'][4]['name'] == 'Eval MAE 0'
+    assert conf['tasks'][4]['name'] == 'Eval 0'
 
 
 template_train_with_baseline_multiseeds = '''

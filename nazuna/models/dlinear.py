@@ -141,6 +141,142 @@ class DLinearChannelwise(BasicBaseModel):
         return x, {'seasonal': seasonal_output, 'trend': trend_output}
 
 
+class DLinearCrossChannel(BasicBaseModel):
+    """
+    !!! tip "Example parameter configurations"
+        ```toml
+        [definitions.DLinearCrossChannel]
+        cls_path = "nazuna.models.dlinear.DLinearCrossChannel"
+        [definitions.DLinearCrossChannel.params]
+        seq_len = 96  # task-dependent
+        pred_len = 24  # task-dependent
+        c_in = 7  # task-dependent
+        kernel_size = 25
+        bias = true
+        n_moving_avg = 1
+        scaler_cls_path = "nazuna.models.common.IqrScaler"
+        scaler_params = { "stat_types" = [ "qtile_full", "saved",] }
+        prep_type = "none"
+        use_revin = false
+        revin_affine = false
+        revin_eps = 1e-5
+        ```
+    """
+    def _setup(
+        self,
+        seq_len: int,
+        pred_len: int,
+        c_in: int,
+        kernel_size: int,
+        bias: bool,
+        n_moving_avg: int = 1,
+        scaler_cls: type | None = IqrScaler,
+        scaler_params: dict | None = {'stat_types': ('qtile_full', 'saved')},
+        prep_type: str = 'none',
+        use_revin: bool = False, revin_affine: bool = False, revin_eps: float = 1e-5,
+        use_lc: bool = False, lc_end_epoch: int | None = None, lc_rate: float | None = None,
+    ) -> None:
+        super()._setup(
+            seq_len, pred_len, scaler_cls, scaler_params, prep_type=prep_type,
+            use_revin=use_revin, revin_eps=revin_eps,
+            revin_affine=revin_affine, c_in=c_in,
+        )
+        self.decomp = MovingAverageDecomp(kernel_size, n_moving_avg)
+        self.seasonal_weight = torch.nn.Parameter(torch.empty(c_in, c_in, seq_len, pred_len))
+        self.trend_weight = torch.nn.Parameter(torch.empty(c_in, c_in, seq_len, pred_len))
+        if bias:
+            self.seasonal_bias = torch.nn.Parameter(torch.zeros(pred_len, c_in))
+            self.trend_bias = torch.nn.Parameter(torch.zeros(pred_len, c_in))
+        else:
+            self.seasonal_bias = None
+            self.trend_bias = None
+        w = 1.0 / (seq_len * c_in)
+        self.seasonal_weight.data.fill_(w)
+        self.trend_weight.data.fill_(w)
+
+    def forward(self, x):
+        seasonal_init, trend_init = self.decomp(x)
+        seasonal_output = torch.einsum('bsc,ocsp->bpo', seasonal_init, self.seasonal_weight)
+        trend_output = torch.einsum('bsc,ocsp->bpo', trend_init, self.trend_weight)
+        if self.seasonal_bias is not None:
+            seasonal_output = seasonal_output + self.seasonal_bias
+            trend_output = trend_output + self.trend_bias
+        x = seasonal_output + trend_output
+        return x, {'seasonal': seasonal_output, 'trend': trend_output}
+
+
+class DLinearStacked(BasicBaseModel):
+    """
+    !!! tip "Example parameter configurations"
+        ```toml
+        [definitions.DLinearStacked]
+        cls_path = "nazuna.models.dlinear.DLinearStacked"
+        [definitions.DLinearStacked.params]
+        seq_len = 96  # task-dependent
+        pred_len = 24  # task-dependent
+        c_in = 7  # task-dependent
+        kernel_size = 25
+        bias = true
+        n_moving_avg = 1
+        scaler_cls_path = "nazuna.models.common.IqrScaler"
+        scaler_params = { "stat_types" = [ "qtile_full", "saved",] }
+        prep_type = "none"
+        use_revin = false
+        revin_affine = false
+        revin_eps = 1e-5
+        ```
+    """
+    def _setup(
+        self,
+        seq_len: int,
+        pred_len: int,
+        c_in: int,
+        kernel_size: int,
+        bias: bool,
+        n_moving_avg: int = 1,
+        scaler_cls: type | None = IqrScaler,
+        scaler_params: dict | None = {'stat_types': ('qtile_full', 'saved')},
+        prep_type: str = 'none',
+        use_revin: bool = False, revin_affine: bool = False, revin_eps: float = 1e-5,
+        use_lc: bool = False, lc_end_epoch: int | None = None, lc_rate: float | None = None,
+    ) -> None:
+        super()._setup(
+            seq_len, pred_len, scaler_cls, scaler_params, prep_type=prep_type,
+            use_revin=use_revin, revin_eps=revin_eps,
+            revin_affine=revin_affine, c_in=c_in,
+        )
+        self.decomp = MovingAverageDecomp(kernel_size, n_moving_avg)
+        self.Linear_Seasonal = torch.nn.Linear(seq_len, pred_len, bias=bias)
+        self.Linear_Trend = torch.nn.Linear(seq_len, pred_len, bias=bias)
+        self.Linear_Seasonal.weight = torch.nn.Parameter(torch.ones(pred_len, seq_len) * (0.9 / seq_len))
+        self.Linear_Trend.weight = torch.nn.Parameter(torch.ones(pred_len, seq_len) * (0.9 / seq_len))
+        self.seasonal_weight = torch.nn.Parameter(torch.empty(c_in, c_in, seq_len, pred_len))
+        self.trend_weight = torch.nn.Parameter(torch.empty(c_in, c_in, seq_len, pred_len))
+        if bias:
+            self.seasonal_bias = torch.nn.Parameter(torch.zeros(pred_len, c_in))
+            self.trend_bias = torch.nn.Parameter(torch.zeros(pred_len, c_in))
+        else:
+            self.seasonal_bias = None
+            self.trend_bias = None
+        self.seasonal_weight.data.fill_(0.1 / (seq_len * c_in))
+        self.trend_weight.data.fill_(0.1 / (seq_len * c_in))
+
+    def forward(self, x):
+        seasonal_init, trend_init = self.decomp(x)
+
+        seasonal_output = self.Linear_Seasonal(seasonal_init.permute(0, 2, 1)).permute(0, 2, 1)
+        trend_output = self.Linear_Trend(trend_init.permute(0, 2, 1)).permute(0, 2, 1)
+
+        seasonal_output_c = torch.einsum('bsc,ocsp->bpo', seasonal_init, self.seasonal_weight)
+        trend_output_c = torch.einsum('bsc,ocsp->bpo', trend_init, self.trend_weight)
+        if self.seasonal_bias is not None:
+            seasonal_output_c = seasonal_output_c + self.seasonal_bias
+            trend_output_c = trend_output_c + self.trend_bias
+
+        x = seasonal_output + trend_output + seasonal_output_c + trend_output_c
+        return x, {'seasonal': seasonal_output + seasonal_output_c, 'trend': trend_output + trend_output_c}
+
+
 class NLinear(BasicBaseModel):
     """
     !!! tip "Example parameter configurations"
@@ -305,3 +441,63 @@ class NLinearCrossChannel(BasicBaseModel):
         if self.bias is not None:
             y = y + self.bias
         return y + x_last, {}
+
+
+class NLinearStacked(BasicBaseModel):
+    """
+    !!! tip "Example parameter configurations"
+        ```toml
+        [definitions.NLinearStacked]
+        cls_path = "nazuna.models.dlinear.NLinearStacked"
+        [definitions.NLinearStacked.params]
+        seq_len = 96  # task-dependent
+        pred_len = 24  # task-dependent
+        c_in = 7  # task-dependent
+        bias = true
+        scaler_cls_path = "nazuna.models.common.IqrScaler"
+        scaler_params = { "stat_types" = [ "qtile_full", "saved",] }
+        prep_type = "none"
+        use_revin = false
+        revin_affine = false
+        revin_eps = 1e-5
+        ```
+    """
+    def _setup(
+        self,
+        seq_len: int,
+        pred_len: int,
+        c_in: int,
+        bias: bool,
+        scaler_cls: type | None = IqrScaler,
+        scaler_params: dict | None = {'stat_types': ('qtile_full', 'saved')},
+        prep_type: str = 'none',
+        use_revin: bool = False, revin_affine: bool = False, revin_eps: float = 1e-5,
+        use_lc: bool = False, lc_end_epoch: int | None = None, lc_rate: float | None = None,
+    ) -> None:
+        super()._setup(
+            seq_len, pred_len, scaler_cls, scaler_params, prep_type=prep_type,
+            use_revin=use_revin, revin_eps=revin_eps,
+            revin_affine=revin_affine, c_in=c_in,
+        )
+        self.Linear = torch.nn.Linear(seq_len, pred_len, bias=bias)
+        self.Linear.weight = torch.nn.Parameter(torch.ones(pred_len, seq_len) * (0.9 / seq_len))
+        self.weight = torch.nn.Parameter(torch.empty(c_in, c_in, seq_len, pred_len))
+        if bias:
+            self.bias = torch.nn.Parameter(torch.zeros(pred_len, c_in))
+        else:
+            self.bias = None
+        self.weight.data.fill_(0.1 / (seq_len * c_in))
+
+    def forward(self, x):
+        x_last = x[:, -1:, :]  # [B, 1, C]
+        x = x - x_last
+
+        y = x.permute(0, 2, 1)  # [B, C, L]
+        y = self.Linear(y)  # [B, C, T]
+        y = y.permute(0, 2, 1)  # [B, T, C]
+
+        # einsum: (B, S, C) x (C, C, S, P) -> (B, P, C)
+        z = torch.einsum('bsc,ocsp->bpo', x, self.weight)
+        if self.bias is not None:
+            z = z + self.bias
+        return x_last + y + z, {}
