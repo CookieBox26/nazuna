@@ -103,6 +103,11 @@ class BaseModel(torch.nn.Module, ABC):
             model.load_state_dict(state_dict, strict=False)
         return model
 
+    def get_args_for_optimizer(self, optimizer_params):
+        args = {'params': (p for p in self.parameters() if p.requires_grad)}
+        args |= optimizer_params
+        return [args]
+
     def count_trainable_parameters(self):
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
 

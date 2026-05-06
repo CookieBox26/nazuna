@@ -470,6 +470,7 @@ class NLinearStacked(BasicBaseModel):
         c_in: int,
         bias: bool,
         freeze_nlinear: bool = False,
+        nlinear_lr_scale: float = 1.0,
         scaler_cls: type | None = IqrScaler,
         scaler_params: dict | None = {'stat_types': ('qtile_full', 'saved')},
         prep_type: str = 'none',
@@ -484,14 +485,30 @@ class NLinearStacked(BasicBaseModel):
         self.Linear = torch.nn.Linear(seq_len, pred_len, bias=bias)
         self.Linear.weight = torch.nn.Parameter(torch.ones(pred_len, seq_len) * (0.9 / seq_len))
         self.weight = torch.nn.Parameter(torch.empty(c_in, c_in, seq_len, pred_len))
+        self.bias = None
         if bias:
             self.bias = torch.nn.Parameter(torch.zeros(pred_len, c_in))
-        else:
-            self.bias = None
         self.weight.data.fill_(0.1 / (seq_len * c_in))
-        if freeze_nlinear:
+        self.freeze_nlinear = freeze_nlinear
+        if self.freeze_nlinear:
             for p in self.Linear.parameters():
                 p.requires_grad = False
+        self.nlinear_lr_scale = nlinear_lr_scale
+
+    def get_args_for_optimizer(self, optimizer_params):
+        li_args = []
+        if not self.freeze_nlinear:
+            args = {'params': (p for p in self.Linear.parameters() if p.requires_grad)}
+            args |= optimizer_params
+            args['lr'] *= self.nlinear_lr_scale
+            li_args.append(args)
+        params = [self.weight]
+        if self.bias is not None:
+            params.append(self.bias)
+        args = {'params': (p for p in params if p.requires_grad)}
+        args |= optimizer_params
+        li_args.append(args)
+        return li_args
 
     def forward(self, x):
         x_last = x[:, -1:, :]  # [B, 1, C]
