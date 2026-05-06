@@ -43,6 +43,9 @@ class WorkflowResult(Workflow):
     def from_conf_toml_path(cls, p: Path | str):
         conf_path_raw = load_config_from_path(Path(p))
         conf_path = Path(conf_path_raw['out_dir']) / 'config.toml'
+        if not conf_path.is_file():
+            print(f'No configuration file was processed at runtime: {conf_path}')
+            return None
         conf_dict = toml.loads(conf_path.read_text(encoding='utf8'))
         conf_dict['exist_ok'] = True
         for task in conf_dict['tasks']:
@@ -64,6 +67,9 @@ class WorkflowResult(Workflow):
                 out_path = out_path.replace(k, v)
             out_path = Path(out_path)
         result_path = out_path / 'result.toml'
+        if not result_path.is_file():
+            print(f'No result file found: {result_path}')
+            return None if as_sn else (None, None)
         result = toml.loads(result_path.read_text(encoding='utf8'))
         if as_sn:
             return types.SimpleNamespace(conf=conf, result=result)

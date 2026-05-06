@@ -420,7 +420,10 @@ class TrainTaskRunner(EvalTaskRunner):
 
         self.criterion = self.criterion_cls.create(self.device, **self.criterion_params)
         self.model = self.model_cls.create(self.device, **self.model_params)
-        self.optimizer = self.optimizer_cls(self.model.parameters(), **self.optimizer_params)
+        self.optimizer = self.optimizer_cls(
+            (p for p in self.model.parameters() if p.requires_grad),
+            **self.optimizer_params,
+        )
         self.lr_scheduler = None
         if self.lr_scheduler_cls:
             self.lr_scheduler = self.lr_scheduler_cls(self.optimizer, **self.lr_scheduler_params)

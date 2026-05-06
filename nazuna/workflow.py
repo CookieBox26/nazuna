@@ -183,8 +183,10 @@ class Workflow:
             return list(range(int(a), int(b) + 1))
         return [int(i) for i in skip_task_ids_.split(',') if i != '']
 
-    def run(self, skip_task_ids_: str = ''):
+    def run(self, skip_task_ids_: str = '', target_tasks_: str = ''):
         skip_task_ids = type(self).parse_skip_task_ids(skip_task_ids_)
+        target_tasks = [t for t in target_tasks_.split(',') if t != '']
+        assert len(skip_task_ids) == 0 or len(target_tasks) == 0
         dm = TimeSeriesDataManager(**self.get_data_param())
         task_runners = self.create_task_runners(dm)
         self.out_path.mkdir(parents=True, exist_ok=self.exist_ok)
@@ -192,6 +194,9 @@ class Workflow:
         info = {}
         with measure_time(info):
             for i_task, task_runner in enumerate(task_runners):
+                if len(target_tasks) > 0:
+                    if not task_runner.name in target_tasks:
+                        continue
                 if i_task in skip_task_ids:
                     continue
                 task_runner.run()
@@ -227,7 +232,10 @@ class WorkflowTemplateResolver:
 
     @classmethod
     def get_task_pilot(cls, d, i_trial=0):
-        task = {'task_type': 'train', 'name': f'Pilot {i_trial}', 'early_stop': True}
+        task = {
+            'task_type': 'train', 'name': f'Pilot {i_trial}', 'early_stop': True,
+            'model_state_path': None,
+        }
         keys = ['data_range_train_pilot', 'data_range_eval_pilot', 'criterion_target'] + \
             ['model', 'batch_sampler', 'optimizer', 'lr_scheduler', 'n_epoch', 'patience']
         rename = {f'data_range_{t}_pilot': f'data_range_{t}' for t in ['train', 'eval']}
@@ -236,7 +244,7 @@ class WorkflowTemplateResolver:
 
     @classmethod
     def get_task_train(cls, d, i_trial=0):
-        task = {'task_type': 'train', 'name': f'Train {i_trial}'}
+        task = {'task_type': 'train', 'name': f'Train {i_trial}', 'model_state_path': None}
         task['n_epoch'] = {'task_name': f'Pilot {i_trial}'}
         keys = ['data_range_train', 'criterion_target'] + \
             ['model', 'batch_sampler', 'optimizer', 'lr_scheduler']
@@ -367,8 +375,9 @@ def normalize_config(source: dict | Path | str):
 def run(
     source: dict | Path | str,
     skip_task_ids_: str = '',
+    target_tasks_: str = '',
 ):
     d = normalize_config(source)
     d = WorkflowTemplateResolver.resolve(d)
     wf = Workflow(**d)
-    wf.run(skip_task_ids_=skip_task_ids_)
+    wf.run(skip_task_ids_=skip_task_ids_, target_tasks_=target_tasks_)

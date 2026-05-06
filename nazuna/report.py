@@ -194,9 +194,10 @@ def report(
                 else:
                     f.write(f'{msg}\n\n')
 
-            result = toml.loads(
-                (task_runner.out_path / 'result.toml').read_text(encoding='utf8'),
-            )
+            result_path = task_runner.out_path / 'result.toml'
+            if not result_path.is_file():
+                continue
+            result = toml.loads(result_path.read_text(encoding='utf8'))
             f.write('```toml\n')
             f.write(toml.dumps(result))
             f.write('```\n')

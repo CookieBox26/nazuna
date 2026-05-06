@@ -1,0 +1,16 @@
+out_dir = "__CONFIG_STEM__"
+exist_ok = true
+
+# =============== data ===============
+[data]
+path = [ "jma", "weather_japan_hourly_2023-01-01_2025-12-31_11_blocks.csv",]
+colname_timestamp = "timestamp"
+seq_len = 193
+pred_len = 24
+
+# =============== tasks ===============
+[[tasks]]
+task_type = "diag"
+name = "Diag"
+data_range_diag = [ 0.0, 0.8,]
+period = 24

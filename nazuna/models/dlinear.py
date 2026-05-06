@@ -454,6 +454,7 @@ class NLinearStacked(BasicBaseModel):
         pred_len = 24  # task-dependent
         c_in = 7  # task-dependent
         bias = true
+        freeze_nlinear = false
         scaler_cls_path = "nazuna.models.common.IqrScaler"
         scaler_params = { "stat_types" = [ "qtile_full", "saved",] }
         prep_type = "none"
@@ -468,6 +469,7 @@ class NLinearStacked(BasicBaseModel):
         pred_len: int,
         c_in: int,
         bias: bool,
+        freeze_nlinear: bool = False,
         scaler_cls: type | None = IqrScaler,
         scaler_params: dict | None = {'stat_types': ('qtile_full', 'saved')},
         prep_type: str = 'none',
@@ -487,6 +489,9 @@ class NLinearStacked(BasicBaseModel):
         else:
             self.bias = None
         self.weight.data.fill_(0.1 / (seq_len * c_in))
+        if freeze_nlinear:
+            for p in self.Linear.parameters():
+                p.requires_grad = False
 
     def forward(self, x):
         x_last = x[:, -1:, :]  # [B, 1, C]
