@@ -146,6 +146,7 @@ class WorkflowResult(Workflow):
             str(trial.pilot.conf['n_epoch'])
         row['elapse_p'] = cls.shorten_time(trial.pilot.result['elapsed'])
         row['elapse_t'] = cls.shorten_time(trial.train.result['elapsed'])
+        row['model_size'] = trial.eval.result.get('parameters_trainable', -1)
         row_model = collections.OrderedDict([('index', index_)])
         for k, v in trial.train.conf['model']['params'].items():
             if k == 'scaler_cls_path':

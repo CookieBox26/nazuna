@@ -1,7 +1,6 @@
 from nazuna.models._base import BasicBaseModel
 from nazuna.models.common import \
-    IqrScaler, TimeFeatureEmbedding, MovingAverageDecomp, TokenNormSeriesDemean, \
-    TransformerEncoderLayer
+    IqrScaler, TimeFeatureEmbedding, MovingAverageDecomp, TokenNormSeriesDemean
 import numpy as np
 import torch
 import math
@@ -133,6 +132,56 @@ class AutoCorrelation(torch.nn.Module):
         return self.out_proj(agg), scores
 
 
+class AutoformerEncoderLayer(torch.nn.Module):
+    def __init__(
+        self, self_attn, d_model, d_ff, decomp_0, decomp_1,
+        dropout_sa=0.1, dropout_ff=(0.0, 0.1), bias=False,
+        decomp_first=False, put_back_trend=False,
+    ):
+        super().__init__()
+        self.self_attn = self_attn
+        self.dropout_sa = torch.nn.Dropout(dropout_sa)
+        self.ff = torch.nn.Sequential(
+            torch.nn.Linear(d_model, d_ff, bias=bias),
+            torch.nn.GELU(),
+            torch.nn.Dropout(dropout_ff[0]),
+            torch.nn.Linear(d_ff, d_model, bias=bias),
+            torch.nn.Dropout(dropout_ff[1]),
+        )
+        self.decomp_0, self.decomp_1 = decomp_0, decomp_1
+        if not decomp_first:
+            assert not put_back_trend
+        self.decomp_first = decomp_first
+        self.put_back_trend = put_back_trend
+
+    def forward(self, x, prev_attn_scores=None):
+        if self.decomp_first:
+            x_save = x
+            x, trend_0 = self.decomp_0(x)
+            x, attn_scores = self.self_attn(x, x, x, prev_attn_scores=prev_attn_scores)
+            x = self.dropout_sa(x)
+            x = x + x_save
+            if self.put_back_trend:
+                x = x + trend_0
+            x_save = x
+            x, trend_1 = self.decomp_1(x)
+            x = self.ff(x)
+            x = x + x_save
+            if self.put_back_trend:
+                x = x + trend_1
+        else:
+            x_save = x
+            x, attn_scores = self.self_attn(x, x, x, prev_attn_scores=prev_attn_scores)
+            x = self.dropout_sa(x)
+            x = x + x_save
+            x, _ = self.decomp_0(x)
+            x_save = x
+            x = self.ff(x)
+            x = x + x_save
+            x, _ = self.decomp_1(x)
+        return x, attn_scores
+
+
 class AutoformerDecoderLayer(torch.nn.Module):
     def __init__(
         self, self_ac, cross_ac, d_model, d_ff, c_out, decomp_0, decomp_1, decomp_2,
@@ -258,16 +307,15 @@ class Autoformer(BasicBaseModel):
         self.dropout_emb = torch.nn.Dropout(dropout_emb)
 
         self.encoder_layers = torch.nn.ModuleList([
-            TransformerEncoderLayer(
+            AutoformerEncoderLayer(
                 self_attn=AutoCorrelation(
                     d_model, n_heads, topk_factor=topk_factor, dropout_aw=dropout_aw,
                     approx_durning_training=approx_durning_training,
                     independent_heads=independent_heads,
                 ),
                 d_model=d_model, d_ff=d_ff,
-                norm_0=MovingAverageDecomp(decomp_kernel, n_moving_avg, True),
-                norm_1=MovingAverageDecomp(decomp_kernel, n_moving_avg, True),
-                activation=torch.nn.GELU(),
+                decomp_0=MovingAverageDecomp(decomp_kernel, n_moving_avg),
+                decomp_1=MovingAverageDecomp(decomp_kernel, n_moving_avg),
                 dropout_sa=dropout_ac, dropout_ff=dropout_ff, bias=False,
             ) for _ in range(e_layers)
         ])
@@ -360,3 +408,113 @@ class Autoformer(BasicBaseModel):
         seasonal_part = self.out_proj(dec_h)
         out = seasonal_part + trend
         return out[:, -self.pred_len:, :], {}
+
+
+class AutoformerLight(BasicBaseModel):
+    """
+    !!! tip "Example parameter configurations"
+        ```toml
+        [definitions.AutoformerLight]
+        cls_path = "nazuna.models.autoformer.AutoformerLight"
+        [definitions.AutoformerLight.params]
+        seq_len = 96  # task-dependent
+        pred_len = 24  # task-dependent
+        c_in = 10  # task-dependent
+        use_time_features = false
+        freq = "hour"  # for time feature extraction
+        e_layers = 2  # number of encoder layers
+        d_model = 128
+        n_heads = 4
+        d_ff = 256
+        decomp_kernel = 25
+        n_moving_avg = 1
+        topk_factor = 3.0  # keep top-k = floor(topk_factor log (L+1)) lags
+        dropout_emb = 0.05  # dropout after embedding
+        dropout_aw = 0.1  # dropout on attention weights
+        dropout_ac = 0.1  # dropout on AutoCorrelation output
+        dropout_ff = [ 0.0, 0.2,]  # dropout before and after the FFN intermediate layer
+        res_attention = false
+        approx_durning_training = true  # whether to approximate AutoCorrelation during training
+        independent_heads = false  # whether to pick top-k lags per head
+        scaler_cls_path = "nazuna.models.common.IqrScaler"
+        scaler_params = { "stat_types" = [ "qtile_full", "saved",] }
+        prep_type = "none"
+        use_revin = false
+        revin_affine = false
+        revin_eps = 1e-5
+        use_lc = false
+        lc_end_epoch = 20
+        lc_rate = 0.9
+        ```
+    """
+    def _setup(
+        self, *, seq_len: int, pred_len: int, c_in: int,
+        use_time_features: bool = False, freq: str = 'hour', e_layers: int = 2,
+        d_model: int = 128, n_heads: int = 4, d_ff: int = 256,
+        decomp_kernel: int = 25, n_moving_avg: int = 1,
+        topk_factor: float = 3.0, dropout_emb: float = 0.1,
+        dropout_aw: float = 0.1, dropout_ac: float = 0.1,
+        dropout_ff: tuple[float, float] = (0.0, 0.2), res_attention: bool = False,
+        approx_durning_training: bool = True, independent_heads: bool = False,
+        scaler_cls: type | None = IqrScaler,
+        scaler_params: dict | None = {'stat_types': ('qtile_full', 'saved')},
+        prep_type: str = 'none',
+        use_revin: bool = False, revin_affine: bool = False, revin_eps: float = 1e-5,
+        use_lc: bool = False,
+        lc_end_epoch: int | None = None, lc_rate: float | None = None,
+    ) -> None:
+        super()._setup(
+            seq_len, pred_len, scaler_cls, scaler_params, prep_type=prep_type,
+            use_revin=use_revin, revin_eps=revin_eps,
+            revin_affine=revin_affine, c_in=c_in,
+            use_lc=use_lc, lc_end_epoch=lc_end_epoch, lc_rate=lc_rate,
+        )
+        c_out = c_in
+        self.res_attention = res_attention
+        self.enc_in_proj = ConvEmb(c_in, d_model, kernel_size=3)
+        self.use_time_features = use_time_features
+        if self.use_time_features:
+            self.enc_tfe = TimeFeatureEmbedding(self.device, freq, d_model)
+        self.dropout_emb = torch.nn.Dropout(dropout_emb)
+        self.encoder_layers = torch.nn.ModuleList([
+            AutoformerEncoderLayer(
+                self_attn=AutoCorrelation(
+                    d_model, n_heads, topk_factor=topk_factor, dropout_aw=dropout_aw,
+                    approx_durning_training=approx_durning_training,
+                    independent_heads=independent_heads,
+                ),
+                d_model=d_model, d_ff=d_ff,
+                decomp_0=MovingAverageDecomp(decomp_kernel, n_moving_avg),
+                decomp_1=MovingAverageDecomp(decomp_kernel, n_moving_avg),
+                dropout_sa=dropout_ac, dropout_ff=dropout_ff, bias=False,
+                decomp_first=True, put_back_trend=True,
+            ) for _ in range(e_layers)
+        ])
+        self.Linear = torch.nn.Linear(seq_len, pred_len)
+        self.out_proj = torch.nn.Linear(d_model, c_out)
+
+    def _extract_input(self, batch):
+        x_enc, prep_info = super()._extract_input(batch)
+        if not self.use_time_features:
+            return (x_enc, None), prep_info
+        tsta = np.asarray(batch.tsta[:, -self.seq_len:])
+        x_mark_enc = self.enc_tfe.get_feats(tsta)
+        return (x_enc, x_mark_enc), prep_info
+
+    def forward(self, input_):
+        x_enc, x_mark_enc = input_
+        B, L, C = x_enc.shape
+
+        h = self.enc_in_proj(x_enc)
+        if self.use_time_features:
+            h = h + self.enc_tfe(x_mark_enc)
+        h = self.dropout_emb(h)  # (B, L_in, D)
+
+        # Encoder
+        scores = None
+        for layer in self.encoder_layers:
+            h, scores = layer(h, (scores if self.res_attention else None))
+        h = h.permute(0, 2, 1)  # (B, D, L_in)
+        h = self.Linear(h)  # (B, D, L_out)
+        h = h.permute(0, 2, 1)  # (B, L_out, D)
+        return self.out_proj(h), {}

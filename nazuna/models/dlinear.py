@@ -483,12 +483,12 @@ class NLinearStacked(BasicBaseModel):
             revin_affine=revin_affine, c_in=c_in,
         )
         self.Linear = torch.nn.Linear(seq_len, pred_len, bias=bias)
-        self.Linear.weight = torch.nn.Parameter(torch.ones(pred_len, seq_len) * (0.9 / seq_len))
+        self.Linear.weight = torch.nn.Parameter(torch.ones(pred_len, seq_len) * (0.99 / seq_len))
         self.weight = torch.nn.Parameter(torch.empty(c_in, c_in, seq_len, pred_len))
         self.bias = None
         if bias:
             self.bias = torch.nn.Parameter(torch.zeros(pred_len, c_in))
-        self.weight.data.fill_(0.1 / (seq_len * c_in))
+        self.weight.data.fill_(0.01 / (seq_len * c_in))
         self.freeze_nlinear = freeze_nlinear
         if self.freeze_nlinear:
             for p in self.Linear.parameters():

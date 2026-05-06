@@ -1,5 +1,5 @@
 from nazuna.data_manager import TimeSeriesDataset
-from nazuna.models.autoformer import AutoCorrelation, Autoformer
+from nazuna.models.autoformer import AutoCorrelation, Autoformer, AutoformerLight
 from nazuna.criteria import MSE
 import numpy as np
 import torch
@@ -7,7 +7,8 @@ import pytest
 from tests.utils import set_training, create_from_doc
 
 
-def test_doc(device):
+@pytest.mark.parametrize('model_cls', [Autoformer, AutoformerLight])
+def test_doc(device, model_cls):
     _ = create_from_doc(Autoformer, device)
 
 
@@ -46,15 +47,16 @@ def test_ac_lagged_aggregation_approx(independent_heads, mean_corr):
     ac._lagged_aggregation_approx(b, mean_corr, topk, v)
 
 
+@pytest.mark.parametrize('model_cls', [Autoformer, AutoformerLight])
 @pytest.mark.parametrize('independent_heads', [False, True])
 @pytest.mark.parametrize('training', [True, False])
 @pytest.mark.parametrize('prep_type', ['none', 'diff'])
 @pytest.mark.parametrize('use_time_features', [True, False])
 def test_forward(
-    device, dummy_data, training, independent_heads, prep_type,
+    device, dummy_data, training, model_cls, independent_heads, prep_type,
     use_time_features,
 ):
-    model = Autoformer.create(
+    model = model_cls.create(
         device=device, seq_len=16, pred_len=4, c_in=3,
         d_model=8, n_heads=2, d_ff=32, decomp_kernel=5,
         independent_heads=independent_heads,
@@ -63,20 +65,24 @@ def test_forward(
     )
     set_training(model, training)
 
-    seq_len_input = 16 + (0 if (prep_type == 'none') else 1)
-    x = dummy_data((1, seq_len_input, 3))
-    x_mark_enc = torch.zeros(1, seq_len_input, 4, device=device)
-    x_mark_dec = torch.zeros(1, 8 + 4, 4, device=device)
-    output, _ = model((x, x_mark_enc, x_mark_dec))
+    seq_len = 16
+    x = dummy_data((1, seq_len, 3))
+    x_mark_enc = torch.zeros(1, seq_len, 4, device=device)
+    if model_cls is AutoformerLight:
+        output, _ = model((x, x_mark_enc))
+    else:
+        x_mark_dec = torch.zeros(1, 8 + 4, 4, device=device)
+        output, _ = model((x, x_mark_enc, x_mark_dec))
     assert output.shape == (1, 4, 3)
 
 
+@pytest.mark.parametrize('model_cls', [Autoformer, AutoformerLight])
 @pytest.mark.parametrize('independent_heads', [False, True])
 @pytest.mark.parametrize('training', [True, False])
 @pytest.mark.parametrize('prep_type', ['none', 'diff'])
 @pytest.mark.parametrize('use_time_features', [True, False])
 def test_get_loss(
-    device, dummy_data, training, independent_heads, prep_type,
+    device, dummy_data, training, model_cls, independent_heads, prep_type,
     use_time_features,
 ):
     seq_len_input = 16 + (0 if (prep_type == 'none') else 1)
@@ -98,7 +104,7 @@ def test_get_loss(
     )
     criterion = MSE.create(device, n_channel=3, pred_len=4)
 
-    model = Autoformer.create(
+    model = model_cls.create(
         device=device, seq_len=16, pred_len=4, c_in=3,
         d_model=8, n_heads=2, d_ff=32, decomp_kernel=5,
         independent_heads=independent_heads,

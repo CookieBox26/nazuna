@@ -8,6 +8,8 @@ class BaseSimpleAverage(BasicBaseModel):
         self.period_len = period_len
         assert self.seq_len % self.period_len == 0
         self.n_period = int(self.seq_len / self.period_len)
+        assert self.pred_len % self.period_len == 0
+        self.n_repeat = int(self.pred_len / self.period_len)
 
 
 class SimpleAverage(BaseSimpleAverage):
@@ -43,7 +45,8 @@ class SimpleAverage(BaseSimpleAverage):
     def forward(self, x):
         batch_size, _, n_channel = x.shape  # batch_size, seq_len, n_channel
         x_view = x.view(batch_size, self.n_period, self.period_len, n_channel)
-        return torch.einsum('j,ijkl->ikl', (self.weight, x_view)), {}
+        y = torch.einsum('j,ijkl->ikl', (self.weight, x_view))
+        return y.repeat(1, self.n_repeat, 1), {}
 
 
 class SimpleAverageVariableDecay(BaseSimpleAverage):
@@ -77,7 +80,8 @@ class SimpleAverageVariableDecay(BaseSimpleAverage):
         )  # Ex. [3., 2., 1., 0.] (n_period = 4)
         w = self.decay_rate ** j
         w = w / w.sum()
-        return torch.einsum('j,ijkl->ikl', (w, x_view)), {}
+        y = torch.einsum('j,ijkl->ikl', (w, x_view))
+        return y.repeat(1, self.n_repeat, 1), {}
 
 
 class SimpleAverageVariableDecayChannelwise(BaseSimpleAverage):
@@ -117,4 +121,5 @@ class SimpleAverageVariableDecayChannelwise(BaseSimpleAverage):
         w = w / w.sum(dim=1, keepdim=True)
         # x_view: (batch_size, n_period, period_len, n_channel)
         # w: (n_channel, n_period) -> einsum: 'lj,ijkl->ikl'
-        return torch.einsum('lj,ijkl->ikl', (w, x_view)), {}
+        y = torch.einsum('lj,ijkl->ikl', (w, x_view))
+        return y.repeat(1, self.n_repeat, 1), {}
