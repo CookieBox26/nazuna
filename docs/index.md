@@ -43,6 +43,9 @@ uv run nazuna --example jma_optuna_dlinear
 
 # Run tasks defined in a TOML config file:
 uv run nazuna config.toml
+
+# Skip all tasks and regenerate the report only (force replot graphs)
+uv run nazuna config.toml -s 0-99 -f
 ```
 For details on how to write the TOML config file, see [How to Run](how_to_run.md).
 

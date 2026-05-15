@@ -183,7 +183,12 @@ class Workflow:
             return list(range(int(a), int(b) + 1))
         return [int(i) for i in skip_task_ids_.split(',') if i != '']
 
-    def run(self, skip_task_ids_: str = '', target_tasks_: str = ''):
+    def run(
+        self,
+        skip_task_ids_: str = '',
+        target_tasks_: str = '',
+        force_replot: bool = False,
+    ):
         skip_task_ids = type(self).parse_skip_task_ids(skip_task_ids_)
         target_tasks = [t for t in target_tasks_.split(',') if t != '']
         assert len(skip_task_ids) == 0 or len(target_tasks) == 0
@@ -191,7 +196,9 @@ class Workflow:
         task_runners = self.create_task_runners(dm)
         self.out_path.mkdir(parents=True, exist_ok=self.exist_ok)
         self.save_toml()
+        report_path = self.out_path / 'report.md'
         info = {}
+        any_task_run = False
         with measure_time(info):
             for i_task, task_runner in enumerate(task_runners):
                 if len(target_tasks) > 0:
@@ -200,8 +207,13 @@ class Workflow:
                 if i_task in skip_task_ids:
                     continue
                 task_runner.run()
-        report_path = self.out_path / 'report.md'
-        report(report_path, self.to_toml_str(), task_runners)
+                report(report_path, self.to_toml_str(), task_runners)
+                any_task_run = True
+        if force_replot:
+            if any_task_run:
+                print('force_replot is effective only when all tasks are skipped.')
+            else:
+                report(report_path, self.to_toml_str(), task_runners, force=True)
         print(f'Finished all tasks: {report_path.as_posix()} ({info["elapsed"]})')
 
 
@@ -376,8 +388,13 @@ def run(
     source: dict | Path | str,
     skip_task_ids_: str = '',
     target_tasks_: str = '',
+    force_replot: bool = False,
 ):
     d = normalize_config(source)
     d = WorkflowTemplateResolver.resolve(d)
     wf = Workflow(**d)
-    wf.run(skip_task_ids_=skip_task_ids_, target_tasks_=target_tasks_)
+    wf.run(
+        skip_task_ids_=skip_task_ids_,
+        target_tasks_=target_tasks_,
+        force_replot=force_replot,
+    )
