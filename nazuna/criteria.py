@@ -124,7 +124,7 @@ class ImprovementRate(BaseImprovement):
         pred_len: int,
         decay_rate: float | None = None,
         tolerance: float = 0,
-        epsilon: float = 1e-8,
+        epsilon: float = 1e-6,
         error_type: str = "mse",
     ):
         """

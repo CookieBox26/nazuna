@@ -130,7 +130,7 @@ class WorkflowResult(Workflow):
         criterion = cls.cls_path_to_name(trial.eval.conf['criterion']['cls_path'])
         row = collections.OrderedDict([
             ('index', index_),
-            ('model', cls.cls_path_to_name(trial.train.conf['model']['cls_path'])),
+            ('Model', cls.cls_path_to_name(trial.train.conf['model']['cls_path'])),
             # ('criterion', cls.cls_to_str()),
             (f'{criterion}_bl', trial.baseline.result['loss_per_sample']),
             (f'{criterion}_mo', trial.eval.result['loss_per_sample']),
@@ -140,13 +140,13 @@ class WorkflowResult(Workflow):
                 getattr(trial, f'eval_baseline_{criterion_a.lower()}').result['loss_per_sample']
             row[f'{criterion_a}_mo'] = \
                 getattr(trial, f'eval_{criterion_a.lower()}').result['loss_per_sample']
-        row['imprate'] = trial.imprate.result['loss_per_sample']
+        row['ImpRate'] = trial.imprate.result['loss_per_sample']
         row['seed'] = trial.train.conf.get('seed', 0)
         row['n_epoch'] = str(trial.pilot.result['i_epoch_best'] + 1) + ' / ' + \
             str(trial.pilot.conf['n_epoch'])
-        row['elapse_p'] = cls.shorten_time(trial.pilot.result['elapsed'])
-        row['elapse_t'] = cls.shorten_time(trial.train.result['elapsed'])
-        row['model_size'] = trial.eval.result.get('parameters_trainable', -1)
+        row['Elapsed_p'] = cls.shorten_time(trial.pilot.result['elapsed'])
+        row['Elapsed'] = cls.shorten_time(trial.train.result['elapsed'])
+        row['n_parameters'] = trial.eval.result.get('parameters_trainable', -1)
         row_model = collections.OrderedDict([('index', index_)])
         for k, v in trial.train.conf['model']['params'].items():
             if k == 'scaler_cls_path':

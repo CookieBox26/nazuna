@@ -1,0 +1,20 @@
+out_dir = "__CONFIG_STEM__"
+exist_ok = true
+
+# =============== data ===============
+# Obtain the Electricity dataset from the Google Drive
+# linked in the README of the Autoformer repository.
+# https://github.com/thuml/Autoformer
+[data]
+path = "~/datasets/traffic/traffic.csv"
+colname_timestamp = "date"
+seq_len = 1344
+pred_len = 168
+white_list = "0,1,2,3,4,5,6,7"
+
+# =============== tasks ===============
+[[tasks]]
+task_type = "diag"
+name = "Diag"
+data_range_diag = [ 0.0, 0.8,]
+period = 168

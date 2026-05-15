@@ -8,7 +8,8 @@ import toml
 
 plt.rcParams['svg.fonttype'] = 'path'  # convert text to paths for consistent rendering
 plt.rcParams['svg.hashsalt'] = ''  # to make the IDs deterministic
-plt.rcParams['font.size'] = 13
+plt.rcParams['font.size'] = 15
+plt.rcParams['lines.linewidth'] = 1.5
 
 
 def _plot_sample(sample_path: Path, graph_path: Path) -> None:
@@ -22,12 +23,13 @@ def _plot_sample(sample_path: Path, graph_path: Path) -> None:
     if all(t.endswith(":00") for t in timestamps):
         timestamps = [t[:-3] for t in timestamps]
 
-    fig, ax = plt.subplots(figsize=(8, 2))
+    fig, ax = plt.subplots(figsize=(5, 2))
     for i, col in enumerate(columns):
-        ax.plot(timestamps, values[:, i], label=col)
+        ax.plot(timestamps, values[:, i], label=col, linewidth=2)
 
-    ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
-    tick_step = 4
+    #ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+    ax.legend(loc='upper center', bbox_to_anchor=(0.5, -1.3), ncol=2)
+    tick_step = 12
     ax.set_xticks(range(0, len(timestamps), tick_step))
     ax.set_xticklabels(timestamps[::tick_step], rotation=90)
     ax.grid(True, which='major', axis='both', linestyle='--', linewidth=0.5)
