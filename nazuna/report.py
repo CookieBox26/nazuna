@@ -119,10 +119,40 @@ def _plot_sensitivity(history_path: Path, graph_path: Path) -> None:
     plt.close(fig)
 
 
+def _plot_if_stale(
+    cache: dict,
+    graph_path: Path,
+    input_path: Path,
+    plot_fn,
+    force: bool,
+) -> str | None:
+    entry = cache.get('graphs', {}).get(graph_path.name)
+    current_mtime = input_path.stat().st_mtime_ns
+    is_up_to_date = (
+        not force
+        and entry is not None
+        and graph_path.exists()
+        and entry.get('input') == input_path.name
+        and entry.get('input_mtime_ns') == current_mtime
+    )
+    if is_up_to_date:
+        return None
+    msg = plot_fn()
+    if msg is None:
+        cache.setdefault('graphs', {})[graph_path.name] = {
+            'input': input_path.name,
+            'input_mtime_ns': current_mtime,
+        }
+    else:
+        cache.get('graphs', {}).pop(graph_path.name, None)
+    return msg
+
+
 def report(
     report_path: Path,
     conf_toml_str: str,
     task_runners: list,
+    force: bool = False,
 ) -> None:
     with report_path.open('w', newline='\n', encoding='utf8') as f:
         f.write('### Configuration\n')
@@ -138,22 +168,36 @@ def report(
             artifacts = [
                 p.name for p in task_runner.out_path.iterdir()
                 if p.is_file()
-                and p.name != 'result.toml'
+                and p.name not in ('result.toml', '.plot_cache.toml')
             ]
             if artifacts:
                 f.write(f'Artifacts: {", ".join(artifacts)}\n\n')
 
+            cache_path = task_runner.out_path / '.plot_cache.toml'
+            if cache_path.exists():
+                cache = toml.loads(cache_path.read_text(encoding='utf8'))
+            else:
+                cache = {}
+
             sample_path = task_runner.out_path / 'sample.npz'
             if sample_path.exists():
                 graph_path = task_runner.out_path / 'graph.svg'
-                _plot_sample(sample_path, graph_path)
+                _plot_if_stale(
+                    cache, graph_path, sample_path,
+                    lambda: _plot_sample(sample_path, graph_path),
+                    force,
+                )
                 rel_path = graph_path.relative_to(report_path.parent)
                 f.write(f'![graph]({rel_path.as_posix()})\n\n')
 
             history_path = task_runner.out_path / 'train_loss_history.toml'
             if history_path.exists():
                 graph_path = task_runner.out_path / 'train_loss.svg'
-                _plot_train_loss(history_path, graph_path)
+                _plot_if_stale(
+                    cache, graph_path, history_path,
+                    lambda: _plot_train_loss(history_path, graph_path),
+                    force,
+                )
                 rel_path = graph_path.relative_to(report_path.parent)
                 f.write(f'![train_loss]({rel_path.as_posix()})\n\n')
 
@@ -168,7 +212,13 @@ def report(
                     sens_graph_path = (
                         task_runner.out_path / 'sensitivity.svg'
                     )
-                    _plot_sensitivity(history_path, sens_graph_path)
+                    _plot_if_stale(
+                        cache, sens_graph_path, history_path,
+                        lambda: _plot_sensitivity(
+                            history_path, sens_graph_path,
+                        ),
+                        force,
+                    )
                     rel_path = sens_graph_path.relative_to(
                         report_path.parent,
                     )
@@ -179,7 +229,11 @@ def report(
             pred_path = task_runner.out_path / 'pred_first.npz'
             if pred_path.exists():
                 graph_path = task_runner.out_path / 'pred_first.svg'
-                msg = _plot_pred(pred_path, graph_path)
+                msg = _plot_if_stale(
+                    cache, graph_path, pred_path,
+                    lambda: _plot_pred(pred_path, graph_path),
+                    force,
+                )
                 if msg is None:
                     rel_path = graph_path.relative_to(report_path.parent)
                     f.write(f'![pred]({rel_path.as_posix()})\n\n')
@@ -189,12 +243,21 @@ def report(
             pred_last_path = task_runner.out_path / 'pred_last.npz'
             if pred_last_path.exists():
                 graph_last_path = task_runner.out_path / 'pred_last.svg'
-                msg = _plot_pred(pred_last_path, graph_last_path)
+                msg = _plot_if_stale(
+                    cache, graph_last_path, pred_last_path,
+                    lambda: _plot_pred(pred_last_path, graph_last_path),
+                    force,
+                )
                 if msg is None:
                     rel_path = graph_last_path.relative_to(report_path.parent)
                     f.write(f'![pred_last]({rel_path.as_posix()})\n\n')
                 else:
                     f.write(f'{msg}\n\n')
+
+            if cache.get('graphs'):
+                cache_path.write_text(
+                    toml.dumps(cache), newline='\n', encoding='utf8',
+                )
 
             result_path = task_runner.out_path / 'result.toml'
             if not result_path.is_file():
