@@ -364,9 +364,32 @@ class WorkflowTemplateResolver:
 
 def load_config_from_path(p: Path):
     d = toml.loads(p.read_text(encoding='utf8'))
+
+    # If out_dir is set to __CONFIG_STEM__, resolve it to the config file stem.
     out_dir = d.get('out_dir')
     if out_dir == '__CONFIG_STEM__':
         d['out_dir'] = (p.parent / p.stem).as_posix()
+
+    # Resolve definition_includes by merging definitions from listed files.
+    # Later files override earlier ones; the config's own definitions have
+    # the highest priority. Paths may be absolute or relative to this file.
+    includes = d.pop('definition_includes', None)
+    if includes:
+        merged = {}
+        for include in includes:
+            include_path = Path(include)
+            if not include_path.is_absolute():
+                include_path = p.parent / include_path
+            if not include_path.exists():
+                raise FileNotFoundError(
+                    f'definition_includes file not found: '
+                    f'{include_path.as_posix()}'
+                )
+            included = toml.loads(include_path.read_text(encoding='utf8'))
+            merged.update(included.get('definitions', {}))
+        merged.update(d.get('definitions', {}))
+        d['definitions'] = merged
+
     return d
 
 

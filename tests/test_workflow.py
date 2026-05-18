@@ -255,11 +255,40 @@ def test_run_template_train_with_baseline_multiparams(tmp_path):
     assert conf['tasks'][1 + 1 * 4 + 1]['lr_scheduler'] == 'ExponentialLR'
 
 
+dummy_conf = '''
+definition_includes = [
+"defs.toml",
+]
+
+[definitions]
+NEpoch = 100
+'''
+dummy_defs = '''
+[definitions]
+NEpoch = 50
+
+[definitions.MSE]
+cls_path = "nazuna.criteria.MSE"
+params = { n_channel = 4, pred_len = 24 }
+'''
+
+
 def test_load_config_from_path(tmp_path):
     conf_path = tmp_path / 'hoge.toml'
+    defs_path = tmp_path / 'defs.toml'
+
     conf_path.write_text('out_dir = "__CONFIG_STEM__"', newline='\n', encoding='utf8')
     d = load_config_from_path(conf_path)
     assert d['out_dir'] == (tmp_path / 'hoge').as_posix()
+
+    conf_path.write_text(dummy_conf, newline='\n', encoding='utf8')
+    defs_path.write_text(dummy_defs, newline='\n', encoding='utf8')
+    d = load_config_from_path(conf_path)
+    assert d['definitions']['NEpoch'] == 100
+    assert d['definitions']['MSE'] == {
+        'cls_path': 'nazuna.criteria.MSE',
+        'params': {'n_channel': 4, 'pred_len': 24},
+    }
 
 
 def test_workflow_get_task_runner():
