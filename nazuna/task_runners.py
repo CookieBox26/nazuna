@@ -106,6 +106,7 @@ class EvalTaskRunner(BaseTaskRunner):
         model (dict = None): Model configuration **(required)**.
             Must have 'cls_path' (str) and 'params' (dict) keys.
         model_state_path (str | PathLike | IO[bytes] = None): Path to the model state file.
+        dump_pred_data (bool = True): Whether to dump pred_first.npz and pred_last.npz.
     """
     data_range_eval: tuple[float, float] | None = None
     data_offset_eval: int = 0
@@ -116,6 +117,7 @@ class EvalTaskRunner(BaseTaskRunner):
     model: dict = None
     model_state_path: str | os.PathLike[str] | IO[bytes] = None
     inspector_params: dict = None
+    dump_pred_data: bool = True
 
     @classmethod
     def _get_required_params(cls, func):
@@ -236,7 +238,7 @@ class EvalTaskRunner(BaseTaskRunner):
 
                 model_seq_len = getattr(self.model, 'seq_len', None)
 
-                if not sample_saved:
+                if self.dump_pred_data and not sample_saved:
                     save_data = {
                         'pred': pred[0].cpu().numpy(),
                         'data': batch.data[0].cpu().numpy(),
@@ -251,20 +253,22 @@ class EvalTaskRunner(BaseTaskRunner):
                     np.savez(self.out_path / 'pred_first.npz', **save_data)
                     sample_saved = True
 
-                last_in_batch = pred.shape[0] - 1
-                last_save_data = {
-                    'pred': pred[-1].cpu().numpy(),
-                    'data': batch.data[-1].cpu().numpy(),
-                    'data_future': batch.data_future[-1].cpu().numpy(),
-                    'sample_index': np.array(i_batch * self.batch_size_eval + last_in_batch),
-                    'timestamp': np.array(str(batch.tsta[last_in_batch, -1])),
-                }
-                if baseline is not None:
-                    last_save_data['baseline'] = baseline[-1].cpu().numpy()
-                if model_seq_len is not None:
-                    last_save_data['seq_len'] = np.array(model_seq_len)
+                if self.dump_pred_data:
+                    last_in_batch = pred.shape[0] - 1
+                    last_save_data = {
+                        'pred': pred[-1].cpu().numpy(),
+                        'data': batch.data[-1].cpu().numpy(),
+                        'data_future': batch.data_future[-1].cpu().numpy(),
+                        'sample_index': np.array(i_batch * self.batch_size_eval + last_in_batch),
+                        'timestamp': np.array(str(batch.tsta[last_in_batch, -1])),
+                    }
+                    if baseline is not None:
+                        last_save_data['baseline'] = baseline[-1].cpu().numpy()
+                    if model_seq_len is not None:
+                        last_save_data['seq_len'] = np.array(model_seq_len)
 
-        np.savez(self.out_path / 'pred_last.npz', **last_save_data)
+        if self.dump_pred_data:
+            np.savez(self.out_path / 'pred_last.npz', **last_save_data)
 
         n_sample = data_loader.dataset.n_sample
         result = {

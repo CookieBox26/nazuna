@@ -2,12 +2,7 @@ out_dir = "./out/jma_train_dlinear"
 exist_ok = true
 
 # =============== data ===============
-[data]
-path = [ "jma", "weather_japan_hourly_2025-09-01_2025-12-31_27_blocks.csv",]
-colname_timestamp = "timestamp"
-seq_len = 97  # 24 * 4 + 1
-pred_len = 24
-white_list = "temp_fukuoka,temp_osaka,temp_tokyo,temp_sendai"
+data = "JMA4"
 
 # =============== definitions ===============
 [definitions]
@@ -15,6 +10,13 @@ DataRangeEval = [ 0.8, 1.0,]
 DataRangeTrain = [ 0.0, 0.8,]
 DataRangeEvalPilot = [ 0.6, 0.8,]
 DataRangeTrainPilot = [ 0.0, 0.6,]
+
+[definitions.JMA4]
+path = [ "jma", "weather_japan_hourly_2025-09-01_2025-12-31_27_blocks.csv",]
+colname_timestamp = "timestamp"
+seq_len = 97  # 24 * 4 + 1
+pred_len = 24
+white_list = "temp_fukuoka,temp_osaka,temp_tokyo,temp_sendai"
 
 [definitions.MAE]
 cls_path = "nazuna.criteria.MAE"
@@ -60,6 +62,7 @@ name = "Eval Baseline"
 data_range_eval = "DataRangeEval"
 criterion = "MAE"
 model = "SimpleAverage"
+dump_pred_data = false
 
 [[tasks]]
 task_type = "train"

@@ -13,11 +13,21 @@ Nazuna では `Workflow` インスタンスを生成して実行することを�
 - 先行タスクの成果物 (最良エポック数や訓練済パラメータ) を引き継ぐ。
 - レポートを生成する。
 
+`Workflow.run` には以下の引数がある。
+
+- `skip_task_ids_` &mdash; スキップするタスクをインデクスで指定する (`target_tasks_` と併用不可)。
+- `target_tasks_` &mdash; 実行するタスクを名前で指定する (`--skip_task_ids_` と併用不可)。
+- `suppress_plot` &mdash; 常にグラフを出力しない。
+- `force_replot` &mdash; データに基づくグラフが既に存在したとしても、強制的にグラフを再出力する (プロット関数変更時向け)。このフラグは `skip_task_ids` または `report_only` によって全てのタスクがスキップされたときにのみ発動する。
+- `report_only` &mdash; レポート出力のみ行う。
+    - `skip_task_ids_` で全タスクをスキップする場合とは異なり、
+
 !!! Tip
 
     `Workflow` の設定記入の便利のため、以下の記法を用意している。
 
     - (設定を TOML パスで渡したとき限定) `out_dir` キーに `"__CONFIG_STEM__"` を指定すると、その TOML パスの拡張子を取ったパスを設定する (`Workflow` クラスに渡す前に解決される)。
+    - (設定を TOML パスで渡したとき限定) `definition_includes` キーにその TOML パスからの相対パスまたは絶対パスのリストを指定すると、それらから `definitions` キー (後述) を順に取り込む (つまり、同名の定義はリスト内の後ろ側が優先)。なお、その TOML パス自身も `definitions` キーをもつことができ、最優先される。
     - `definitions` キー &ndash; `tasks` で繰り返し使う設定値を定義して名前で参照できる。さらに、定義自体の記入にも、ベースとする定義名とそれに対する差分で定義することができる (`Workflow` インスタンスを実行し、各 `TaskRunner` インスタンスが生成される時に展開される)。
     - `template` キー &ndash; 典型的なシナリオの `tasks` を自動生成する (`Workflow` インスタンス生成前に `WorkflowTemplateResolver` によって展開される)。
 

@@ -1,5 +1,5 @@
 from nazuna.data_manager import TimeSeriesDataManager
-from nazuna.datasets import get_path
+from nazuna.datasets import get_dataset_path
 import pytest
 import torch
 import sys
@@ -20,7 +20,7 @@ def device():
 def get_data_manager():
     def _get_data_manager(conf_=None):
         conf_data = {
-            'path': get_path('jma', 'weather_japan_daily_2025-01-01_2025-12-31_2_blocks.csv'),
+            'path': get_dataset_path('jma', 'weather_japan_daily_2025-01-01_2025-12-31_2_blocks.csv'),
             'colname_timestamp': 'date', 'seq_len': 7 * 4, 'pred_len': 7,
             'white_list': ['temp_avg_nagoya', 'temp_avg_fukuoka'],
         }

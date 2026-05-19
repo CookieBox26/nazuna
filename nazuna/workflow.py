@@ -1,10 +1,11 @@
 import copy
 import dataclasses
+from typing import ClassVar
 from enum import Enum
 from pathlib import Path
 import toml
 import torch
-from nazuna.datasets import get_path
+from nazuna.datasets import get_dataset_path
 from nazuna.data_manager import TimeSeriesDataManager
 from nazuna.task_runners import TaskType
 from nazuna.report import report
@@ -51,12 +52,25 @@ class Workflow:
         - If a task name is not specified, it defaults to 'Task i' (0-indexed sequential number).
         - Duplicate task names are not allowed and will raise an error.
     """
+
     out_dir: str | Path = ''
     exist_ok: bool = False
-    data: dict = None
     device: str = ''
     definitions: dict = None
+    data: dict = None
     tasks: list[dict] = None
+
+    # If any of the following task keys is specified as a string,
+    # resolve it using the definitions
+    task_keys_accepting_definitions: ClassVar[list[str]] = [
+        # a dict with cls_path and params keys
+        'criterion', 'baseline_model', 'model',
+        'batch_sampler', 'optimizer', 'lr_scheduler',
+        # a list
+        'batch_size_eval', 'data_range_train', 'data_range_eval',
+        # an integer
+        'n_epoch',
+    ]
 
     @classmethod
     def _to_snake(cls, s):
@@ -64,14 +78,17 @@ class Workflow:
         return '_'.join(s.lower().split())
 
     def __post_init__(self):
+        assert self.data is not None
+        assert self.tasks is not None
+
         self.out_dir = self.out_dir or f'out/{get_timestamp()}/'
         self.out_path = Path(self.out_dir).expanduser()
-        if (not self.exist_ok) and self.out_path.exists():
-            raise FileExistsError(f'Already exists: {self.out_path.as_posix()}')
-        assert self.data is not None
         self.device = self.device or \
             str(torch.device('cuda' if torch.cuda.is_available() else 'cpu'))
-        assert self.tasks is not None
+
+        if (not self.exist_ok) and self.out_path.exists():
+            raise FileExistsError(f'Already exists: {self.out_path.as_posix()}')
+
         self.out_paths = {}
         self.task_names = []  # To use when analyzing results
         for i_task, _ in enumerate(self.tasks):
@@ -84,11 +101,47 @@ class Workflow:
             self.tasks[i_task].setdefault('out_dir', out_dir_default)
             self.out_paths[name] = Path(self.tasks[i_task]['out_dir'])
 
+        # Dry-run definition resolution
+        if isinstance(self.data, str):
+            _ = self.get_definition(self.data)
+        for i_task, _ in enumerate(self.tasks):
+            params = copy.deepcopy(self.tasks[i_task])
+            for target in type(self).task_keys_accepting_definitions:
+                if target in params and isinstance(params[target], str):
+                    _ = self.get_definition(params[target])
+
     def get_data_param(self):
-        param = copy.deepcopy(self.data)
+        if isinstance(self.data, str):
+            param = self.get_definition(self.data)
+        else:
+            param = copy.deepcopy(self.data)
         if isinstance(param['path'], (list, tuple)):
-            param['path'] = get_path(*param['path'])
+            param['path'] = get_dataset_path(*param['path'])
         return param
+
+    def get_definition(self, name):
+        assert name in self.definitions, f'There is no definition named {name}'
+        definition_raw = self.definitions[name]
+        if not isinstance(definition_raw, dict):
+            return copy.deepcopy(definition_raw)
+        definition = {}
+        if 'base' in definition_raw:
+            # If a definition has a base key, first copy the base definition
+            definition_base = self.definitions[definition_raw['base']]
+            for k, v in definition_base.items():
+                 assert k != 'base', 'Multiple inheritance is not supported'
+                 definition[k] = copy.deepcopy(v)
+        for k, v in definition_raw.items():
+            if k == 'base':
+                continue
+            if (k not in definition) or (not isinstance(v, dict)):
+                # If there is no base, or the value is not a dictionary, deep-copy it
+                definition[k] = copy.deepcopy(v)
+            else:
+                # If the value is a dict and a base definition exists, update it
+                assert isinstance(definition[k], dict)
+                definition[k].update(v)
+        return definition
 
     def parse_task_runner_config(self, i_task):
         params = copy.deepcopy(self.tasks[i_task])
@@ -97,41 +150,15 @@ class Workflow:
         params.setdefault('device', self.device)
         params.setdefault('exist_ok', self.exist_ok)
 
+        for target in type(self).task_keys_accepting_definitions:
+            if target in params and isinstance(params[target], str):
+                params[target] = self.get_definition(params[target])
+
         if 'n_epoch' in params and isinstance(params['n_epoch'], dict):
             target_path = self.out_paths[params['n_epoch']['task_name']]
             params['n_epoch_path'] = target_path / 'result.toml'
             params['n_epoch_path_defer'] = True
             del params['n_epoch']
-
-        # If the following parameters are specified as strings,
-        # resolve them using the definitions.
-        for target in [
-            'criterion', 'baseline_model', 'model',
-            'batch_sampler', 'optimizer', 'lr_scheduler',
-        ]:
-            if target in params and isinstance(params[target], str):
-                definition = self.definitions[params[target]]
-                if 'base' in definition:
-                    definition_base = self.definitions[definition['base']]
-                    params[target] = {
-                        'cls_path': definition_base['cls_path'],
-                        'params': copy.deepcopy(definition_base['params']),
-                    }
-                    if 'cls_path' in definition:
-                        params[target]['cls_path'] = definition['cls_path']
-                    if 'params' in definition:
-                        params[target]['params'].update(definition['params'])
-                else:
-                    params[target] = {
-                        'cls_path': definition['cls_path'],
-                        'params': copy.deepcopy(definition['params']),
-                    }
-        for target in [
-            'batch_size_eval', 'data_range_train', 'data_range_eval',
-            'n_epoch',
-        ]:
-            if target in params and isinstance(params[target], str):
-                params[target] = self.definitions[params[target]]
 
         if 'model_state' in params:
             target_path = self.out_paths[params['model_state']['task_name']]
@@ -149,7 +176,7 @@ class Workflow:
 
     def to_toml_str(self):
         assert [field.name for field in dataclasses.fields(self)] == \
-            ['out_dir', 'exist_ok', 'data', 'device', 'definitions', 'tasks'], \
+            ['out_dir', 'exist_ok', 'device', 'definitions', 'data', 'tasks'], \
             'Update the custom TOML stringification when fields are changed.'
         header = {'out_dir': self.out_dir, 'exist_ok': self.exist_ok, 'device': self.device}
         toml_str = toml.dumps(header) + '\n'
@@ -172,9 +199,17 @@ class Workflow:
             toml_str += s + '\n'
         return toml_str
 
-    def save_toml(self):
-        self.conf_path = self.out_path / 'config.toml'
-        self.conf_path.write_text(self.to_toml_str(), newline='\n', encoding='utf8')
+    def save_toml(self, conf_save_path):
+        conf_save_path.write_text(self.to_toml_str(), newline='\n', encoding='utf8')
+
+    @classmethod
+    def load_from_path_without_validation(cls, conf_path):
+        conf_dict = toml.loads(conf_path.read_text(encoding='utf8'))
+        exist_ok_org = conf_dict['exist_ok']
+        conf_dict['exist_ok'] = True
+        wf = Workflow(**conf_dict)
+        wf.exist_ok = exist_ok_org
+        return wf
 
     @classmethod
     def parse_skip_task_ids(cls, skip_task_ids_):
@@ -187,34 +222,39 @@ class Workflow:
         self,
         skip_task_ids_: str = '',
         target_tasks_: str = '',
+        suppress_plot: bool = False,
         force_replot: bool = False,
+        report_only: bool = False,
     ):
         skip_task_ids = type(self).parse_skip_task_ids(skip_task_ids_)
         target_tasks = [t for t in target_tasks_.split(',') if t != '']
         assert len(skip_task_ids) == 0 or len(target_tasks) == 0
+
         dm = TimeSeriesDataManager(**self.get_data_param())
         task_runners = self.create_task_runners(dm)
-        self.out_path.mkdir(parents=True, exist_ok=self.exist_ok)
-        self.save_toml()
+
+        conf_save_path = self.out_path / 'config.toml'
         report_path = self.out_path / 'report.md'
-        info = {}
         any_task_run = False
+        info = {}
         with measure_time(info):
-            for i_task, task_runner in enumerate(task_runners):
-                if len(target_tasks) > 0:
-                    if not task_runner.name in target_tasks:
+            if not report_only:
+                self.out_path.mkdir(parents=True, exist_ok=self.exist_ok)
+                self.save_toml(conf_save_path)
+                for i_task, task_runner in enumerate(task_runners):
+                    if len(target_tasks) > 0:
+                        if not task_runner.name in target_tasks:
+                            continue
+                    if i_task in skip_task_ids:
                         continue
-                if i_task in skip_task_ids:
-                    continue
-                task_runner.run()
-                report(report_path, self.to_toml_str(), task_runners)
-                any_task_run = True
-        if force_replot:
-            if any_task_run:
-                print('force_replot is effective only when all tasks are skipped.')
-            else:
-                report(report_path, self.to_toml_str(), task_runners, force=True)
-        print(f'Finished all tasks: {report_path.as_posix()} ({info["elapsed"]})')
+                    task_runner.run()
+                    report(report_path, self.to_toml_str(), task_runners, suppress_plot)
+                    any_task_run = True
+            if not any_task_run:
+                wf_saved = type(self).load_from_path_without_validation(conf_save_path)
+                toml_str = wf_saved.to_toml_str()
+                report(report_path, toml_str, task_runners, suppress_plot, force_replot)
+        print(f'Finished: {report_path.as_posix()} ({info.get("elapsed")})')
 
 
 class WorkflowTemplateResolver:
@@ -237,7 +277,7 @@ class WorkflowTemplateResolver:
 
     @classmethod
     def get_task_eval_baseline(cls, d):
-        task = {'task_type': 'eval', 'name': 'Eval Baseline'}
+        task = {'task_type': 'eval', 'name': 'Eval Baseline', 'dump_pred_data': False}
         keys = ['data_range_eval', 'criterion_eval', 'baseline_model']
         rename = {'criterion_eval': 'criterion', 'baseline_model': 'model'}
         return cls.update(task, d, keys, rename)
@@ -377,7 +417,7 @@ def load_config_from_path(p: Path):
     if includes:
         merged = {}
         for include in includes:
-            include_path = Path(include)
+            include_path = Path(include).expanduser()
             if not include_path.is_absolute():
                 include_path = p.parent / include_path
             if not include_path.exists():
@@ -411,7 +451,9 @@ def run(
     source: dict | Path | str,
     skip_task_ids_: str = '',
     target_tasks_: str = '',
+    suppress_plot: bool = False,
     force_replot: bool = False,
+    report_only: bool = False,
 ):
     d = normalize_config(source)
     d = WorkflowTemplateResolver.resolve(d)
@@ -419,5 +461,7 @@ def run(
     wf.run(
         skip_task_ids_=skip_task_ids_,
         target_tasks_=target_tasks_,
+        suppress_plot=suppress_plot,
         force_replot=force_replot,
+        report_only=report_only,
     )
