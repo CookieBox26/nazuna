@@ -751,6 +751,7 @@ name = "nazuna"
 version = "0.0.1"
 source = { editable = "." }
 dependencies = [
+    { name = "jinja2" },
     { name = "matplotlib" },
     { name = "numpy" },
     { name = "optuna" },
@@ -783,6 +784,7 @@ torch-cu130 = [
 
 [package.metadata]
 requires-dist = [
+    { name = "jinja2", specifier = "==3.1.6" },
     { name = "matplotlib", specifier = "==3.10.8" },
     { name = "mkdocs", marker = "extra == 'docs'" },
     { name = "mkdocs-material", marker = "extra == 'docs'" },

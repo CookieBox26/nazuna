@@ -1,13 +1,5 @@
-from nazuna.workflow import Workflow, load_config_from_path, run
-import toml
+from nazuna.workflow import Workflow, normalize_config, run
 import pytest
-
-
-def validate_outputs(out_dir):
-    assert out_dir.is_dir()
-    assert (out_dir / 'config.toml').is_file()
-    assert (out_dir / 'report.md').is_file()
-    return toml.loads((out_dir / 'config.toml').read_text(encoding='utf8'))
 
 
 premise = '''
@@ -107,7 +99,8 @@ def test_run_tasks_0(tmp_path):
     out_dir = tmp_path / 'tasks_0'
     conf = f'out_dir = "{out_dir.as_posix()}"\n' + premise + tasks_0
     run(conf)
-    validate_outputs(out_dir)
+    assert out_dir.is_dir()
+    assert (out_dir / 'report.md').is_file()
 
 
 template_train_with_baseline = '''
@@ -137,9 +130,10 @@ def test_run_template_train_with_baseline(tmp_path):
     out_dir = tmp_path / 'template_train_with_baseline'
     conf = f'out_dir = "{out_dir.as_posix()}"\n' + premise + \
         template_train_with_baseline
-    run(conf)
-    conf = validate_outputs(out_dir)
-    assert conf['tasks'][4]['name'] == 'Eval 0'
+    wf = run(conf)
+    assert out_dir.is_dir()
+    assert (out_dir / 'report.md').is_file()
+    assert wf.tasks[4]['name'] == 'Eval 0'
 
 
 template_train_with_baseline_multiseeds = '''
@@ -169,14 +163,15 @@ def test_run_template_train_with_baseline_multiseeds(tmp_path):
     out_dir = tmp_path / 'template_train_with_baseline_multiseeds'
     conf = f'out_dir = "{out_dir.as_posix()}"\n' + premise + \
         template_train_with_baseline_multiseeds
-    run(conf)
-    conf = validate_outputs(out_dir)
-    assert conf['tasks'][1 + 1 * 4 + 1]['name'] == 'Train 1'
-    assert conf['tasks'][1 + 1 * 4 + 1]['seed'] == 1
-    assert conf['tasks'][1 + 1 * 4 + 1]['n_epoch']['task_name'] == 'Pilot 1'
-    assert conf['tasks'][1 + 2 * 4 + 1]['name'] == 'Train 2'
-    assert conf['tasks'][1 + 2 * 4 + 1]['seed'] == 2
-    assert conf['tasks'][1 + 2 * 4 + 1]['n_epoch']['task_name'] == 'Pilot 2'
+    wf = run(conf)
+    assert out_dir.is_dir()
+    assert (out_dir / 'report.md').is_file()
+    assert wf.tasks[1 + 1 * 4 + 1]['name'] == 'Train 1'
+    assert wf.tasks[1 + 1 * 4 + 1]['seed'] == 1
+    assert wf.tasks[1 + 1 * 4 + 1]['n_epoch']['task_name'] == 'Pilot 1'
+    assert wf.tasks[1 + 2 * 4 + 1]['name'] == 'Train 2'
+    assert wf.tasks[1 + 2 * 4 + 1]['seed'] == 2
+    assert wf.tasks[1 + 2 * 4 + 1]['n_epoch']['task_name'] == 'Pilot 2'
 
 
 template_train_with_baseline_multimodels = '''
@@ -206,12 +201,13 @@ def test_run_template_train_with_baseline_multimodels(tmp_path):
     out_dir = tmp_path / 'template_train_with_baseline_multimodels'
     conf = f'out_dir = "{out_dir.as_posix()}"\n' + premise + \
         template_train_with_baseline_multimodels
-    run(conf)
-    conf = validate_outputs(out_dir)
-    assert conf['tasks'][1 + 0 * 4 + 1]['name'] == 'Train 0'
-    assert conf['tasks'][1 + 0 * 4 + 1]['model'] == 'SimpleAverageVariableDecay'
-    assert conf['tasks'][1 + 1 * 4 + 1]['name'] == 'Train 1'
-    assert conf['tasks'][1 + 1 * 4 + 1]['model'] == 'SimpleAverageVariableDecayChannelwise'
+    wf = run(conf)
+    assert out_dir.is_dir()
+    assert (out_dir / 'report.md').is_file()
+    assert wf.tasks[1 + 0 * 4 + 1]['name'] == 'Train 0'
+    assert wf.tasks[1 + 0 * 4 + 1]['model'] == 'SimpleAverageVariableDecay'
+    assert wf.tasks[1 + 1 * 4 + 1]['name'] == 'Train 1'
+    assert wf.tasks[1 + 1 * 4 + 1]['model'] == 'SimpleAverageVariableDecayChannelwise'
 
 
 template_train_with_baseline_multiparams = '''
@@ -246,19 +242,26 @@ def test_run_template_train_with_baseline_multiparams(tmp_path):
     out_dir = tmp_path / 'template_train_with_baseline_multiparams'
     conf = f'out_dir = "{out_dir.as_posix()}"\n' + premise + \
         template_train_with_baseline_multiparams
-    run(conf)
-    conf = validate_outputs(out_dir)
-    assert conf['tasks'][1 + 0 * 4 + 1]['name'] == 'Train 0'
-    assert conf['tasks'][1 + 0 * 4 + 1]['batch_sampler'] == 'BS'
-    assert conf['tasks'][1 + 0 * 4 + 1]['lr_scheduler'] == 'CosineAnnealingLR'
-    assert conf['tasks'][1 + 1 * 4 + 1]['name'] == 'Train 1'
-    assert conf['tasks'][1 + 1 * 4 + 1]['lr_scheduler'] == 'ExponentialLR'
+    wf = run(conf)
+    assert out_dir.is_dir()
+    assert (out_dir / 'report.md').is_file()
+    assert wf.tasks[1 + 0 * 4 + 1]['name'] == 'Train 0'
+    assert wf.tasks[1 + 0 * 4 + 1]['batch_sampler'] == 'BS'
+    assert wf.tasks[1 + 0 * 4 + 1]['lr_scheduler'] == 'CosineAnnealingLR'
+    assert wf.tasks[1 + 1 * 4 + 1]['name'] == 'Train 1'
+    assert wf.tasks[1 + 1 * 4 + 1]['lr_scheduler'] == 'ExponentialLR'
 
 
 dummy_conf = '''
 definition_includes = [
-"defs.toml",
+{ bundled = "common" },
+{ relpath = "defs.toml" },
 ]
+
+[definition_includes_data]
+n_channel = 4
+pred_len = 24
+period_len = 24
 
 [definitions]
 NEpoch = 100
@@ -267,24 +270,36 @@ dummy_defs = '''
 [definitions]
 NEpoch = 50
 
-[definitions.MSE]
-cls_path = "nazuna.criteria.MSE"
-params = { n_channel = 4, pred_len = 24 }
+[definitions.BSS8]
+cls_path = "nazuna.batch_samplers.BatchSamplerShuffle"
+params = { batch_size = 8 }
 '''
 
 
-def test_load_config_from_path(tmp_path):
+def test_normalize_config(tmp_path):
     conf_path = tmp_path / 'hoge.toml'
     defs_path = tmp_path / 'defs.toml'
 
     conf_path.write_text('out_dir = "__CONFIG_STEM__"', newline='\n', encoding='utf8')
-    d = load_config_from_path(conf_path)
+    d = normalize_config(conf_path)
     assert d['out_dir'] == (tmp_path / 'hoge').as_posix()
 
     conf_path.write_text(dummy_conf, newline='\n', encoding='utf8')
     defs_path.write_text(dummy_defs, newline='\n', encoding='utf8')
-    d = load_config_from_path(conf_path)
+    d = normalize_config(conf_path)
+    assert d['definitions']['BSS8'] == {
+        'cls_path': 'nazuna.batch_samplers.BatchSamplerShuffle',
+        'params': {'batch_size': 8},
+    }
+    assert d['definitions']['BSS32'] == {
+        'cls_path': 'nazuna.batch_samplers.BatchSamplerShuffle',
+        'params': {'batch_size': 32},
+    }
     assert d['definitions']['NEpoch'] == 100
+    assert d['definitions']['MAE'] == {
+        'cls_path': 'nazuna.criteria.MAE',
+        'params': {'n_channel': 4, 'pred_len': 24},
+    }
     assert d['definitions']['MSE'] == {
         'cls_path': 'nazuna.criteria.MSE',
         'params': {'n_channel': 4, 'pred_len': 24},

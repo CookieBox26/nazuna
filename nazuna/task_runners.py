@@ -18,7 +18,7 @@ from nazuna.analysis.optuna_utils import OptunaUtils
 from nazuna.analysis.diagnoser import Diagnoser
 from nazuna.analysis.inspector import Inspector
 from nazuna.utils import (
-    fix_seed, load_class, measure_time, get_timestamp, get_env_info,
+    fix_seed, load_class, measure_time, get_timestamp, get_env_info, load_toml,
 )
 
 
@@ -38,14 +38,14 @@ class BaseTaskRunner(ABC):
         name (str = ''): Name of this task. Not used when running a task standalone.
         out_dir (str | Path = ''): Output path for this task's artifacts.
             Defaults to 'out/YYYYmmdd-HHMMSS/task_0/' if not specified.
-        exist_ok (bool = False): Whether to allow the output path to already exist.
+        exist_ok (bool = True): Whether to allow the output path to already exist.
         seed (int = 0): Random seed for reproducibility.
     """
     dm: TimeSeriesDataManager
     device: str = None
     name: str = None
     out_dir: str | Path = None
-    exist_ok: bool = False
+    exist_ok: bool = True
     seed: int = 0
 
     def __post_init__(self):
@@ -56,6 +56,11 @@ class BaseTaskRunner(ABC):
             raise FileExistsError(f'Already exists: {self.out_path.as_posix()}')
         self.log_path = self.out_path / 'log.txt'
         self.result = {}
+        self.result_path = type(self).to_result_path(self.out_path)
+
+    @classmethod
+    def to_result_path(cls, out_path):
+        return out_path / 'result.toml'
 
     @abstractmethod
     def _run(self):
@@ -68,10 +73,15 @@ class BaseTaskRunner(ABC):
         with self.log_path.open('a', newline='\n', encoding='utf8') as f:
             f.write(line)
 
+    def _save_result(self):
+        self.result_path.write_text(toml.dumps(self.result), newline='\n', encoding='utf8')
+
     def run(self):
         if self.result:
             raise RuntimeError('Running TaskRunner more than once is not supported.')
         self.out_path.mkdir(parents=True, exist_ok=self.exist_ok)
+        if self.result_path.exists():
+            self.result_path.unlink()
         if self.log_path.exists():
             self.log_path.unlink()
         self._log('Started')
@@ -80,10 +90,9 @@ class BaseTaskRunner(ABC):
             fix_seed(self.seed)
             self._run()
         self._log('Finished')
-        self.result_path = self.out_path / 'result.toml'
-        self.result_path.write_text(toml.dumps(self.result), newline='\n', encoding='utf8')
+        self._save_result()
         elapsed = self.result['elapsed']
-        print(f'[Task] Finished task: {self.result_path.as_posix()} ({elapsed})')
+        print(f'[Task] Finished task: {self.out_path.as_posix()} ({elapsed})')
 
 
 @dataclasses.dataclass
@@ -414,9 +423,7 @@ class TrainTaskRunner(EvalTaskRunner):
 
     def _run(self):
         if self.n_epoch_path is not None:
-            self.n_epoch = toml.loads(
-                Path(self.n_epoch_path).read_text(encoding='utf8')
-            )['i_epoch_best'] + 1
+            self.n_epoch = load_toml(self.n_epoch_path)['i_epoch_best'] + 1
 
         self.set_data_loader_train()
         if self.data_range_eval is not None:

@@ -1,0 +1,93 @@
+# =============== Data splitting ===============
+[definitions]
+DataRangeEval = [ 0.8, 1.0,]
+DataRangeTrain = [ 0.0, 0.8,]
+DataRangeEvalPilot = [ 0.6, 0.8,]
+DataRangeTrainPilot = [ 0.0, 0.6,]
+
+# =============== Criteria ===============
+[definitions.MSE]
+cls_path = "nazuna.criteria.MSE"
+params = { n_channel = {{ n_channel }}, pred_len = {{ pred_len }} }
+
+[definitions.MAE]
+cls_path = "nazuna.criteria.MAE"
+params = { n_channel = {{ n_channel }}, pred_len = {{ pred_len }} }
+
+[definitions.ImprovementRate]
+cls_path = "nazuna.criteria.ImprovementRate"
+params = { n_channel = {{ n_channel }}, pred_len = {{ pred_len }}, error_type = "mae" }
+
+# =============== Naive forcast ===============
+[definitions.LastValue]
+cls_path = "nazuna.models.simple_average.SimpleAverage"
+[definitions.LastValue.params]
+seq_len = 1
+pred_len = {{ pred_len }}
+period_len = 1
+
+[definitions.Last1Cycle]
+cls_path = "nazuna.models.simple_average.SimpleAverage"
+[definitions.Last1Cycle.params]
+seq_len = {{ period_len }}
+pred_len = {{ pred_len }}
+period_len = {{ period_len }}
+
+[definitions.Last2Cycles]
+base = "Last1Cycle"
+params = { seq_len = {{ period_len_2 }} }
+
+[definitions.Last4Cycles]
+base = "Last1Cycle"
+params = { seq_len = {{ period_len_4 }} }
+
+[definitions.Last1CycleD]
+base = "Last1Cycle"
+params = { prep_type = "diff" }
+
+[definitions.Last2CyclesD]
+base = "Last2Cycles"
+params = { prep_type = "diff" }
+
+[definitions.Last4CyclesD]
+base = "Last4Cycles"
+params = { prep_type = "diff" }
+
+# =============== Batch sampler ===============
+[definitions.BSS32]
+cls_path = "nazuna.batch_samplers.BatchSamplerShuffle"
+params = { batch_size = 32 }
+
+[definitions.BSS64]
+cls_path = "nazuna.batch_samplers.BatchSamplerShuffle"
+params = { batch_size = 64 }
+
+[definitions.BSS128]
+cls_path = "nazuna.batch_samplers.BatchSamplerShuffle"
+params = { batch_size = 128 }
+
+# =============== Optimizer ===============
+[definitions.Adam00001]
+cls_path = "torch.optim.Adam"
+params = { lr = 0.0001 }
+
+[definitions.Adam00005]
+cls_path = "torch.optim.Adam"
+params = { lr = 0.0005 }
+
+# =============== Learning rate scheduler ===============
+[definitions.ExponentialLR09]
+cls_path = "torch.optim.lr_scheduler.ExponentialLR"
+params = { gamma = 0.9 }
+
+[definitions.ExponentialLR05]
+cls_path = "torch.optim.lr_scheduler.ExponentialLR"
+params = { gamma = 0.5 }
+
+[definitions.CosineAnnealingLR20]
+cls_path = "torch.optim.lr_scheduler.CosineAnnealingLR"
+params = { T_max = 20 }
+
+[definitions.CosineAnnealingLR100]
+cls_path = "torch.optim.lr_scheduler.CosineAnnealingLR"
+params = { T_max = 100 }

@@ -1,6 +1,9 @@
 # Nazuna の設計に関するノート
 
 
+## 今後追加したい機能
+
+
 ## `Workflow` クラスと `TaskRunner` クラス
 
 ### 設計方針
@@ -16,20 +19,41 @@ Nazuna では `Workflow` インスタンスを生成して実行することを�
 `Workflow.run` には以下の引数がある。
 
 - `skip_task_ids_` &mdash; スキップするタスクをインデクスで指定する (`target_tasks_` と併用不可)。
-- `target_tasks_` &mdash; 実行するタスクを名前で指定する (`--skip_task_ids_` と併用不可)。
-- `suppress_plot` &mdash; 常にグラフを出力しない。
-- `force_replot` &mdash; データに基づくグラフが既に存在したとしても、強制的にグラフを再出力する (プロット関数変更時向け)。このフラグは `skip_task_ids` または `report_only` によって全てのタスクがスキップされたときにのみ発動する。
-- `report_only` &mdash; レポート出力のみ行う。
-    - `skip_task_ids_` で全タスクをスキップする場合とは異なり、
+- `target_tasks_` &mdash; 逆に実行するタスクのみをタスク名で指定する (`--skip_task_ids_` と併用不可)。
+- `force_rerun` &mdash; `True` そのタスクが実行済みでも (既に結果ファイルがあっても) 再実行する。
+- `suppress_plot` &mdash; `True` ならグラフを出力しない。
+- `force_replot` &mdash; `True` ならデータに基づくグラフが既に存在しても、強制的にグラフを再出力する。このフラグは `skip_task_ids` または `report_only` によって全てのタスクがスキップされたときにのみ発動する。プロット関数の変更時に強制再出力するケース向けである。
+- `report_only` &mdash; `True` ならタスクを実行せずレポート出力のみ行う (`--skip_task_ids_` で全タスクをスキップするのと等価)。
 
 !!! Tip
 
     `Workflow` の設定記入の便利のため、以下の記法を用意している。
 
-    - (設定を TOML パスで渡したとき限定) `out_dir` キーに `"__CONFIG_STEM__"` を指定すると、その TOML パスの拡張子を取ったパスを設定する (`Workflow` クラスに渡す前に解決される)。
-    - (設定を TOML パスで渡したとき限定) `definition_includes` キーにその TOML パスからの相対パスまたは絶対パスのリストを指定すると、それらから `definitions` キー (後述) を順に取り込む (つまり、同名の定義はリスト内の後ろ側が優先)。なお、その TOML パス自身も `definitions` キーをもつことができ、最優先される。
-    - `definitions` キー &ndash; `tasks` で繰り返し使う設定値を定義して名前で参照できる。さらに、定義自体の記入にも、ベースとする定義名とそれに対する差分で定義することができる (`Workflow` インスタンスを実行し、各 `TaskRunner` インスタンスが生成される時に展開される)。
-    - `template` キー &ndash; 典型的なシナリオの `tasks` を自動生成する (`Workflow` インスタンス生成前に `WorkflowTemplateResolver` によって展開される)。
+    - (設定を TOML パスで渡したとき限定) `out_dir` キーに `"__CONFIG_STEM__"` を指定すると、その TOML パスの拡張子を取ったパスを設定する (`Workflow` クラスに渡す前に解決される)。**このとき、各 `TaskRunner` の `out_dir` キーを指定してはならない。**
+    - `definitions` キー &mdash; `tasks` で繰り返し使う設定値を定義して名前で参照できる。さらに、定義自体の記入にも、ベースとする定義名とそれに対する差分で定義することができる (`Workflow` インスタンスを実行し、各 `TaskRunner` インスタンスが生成される時に展開される)。
+    - `definition_includes` キー &mdash; 定義ファイル (パッケージ同梱の定義ファイルなら `bundle` キー、ユーザによる定義ファイルなら `path` キーを指定) のリストを指定すると、それらから `definitions` キーを順に取り込む (つまり、同名の定義はリスト内の後ろ側が優先)。なお、その TOML パス自身も `definitions` キーをもつことができ、最優先される。
+        - 設定を TOML パスで渡したときは、その TOML パスからの相対パス `relpath` キーも指定できる。
+    - `template` キー &mdash; 典型的なシナリオの `tasks` を自動生成する (`Workflow` インスタンス生成前に `WorkflowTemplateResolver` によって展開される)。
+
+!!! Tip
+
+    既に途中まで / 最後まで実行した `Workflow` を再実行しても構わない。 
+
+    - ただし、`exist_ok=True` でなければならない。
+    - デフォルトでは実行済みタスクは再実行しない (再実行するなら `force_rerun` を指定する)。
+    - 別のサーバ / ディレクトリで実行した結果を移動させてきて、残タスク再実行 / レポート再出力をする場合、
+        - `Workflow` の `out_dir` キー (および指定があれば各 `TaskRunner` の `out_dir` キーも) が、再実行環境でも成立する場合、そのまま実行できる (当初の実行時と同じ個別タスクパスが認識される)。Nazuna からの相対パス指定で、再実行環境でも相対パスが同一のときや、絶対パス指定でも、同じ OS・同じユーザ名のサーバの同じ場所に移動させたときは、これに該当する。
+        - `Workflow` の `out_dir` キーが `"__CONFIG_STEM__"` 指定のときも、そのまま実行できる (当初の実行時と同じ個別タスクパスが認識される)。
+        - そうでない場合は、`Workflow` の `out_dir` キー (および指定があれば各 `TaskRunner` の `out_dir` キーも) を再実行環境のものに書き換える必要がある。
+        - 個別タスクが実行された環境は、結果ファイルの `env` に保持される。
+
+
+## `WorkflowResult` クラス
+
+`WorkflowResult` クラスは `Workflow` の派生クラスで、実行後に結果を集約するための便利クラスである。以下などの機能がある。
+
+- `wr = WorkflowResult.load(conf_toml_path)` で、ディレクトリ存在チェックを無視してインスタンス化できる。
+- タスク名を指定して、設定ファイルと結果ファイルを読み込む。
 
 
 ## `BaseModel` クラス

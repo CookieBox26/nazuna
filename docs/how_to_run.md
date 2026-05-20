@@ -12,9 +12,19 @@ uv run nazuna config.toml --skip_task_ids 0,1  # if you want to skip tasks 0 and
 The first argument is the path to the config file.
 The following options are also available:
 
-- `--skip_task_ids` &mdash; Skip tasks by index (0-based), e.g., `0,1` or `1-3`.
+- `-s, --skip_task_ids` &mdash; Skip tasks by index (0-based), e.g., `0,1` or `1-3`.
   Dependencies are not validated, so ensure that no subsequent tasks depend on the skipped ones.
   This is useful for resuming or fixing part of a workflow.
+- `-t, --target_tasks` &mdash; Run only the specified tasks by name, e.g., `Train,Eval`.
+  Cannot be combined with `--skip_task_ids`.
+- `-f, --force_rerun` &mdash; Re-run a task even when its result file already exists.
+  By default, tasks whose results already exist are skipped.
+- `--suppress_plot` &mdash; Do not generate plots.
+- `--force_replot` &mdash; Force regeneration of data-based plots even when they already exist.
+  This flag only takes effect when all tasks are skipped (via `--skip_task_ids` or `--report_only`),
+  and is intended for cases such as updating the plotting function.
+- `--report_only` &mdash; Do not run any task; only generate the report
+  (equivalent to skipping all tasks via `--skip_task_ids`).
 - `--example` &mdash; Run a bundled example config (including data).
   Specify a TOML file under [nazuna/examples/](https://github.com/CookieBox26/nazuna/tree/main/nazuna/examples), e.g., `jma_train_dlinear`
   (extension optional). No config path is required in this case.

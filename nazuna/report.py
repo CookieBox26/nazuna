@@ -6,6 +6,7 @@ from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
 import numpy as np
 import toml
+from nazuna.utils import load_toml
 
 
 class BasePlotter(ABC):
@@ -147,7 +148,7 @@ class TrainLossPlotter(BasePlotter):
         )
 
     def _plot(self) -> Figure:
-        history = toml.loads(self.history_path.read_text(encoding='utf8'))
+        history = load_toml(self.history_path)
         epochs = history['epochs']
         x = [e['i_epoch'] for e in epochs]
         train_loss = [e['train']['loss_per_sample'] for e in epochs]
@@ -175,7 +176,7 @@ class SensitivityPlotter(BasePlotter):
         )
 
     def _plot(self) -> Figure:
-        history = toml.loads(self.history_path.read_text(encoding='utf8'))
+        history = load_toml(self.history_path)
         if not (
             'eval' in history['epochs'][0]
             and 'sensitivity' in history['epochs'][0]['eval']
@@ -198,7 +199,7 @@ def _write_plot_section(f, report_path, task_runner, force_replot) -> None:
     cache = {}
     cache_path = task_runner.out_path / '.plot_cache.toml'
     if cache_path.exists():
-        cache = toml.loads(cache_path.read_text(encoding='utf8'))
+        cache = load_toml(cache_path)
 
     SamplePlotter(
         graph_path=(task_runner.out_path / 'sample.npz'),
@@ -257,11 +258,10 @@ def _write_report(
         if not suppress_plot:
             _write_plot_section(f, report_path, task_runner, force_replot)
 
-        result_path = task_runner.out_path / 'result.toml'
-        if not result_path.is_file():
+        if not task_runner.result_path.is_file():
             continue
         f.write('```toml\n')
-        f.write(toml.dumps(toml.loads(result_path.read_text(encoding='utf8'))))
+        f.write(toml.dumps(load_toml(task_runner.result_path)))
         f.write('```\n')
 
 

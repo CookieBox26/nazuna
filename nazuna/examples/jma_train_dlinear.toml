@@ -5,30 +5,23 @@ exist_ok = true
 data = "JMA4"
 
 # =============== definitions ===============
-[definitions]
-DataRangeEval = [ 0.8, 1.0,]
-DataRangeTrain = [ 0.0, 0.8,]
-DataRangeEvalPilot = [ 0.6, 0.8,]
-DataRangeTrainPilot = [ 0.0, 0.6,]
+definition_includes = [
+{ bundled = "common" },
+]
+
+[definition_includes_data]
+n_channel = 4
+pred_len = 24
+period_len = 24
 
 [definitions.JMA4]
-path = [ "jma", "weather_japan_hourly_2025-09-01_2025-12-31_27_blocks.csv",]
 colname_timestamp = "timestamp"
 seq_len = 97  # 24 * 4 + 1
 pred_len = 24
 white_list = "temp_fukuoka,temp_osaka,temp_tokyo,temp_sendai"
-
-[definitions.MAE]
-cls_path = "nazuna.criteria.MAE"
-params = { n_channel = 4, pred_len = 24 }
-
-[definitions.ImprovementRate]
-cls_path = "nazuna.criteria.ImprovementRate"
-params = { n_channel = 4, pred_len = 24, error_type = "mae" }
-
-[definitions.SimpleAverage]
-cls_path = "nazuna.models.simple_average.SimpleAverage"
-params = { seq_len = 96, pred_len = 24, period_len = 24, prep_type = "diff" }
+[definitions.JMA4.path]
+category = "jma"
+filename = "weather_japan_hourly_2025-09-01_2025-12-31_27_blocks.csv"
 
 [definitions.DLinear]
 cls_path = "nazuna.models.dlinear.DLinear"
@@ -43,25 +36,13 @@ use_lc = true
 lc_end_epoch = 20
 lc_rate = 0.9
 
-[definitions.BatchSamplerShuffle]
-cls_path = "nazuna.batch_samplers.BatchSamplerShuffle"
-params = { batch_size = 32 }
-
-[definitions.Adam]
-cls_path = "torch.optim.Adam"
-params = { lr = 0.0001 }
-
-[definitions.CosineAnnealingLR]
-cls_path = "torch.optim.lr_scheduler.CosineAnnealingLR"
-params = { T_max = 100 }
-
 # =============== tasks ===============
 [[tasks]]
 task_type = "eval"
 name = "Eval Baseline"
 data_range_eval = "DataRangeEval"
 criterion = "MAE"
-model = "SimpleAverage"
+model = "Last4CyclesD"
 dump_pred_data = false
 
 [[tasks]]
@@ -71,9 +52,9 @@ data_range_train = "DataRangeTrainPilot"
 data_range_eval = "DataRangeEvalPilot"
 criterion = "MAE"
 model = "DLinear"
-batch_sampler = "BatchSamplerShuffle"
-optimizer = "Adam"
-lr_scheduler = "CosineAnnealingLR"
+batch_sampler = "BSS32"
+optimizer = "Adam00001"
+lr_scheduler = "CosineAnnealingLR100"
 n_epoch = 5
 early_stop = true
 
@@ -83,9 +64,9 @@ name = "Train"
 data_range_train = "DataRangeTrain"
 criterion = "MAE"
 model = "DLinear"
-batch_sampler = "BatchSamplerShuffle"
-optimizer = "Adam"
-lr_scheduler = "CosineAnnealingLR"
+batch_sampler = "BSS32"
+optimizer = "Adam00001"
+lr_scheduler = "CosineAnnealingLR100"
 n_epoch = { task_name = "Pilot" }
 
 [[tasks]]
@@ -101,6 +82,6 @@ task_type = "eval"
 name = "Eval ImpRate"
 data_range_eval = "DataRangeEval"
 criterion = "ImprovementRate"
-baseline_model = "SimpleAverage"
+baseline_model = "Last4CyclesD"
 model = "DLinear"
 model_state = { task_name = "Train" }

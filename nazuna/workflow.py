@@ -6,10 +6,11 @@ from pathlib import Path
 import toml
 import torch
 from nazuna.datasets import get_dataset_path
+from nazuna.definitions import get_definition
 from nazuna.data_manager import TimeSeriesDataManager
 from nazuna.task_runners import TaskType
 from nazuna.report import report
-from nazuna.utils import as_path_if_length_safe, measure_time, get_timestamp
+from nazuna.utils import as_path_if_length_safe, measure_time, get_timestamp, load_toml
 
 
 @dataclasses.dataclass
@@ -28,7 +29,7 @@ class Workflow:
               (it will be overwritten with the resolved config.toml).
               In that case, set exist_ok to True.
 
-        exist_ok (bool = False): Whether to allow the output path to already exist.
+        exist_ok (bool = True): Whether to allow the output path to already exist.
         data (dict = None): Data configuration for
             [TimeSeriesDataManager](reference_others.md#nazuna.data_manager.TimeSeriesDataManager)
             **(required)**.
@@ -54,7 +55,7 @@ class Workflow:
     """
 
     out_dir: str | Path = ''
-    exist_ok: bool = False
+    exist_ok: bool = True
     device: str = ''
     definitions: dict = None
     data: dict = None
@@ -86,8 +87,8 @@ class Workflow:
         self.device = self.device or \
             str(torch.device('cuda' if torch.cuda.is_available() else 'cpu'))
 
-        if (not self.exist_ok) and self.out_path.exists():
-            raise FileExistsError(f'Already exists: {self.out_path.as_posix()}')
+        assert self.exist_ok or (not self.out_path.exists()), \
+            f'Already exists: {self.out_path.as_posix()}'
 
         self.out_paths = {}
         self.task_names = []  # To use when analyzing results
@@ -99,9 +100,13 @@ class Workflow:
             self.task_names.append(name)
             out_dir_default = (self.out_path / type(self)._to_snake(name)).as_posix()
             self.tasks[i_task].setdefault('out_dir', out_dir_default)
-            self.out_paths[name] = Path(self.tasks[i_task]['out_dir'])
+            task_out_path = Path(self.tasks[i_task]['out_dir'])
+            assert task_out_path.parent == self.out_path, \
+                f'Task path must be under the workflow path.\n{self.out_path}\n{task_out_path}'
+            self.out_paths[name] = task_out_path
 
         # Dry-run definition resolution
+        self.used_definitions = set()
         if isinstance(self.data, str):
             _ = self.get_definition(self.data)
         for i_task, _ in enumerate(self.tasks):
@@ -115,21 +120,26 @@ class Workflow:
             param = self.get_definition(self.data)
         else:
             param = copy.deepcopy(self.data)
-        if isinstance(param['path'], (list, tuple)):
+        if isinstance(param['path'], dict):
+            param['path'] = get_dataset_path(**param['path'])
+        elif isinstance(param['path'], (list, tuple)):  # legacy compatibility
             param['path'] = get_dataset_path(*param['path'])
         return param
 
-    def get_definition(self, name):
+    def get_definition(self, name, _depth=0):
+        assert _depth <= 5, \
+            f'Inheritance depth exceeded (>5) at "{name}"'
         assert name in self.definitions, f'There is no definition named {name}'
         definition_raw = self.definitions[name]
+        self.used_definitions.add(name)
         if not isinstance(definition_raw, dict):
             return copy.deepcopy(definition_raw)
         definition = {}
         if 'base' in definition_raw:
-            # If a definition has a base key, first copy the base definition
-            definition_base = self.definitions[definition_raw['base']]
+            # If a definition has a base key, first copy the (recursively resolved) base
+            base_name = definition_raw['base']
+            definition_base = self.get_definition(base_name, _depth=_depth + 1)
             for k, v in definition_base.items():
-                 assert k != 'base', 'Multiple inheritance is not supported'
                  definition[k] = copy.deepcopy(v)
         for k, v in definition_raw.items():
             if k == 'base':
@@ -156,7 +166,7 @@ class Workflow:
 
         if 'n_epoch' in params and isinstance(params['n_epoch'], dict):
             target_path = self.out_paths[params['n_epoch']['task_name']]
-            params['n_epoch_path'] = target_path / 'result.toml'
+            params['n_epoch_path'] = task_runner_cls.to_result_path(target_path)
             params['n_epoch_path_defer'] = True
             del params['n_epoch']
 
@@ -178,7 +188,11 @@ class Workflow:
         assert [field.name for field in dataclasses.fields(self)] == \
             ['out_dir', 'exist_ok', 'device', 'definitions', 'data', 'tasks'], \
             'Update the custom TOML stringification when fields are changed.'
-        header = {'out_dir': self.out_dir, 'exist_ok': self.exist_ok, 'device': self.device}
+        header = {
+            'out_dir': self.out_dir,
+            # 'exist_ok': self.exist_ok,
+            # 'device': self.device,
+        }
         toml_str = toml.dumps(header) + '\n'
         toml_str += '# =============== data ===============\n'
         toml_str += toml.dumps({'data': self.data}) + '\n'
@@ -186,10 +200,14 @@ class Workflow:
             toml_str += '# =============== definitions ===============\n'
             toml_str += '[definitions]\n'
             for k, v in self.definitions.items():
+                if k not in self.used_definitions:
+                    continue
                 if not isinstance(v, dict):
                     toml_str += toml.dumps({k: v})
             toml_str += '\n'
             for k, v in self.definitions.items():
+                if k not in self.used_definitions:
+                    continue
                 if isinstance(v, dict):
                     toml_str += toml.dumps({'definitions': {k: v}}).replace('\n\n', '\n') + '\n'
         toml_str += '# =============== tasks ===============\n'
@@ -198,18 +216,6 @@ class Workflow:
             s = toml.dumps({'tasks': [task]}).replace('\n\n', '\n')
             toml_str += s + '\n'
         return toml_str
-
-    def save_toml(self, conf_save_path):
-        conf_save_path.write_text(self.to_toml_str(), newline='\n', encoding='utf8')
-
-    @classmethod
-    def load_from_path_without_validation(cls, conf_path):
-        conf_dict = toml.loads(conf_path.read_text(encoding='utf8'))
-        exist_ok_org = conf_dict['exist_ok']
-        conf_dict['exist_ok'] = True
-        wf = Workflow(**conf_dict)
-        wf.exist_ok = exist_ok_org
-        return wf
 
     @classmethod
     def parse_skip_task_ids(cls, skip_task_ids_):
@@ -222,6 +228,7 @@ class Workflow:
         self,
         skip_task_ids_: str = '',
         target_tasks_: str = '',
+        force_rerun: bool = False,
         suppress_plot: bool = False,
         force_replot: bool = False,
         report_only: bool = False,
@@ -233,27 +240,30 @@ class Workflow:
         dm = TimeSeriesDataManager(**self.get_data_param())
         task_runners = self.create_task_runners(dm)
 
-        conf_save_path = self.out_path / 'config.toml'
         report_path = self.out_path / 'report.md'
         any_task_run = False
         info = {}
         with measure_time(info):
             if not report_only:
-                self.out_path.mkdir(parents=True, exist_ok=self.exist_ok)
-                self.save_toml(conf_save_path)
                 for i_task, task_runner in enumerate(task_runners):
                     if len(target_tasks) > 0:
                         if not task_runner.name in target_tasks:
                             continue
                     if i_task in skip_task_ids:
                         continue
+                    if task_runner.result_path.exists():
+                        if force_rerun:
+                            print('Result already exists, but rerunning.')
+                        else:
+                            print('Result already exists. Skipping.')
+                            continue
+                    if not any_task_run:
+                        self.out_path.mkdir(parents=True, exist_ok=self.exist_ok)
+                        any_task_run = True
                     task_runner.run()
                     report(report_path, self.to_toml_str(), task_runners, suppress_plot)
-                    any_task_run = True
             if not any_task_run:
-                wf_saved = type(self).load_from_path_without_validation(conf_save_path)
-                toml_str = wf_saved.to_toml_str()
-                report(report_path, toml_str, task_runners, suppress_plot, force_replot)
+                report(report_path, self.to_toml_str(), task_runners, suppress_plot, force_replot)
         print(f'Finished: {report_path.as_posix()} ({info.get("elapsed")})')
 
 
@@ -402,55 +412,76 @@ class WorkflowTemplateResolver:
         return d
 
 
+def resolve_definition_includes(d: dict, p: Path | None):
+    # Resolve definition_includes by merging definitions from listed files.
+    # Later files override earlier ones; the config's own definitions have
+    # the highest priority. "relpath" is resolved relative to the config TOML's
+    # directory and is only usable when the config is loaded from a TOML file.
+    definition_includes = d.pop('definition_includes', None)
+    definition_includes_data = d.pop('definition_includes_data', None)
+    if not definition_includes:
+        return
+    merged = {}
+    for include in definition_includes:
+        assert isinstance(include, dict), 'include must be specified as a table.'
+        assert set(include) in ({'bundled'}, {'path'}, {'relpath'}), \
+            'include must have exactly one of "bundled", "path", or "relpath".'
+        if 'bundled' in include:
+            included = get_definition(include['bundled'], definition_includes_data)
+        else:
+            if 'relpath' in include:
+                assert p is not None, \
+                    'relpath cannot be used when the config is not loaded from a TOML file.'
+                include_path = (p.parent / Path(include['relpath']).expanduser())
+            else:
+                include_path = Path(include['path']).expanduser()
+            assert include_path.exists(), \
+                f'definition_includes file not found: {include_path.as_posix()}'
+            included = load_toml(include_path)
+        merged.update(included['definitions'])
+    merged.update(d.get('definitions', {}))
+    d['definitions'] = merged
+
+
 def load_config_from_path(p: Path):
-    d = toml.loads(p.read_text(encoding='utf8'))
+    d = load_toml(p)
 
     # If out_dir is set to __CONFIG_STEM__, resolve it to the config file stem.
     out_dir = d.get('out_dir')
     if out_dir == '__CONFIG_STEM__':
+        assert all('out_dir' not in t for t in d.get('tasks', [])), \
+            'Do not specify out_dir for individual tasks when using __CONFIG_STEM__.'
         d['out_dir'] = (p.parent / p.stem).as_posix()
-
-    # Resolve definition_includes by merging definitions from listed files.
-    # Later files override earlier ones; the config's own definitions have
-    # the highest priority. Paths may be absolute or relative to this file.
-    includes = d.pop('definition_includes', None)
-    if includes:
-        merged = {}
-        for include in includes:
-            include_path = Path(include).expanduser()
-            if not include_path.is_absolute():
-                include_path = p.parent / include_path
-            if not include_path.exists():
-                raise FileNotFoundError(
-                    f'definition_includes file not found: '
-                    f'{include_path.as_posix()}'
-                )
-            included = toml.loads(include_path.read_text(encoding='utf8'))
-            merged.update(included.get('definitions', {}))
-        merged.update(d.get('definitions', {}))
-        d['definitions'] = merged
 
     return d
 
 
 def normalize_config(source: dict | Path | str):
+    p = None
     if isinstance(source, dict):
-        return source
-    if isinstance(source, Path):
-        return load_config_from_path(source)
-    if isinstance(source, str):
+        d = source
+    elif isinstance(source, Path):
+        d = load_config_from_path(source)
+        p = source
+    elif isinstance(source, str):
         s = source.strip()
-        p = as_path_if_length_safe(s)
-        if isinstance(p, Path):
-            return load_config_from_path(p)
-        return toml.loads(s)
-    return None  # Cannot cast to dict
+        path_or_none = as_path_if_length_safe(s)
+        if isinstance(path_or_none, Path):
+            d = load_config_from_path(path_or_none)
+            p = path_or_none
+        else:
+            d = toml.loads(s)
+    else:
+        raise AssertionError(f'Cannot normalize config from {type(source).__name__}')
+    resolve_definition_includes(d, p)
+    return d
 
 
 def run(
     source: dict | Path | str,
     skip_task_ids_: str = '',
     target_tasks_: str = '',
+    force_rerun: bool = False,
     suppress_plot: bool = False,
     force_replot: bool = False,
     report_only: bool = False,
@@ -461,7 +492,9 @@ def run(
     wf.run(
         skip_task_ids_=skip_task_ids_,
         target_tasks_=target_tasks_,
+        force_rerun=force_rerun,
         suppress_plot=suppress_plot,
         force_replot=force_replot,
         report_only=report_only,
     )
+    return wf

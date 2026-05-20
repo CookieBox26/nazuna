@@ -1,10 +1,10 @@
-from nazuna.workflow import Workflow, load_config_from_path
-from pathlib import Path
-import toml
+from nazuna.workflow import normalize_config, WorkflowTemplateResolver, Workflow
+from nazuna.task_runners import BaseTaskRunner
 import re
 import types
 import pandas as pd
 import collections
+from nazuna.utils import load_toml
 
 
 def parse_param_conf(model_cls, overrides=None, n_derived=0):
@@ -40,35 +40,30 @@ def parse_param_conf(model_cls, overrides=None, n_derived=0):
 
 class WorkflowResult(Workflow):
     @classmethod
-    def from_conf_toml_path(cls, path: Path | str):
-        conf_path_raw = load_config_from_path(Path(path))
-        conf_path = Path(conf_path_raw['out_dir']) / 'config.toml'
-        if not conf_path.is_file():
-            print(f'No configuration file was processed at runtime: {conf_path}')
+    def load(cls, source):
+        d = normalize_config(source)
+        if d is None:
             return None
-        conf_dict = toml.loads(conf_path.read_text(encoding='utf8'))
-        conf_dict['exist_ok'] = True
-        obj = cls(**conf_dict)
-        obj.rename = None  # Ex. {'/home/ubuntu/': 'C:/Users/Cookie/'}
-        obj.criteria_additional = []  # Ex. ['MAE']
-        return obj
+        d = WorkflowTemplateResolver.resolve(d)
+        exist_ok_org = d['exist_ok']
+        d['exist_ok'] = True
+        wf = cls(**d)
+        wf.exist_ok = exist_ok_org
+        wf.criteria_additional = []  # Ex. ['MAE']
+        return wf
 
     def get_conf_and_result(self, task_name, as_sn=False):
         if task_name not in self.task_names:
             return None if as_sn else (None, None)
         i_task = self.task_names.index(task_name)
         _, conf = self.parse_task_runner_config(i_task)
-        out_path = self.out_paths[task_name]
-        if self.rename is not None:
-            out_path = out_path.as_posix()
-            for k, v in self.rename.items():
-                out_path = out_path.replace(k, v)
-            out_path = Path(out_path)
-        result_path = out_path / 'result.toml'
+
+        result_path = BaseTaskRunner.to_result_path(self.out_paths[task_name])
         if not result_path.is_file():
             print(f'No result file found: {result_path}')
             return None if as_sn else (None, None)
-        result = toml.loads(result_path.read_text(encoding='utf8'))
+        result = load_toml(result_path)
+
         if as_sn:
             return types.SimpleNamespace(conf=conf, result=result)
         return (conf, result)
@@ -142,7 +137,7 @@ class WorkflowResult(Workflow):
         row['seed'] = trial.train.conf.get('seed', 0)
         row['n_epoch'] = str(trial.pilot.result['i_epoch_best'] + 1) + ' / ' + \
             str(trial.pilot.conf['n_epoch'])
-        row['Elapsed_p'] = cls.shorten_time(trial.pilot.result['elapsed'])
+        row['Elapsed_pilot'] = cls.shorten_time(trial.pilot.result['elapsed'])
         row['Elapsed'] = cls.shorten_time(trial.train.result['elapsed'])
         row['n_parameters'] = trial.eval.result.get('parameters_trainable', -1)
         row_model = collections.OrderedDict([('index', index_)])

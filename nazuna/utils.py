@@ -7,6 +7,7 @@ import time
 from contextlib import contextmanager
 import datetime
 import socket
+import toml
 
 
 def fix_seed(seed=0):
@@ -67,3 +68,8 @@ def get_env_info():
             for i in range(torch.cuda.device_count())
         ],
     }
+
+
+def load_toml(path: str | Path):
+    text = Path(path).read_text(encoding='utf8')
+    return toml.loads(text)
