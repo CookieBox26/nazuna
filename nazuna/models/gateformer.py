@@ -23,7 +23,7 @@ class Gateformer(BasicBaseModel):
         patch_len: int = 8, stride: int = 8,
         d_model: int = 512, n_heads: int = 8, d_ff: int = 2048, e_layers: int = 2,
         dropout_emb: float = 0.1, dropout_aw: float = 0.1, dropout_sa: float = 0.1,
-        dropout_ff: tuple[float, float] = (0.1, 0.1),
+        dropout_ff: tuple[float, float] = (0.0, 0.2),
         scaler_cls: type | None = None, scaler_params: dict | None = None,
         prep_type: str = 'none',
         use_revin: bool = True, revin_affine: bool = False, revin_eps: float = 1e-5,

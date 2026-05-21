@@ -77,6 +77,7 @@ uv run ruff check
 # run tests locally
 uv run pytest
 # uv run pytest -m ""  # run all tests, including slow ones
+# uv run pytest -vv  # show individual test names
 
 # update documentation in ./docs/
 uv run mkdocs serve --livereload  # preview documentation locally
