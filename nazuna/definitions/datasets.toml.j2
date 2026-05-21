@@ -6,7 +6,7 @@ pred_len = {{ pred_len_sample }}
 category = "jma"
 filename = "weather_japan_hourly_2023-01-01_2025-12-31_11_blocks.csv"
 
-[data.Traffic]
+[definitions.Traffic]
 # Warning: Data acquisition is required!
 path = "~/datasets/traffic/traffic.csv"
 colname_timestamp = "date"
@@ -20,11 +20,11 @@ colname_timestamp = "date"
 seq_len = {{ seq_len_sample }}
 pred_len = {{ pred_len_sample }}
 
-[data.Traffic8]
+[definitions.Traffic8]
 base = "Traffic"
 white_list = "0,1,2,3,4,5,6,7"
 
-[data.ECL8]
+[definitions.ECL8]
 base = "ECL"
 white_list = "0,1,2,3,4,5,6,7"
 

@@ -125,7 +125,7 @@ class ImprovementRate(BaseImprovement):
         decay_rate: float | None = None,
         tolerance: float = 0,
         epsilon: float = 1e-6,
-        error_type: str = "mse",
+        error_type: str = "mae",
     ):
         """
         Args:
