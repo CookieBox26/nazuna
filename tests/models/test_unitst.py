@@ -2,11 +2,6 @@ from nazuna.data_manager import TimeSeriesDataset
 from nazuna.models.unitst import UniTSTLike
 from nazuna.criteria import MSE
 import pytest
-from tests.utils import create_from_doc
-
-
-def test_doc(device):
-    _ = create_from_doc(UniTSTLike, device)
 
 
 @pytest.mark.parametrize('prep_type', ['none', 'diff'])

@@ -13,19 +13,6 @@ class BaseSimpleAverage(BasicBaseModel):
 
 
 class SimpleAverage(BaseSimpleAverage):
-    """
-    !!! tip "Example parameter configurations"
-        ```toml
-        [definitions.SimpleAverage]
-        cls_path = "nazuna.models.simple_average.SimpleAverage"
-        [definitions.SimpleAverage.params]
-        seq_len = 96  # task-dependent
-        pred_len = 24  # task-dependent
-        period_len = 24  # task-dependent
-        decay_rate = 1.0
-        prep_type = "none"
-        ```
-    """
     def _setup(
         self,
         seq_len: int,
@@ -50,18 +37,6 @@ class SimpleAverage(BaseSimpleAverage):
 
 
 class SimpleAverageVariableDecay(BaseSimpleAverage):
-    """
-    !!! tip "Example parameter configurations"
-        ```toml
-        [definitions.SimpleAverageVariableDecay]
-        cls_path = "nazuna.models.simple_average.SimpleAverageVariableDecay"
-        [definitions.SimpleAverageVariableDecay.params]
-        seq_len = 96  # task-dependent
-        pred_len = 24  # task-dependent
-        period_len = 24  # task-dependent
-        prep_type = "none"
-        ```
-    """
     def _setup(
         self,
         seq_len: int,
@@ -85,19 +60,6 @@ class SimpleAverageVariableDecay(BaseSimpleAverage):
 
 
 class SimpleAverageVariableDecayChannelwise(BaseSimpleAverage):
-    """
-    !!! tip "Example parameter configurations"
-        ```toml
-        [definitions.SimpleAverageVariableDecayChannelwise]
-        cls_path = "nazuna.models.simple_average.SimpleAverageVariableDecayChannelwise"
-        [definitions.SimpleAverageVariableDecayChannelwise.params]
-        seq_len = 96  # task-dependent
-        pred_len = 24  # task-dependent
-        period_len = 24  # task-dependent
-        n_channel = 7  # task-dependent
-        prep_type = "none"
-        ```
-    """
     def _setup(
         self,
         seq_len: int,

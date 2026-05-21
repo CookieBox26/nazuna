@@ -64,37 +64,6 @@ class UniTSTLike(BasicBaseModel):
         so this implementation follows the description in the paper. Activation
         function and dropout placement are not specified in the paper and follow
         choices common in PatchTST-style models.
-
-    !!! tip "Example parameter configurations"
-        ```toml
-        [definitions.UniTSTLike]
-        cls_path = "nazuna.models.unitst.UniTSTLike"
-        [definitions.UniTSTLike.params]
-        seq_len = 96  # task-dependent
-        pred_len = 24  # task-dependent
-        c_in = 10  # task-dependent
-        patch_len = 16
-        stride = 8
-        padding_patch = "end"
-        d_model = 128
-        n_heads = 8
-        d_ff = 256
-        e_layers = 2
-        n_dispatchers = 8
-        dropout_emb = 0.1
-        dropout_aw = 0.1
-        dropout_sa = 0.1
-        dropout_ff = [ 0.0, 0.2,]
-        scaler_cls_path = ""
-        scaler_params = {}
-        prep_type = "none"
-        use_revin = true
-        revin_affine = false
-        revin_eps = 1e-5
-        use_lc = false
-        lc_end_epoch = 20
-        lc_rate = 0.9
-        ```
     """
     def _setup(
         self, seq_len: int, pred_len: int, c_in: int,

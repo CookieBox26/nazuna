@@ -16,7 +16,7 @@ def _normalize_suffixes(filename):
     raise ValueError(f'Unsupported template path suffix: {filename}')
 
 
-def get_definition(filename, data):
+def get_definitions(filename, data):
     assert data is not None, 'Template data for a bundled definition must not be None.'
     template_dir = files('nazuna.definitions')
     normalized = _normalize_suffixes(filename)
@@ -26,4 +26,6 @@ def get_definition(filename, data):
     template = env.get_template(normalized)
     data['period_len_2'] = 2 * data['period_len']
     data['period_len_4'] = 4 * data['period_len']
+    data.setdefault('seq_len', -1)
+    data.setdefault('seq_len_raw', -1)
     return toml.loads(template.render(data))

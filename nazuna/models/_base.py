@@ -119,6 +119,32 @@ class BasicBaseModel(BaseModel):
     """
     PrepType = Enum('PrepType', ['none', 'diff'])  # preprocessing type (applied after scaling)
 
+    def __init__(self, device, **setup_args) -> None:
+        setup_args = type(self)._resolve_seq_len(setup_args)
+        super().__init__(device, **setup_args)
+
+    @staticmethod
+    def _resolve_seq_len(args):
+        seq_len = args.get('seq_len')
+        seq_len_raw = args.pop('seq_len_raw', None)
+        # Treat negative values as unspecified (so templates can default to e.g. -1).
+        if seq_len is not None and seq_len < 0:
+            seq_len = None
+        if seq_len_raw is not None and seq_len_raw < 0:
+            seq_len_raw = None
+        prep_type = args.get('prep_type', 'none')
+        delta = 1 if prep_type == 'diff' else 0
+        if seq_len is None and seq_len_raw is None:
+            raise ValueError('Either seq_len or seq_len_raw must be specified.')
+        if seq_len is None:
+            args['seq_len'] = seq_len_raw - delta
+        elif seq_len_raw is not None and seq_len + delta != seq_len_raw:
+            raise ValueError(
+                f'seq_len_raw ({seq_len_raw}) must equal '
+                f'seq_len ({seq_len}) + {delta} for prep_type={prep_type!r}.'
+            )
+        return args
+
     def _setup(
         self, seq_len, pred_len,
         scaler_cls=None, scaler_params=None, rescale_loss=True,

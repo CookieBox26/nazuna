@@ -7,10 +7,12 @@ data = "JMA4"
 # =============== definitions ===============
 definition_includes = [
 { bundled = "common" },
+{ bundled = "dlinear" },
 ]
 
 [definition_includes_data]
 n_channel = 4
+seq_len = 97
 pred_len = 24
 period_len = 24
 
@@ -23,19 +25,6 @@ white_list = "temp_fukuoka,temp_osaka,temp_tokyo,temp_sendai"
 category = "jma"
 filename = "weather_japan_hourly_2025-09-01_2025-12-31_27_blocks.csv"
 
-[definitions.DLinear]
-cls_path = "nazuna.models.dlinear.DLinear"
-[definitions.DLinear.params]
-seq_len = 97
-pred_len = 24
-kernel_size = 25
-bias = true
-scaler_cls_path = "nazuna.models.common.IqrScaler"
-scaler_params = { stat_types = [ "qtile_full", "saved",] }
-use_lc = true
-lc_end_epoch = 20
-lc_rate = 0.9
-
 # =============== tasks ===============
 [[tasks]]
 task_type = "eval"
@@ -47,7 +36,7 @@ dump_pred_data = false
 
 [[tasks]]
 task_type = "train"
-name = "Pilot"
+name = "Pilot 0"
 data_range_train = "DataRangeTrainPilot"
 data_range_eval = "DataRangeEvalPilot"
 criterion = "MAE"
@@ -60,28 +49,28 @@ early_stop = true
 
 [[tasks]]
 task_type = "train"
-name = "Train"
+name = "Train 0"
 data_range_train = "DataRangeTrain"
 criterion = "MAE"
 model = "DLinear"
 batch_sampler = "BSS32"
 optimizer = "Adam00001"
 lr_scheduler = "CosineAnnealingLR100"
-n_epoch = { task_name = "Pilot" }
+n_epoch = { task_name = "Pilot 0" }
 
 [[tasks]]
 task_type = "eval"
-name = "Eval"
+name = "Eval 0"
 data_range_eval = "DataRangeEval"
 criterion = "MAE"
 model = "DLinear"
-model_state = { task_name = "Train" }
+model_state = { task_name = "Train 0" }
 
 [[tasks]]
 task_type = "eval"
-name = "Eval ImpRate"
+name = "Eval ImpRate 0"
 data_range_eval = "DataRangeEval"
 criterion = "ImprovementRate"
 baseline_model = "Last4CyclesD"
 model = "DLinear"
-model_state = { task_name = "Train" }
+model_state = { task_name = "Train 0" }

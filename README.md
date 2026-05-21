@@ -30,6 +30,7 @@ This repository mainly consists of the following files:
 │  ├─ workflow.py  # Executes a sequence of tasks
 │  ├─ report.py  # Generates reports
 │  ├─ datasets/  # Sample datasets
+│  ├─ definitions/  # Bundled definitions
 │  └─ examples/  # Example configurations
 │
 ├─ tests/

@@ -6,7 +6,7 @@ from pathlib import Path
 import toml
 import torch
 from nazuna.datasets import get_dataset_path
-from nazuna.definitions import get_definition
+from nazuna.definitions import get_definitions
 from nazuna.data_manager import TimeSeriesDataManager
 from nazuna.task_runners import TaskType
 from nazuna.report import report
@@ -427,7 +427,7 @@ def resolve_definition_includes(d: dict, p: Path | None):
         assert set(include) in ({'bundled'}, {'path'}, {'relpath'}), \
             'include must have exactly one of "bundled", "path", or "relpath".'
         if 'bundled' in include:
-            included = get_definition(include['bundled'], definition_includes_data)
+            included = get_definitions(include['bundled'], definition_includes_data)
         else:
             if 'relpath' in include:
                 assert p is not None, \

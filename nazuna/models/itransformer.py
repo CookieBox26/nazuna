@@ -18,36 +18,6 @@ class iTransformer(BasicBaseModel):
           [Paper](https://openreview.net/forum?id=JePfAI8fah) |
           [arXiv](https://arxiv.org/abs/2310.06625) |
           [GitHub](https://github.com/thuml/iTransformer)
-
-    !!! tip "Example parameter configurations"
-        ```toml
-        [definitions.iTransformer]
-        cls_path = "nazuna.models.itransformer.iTransformer"
-        [definitions.iTransformer.params]
-        seq_len = 96  # task-dependent
-        pred_len = 24  # task-dependent
-        c_in = 10  # task-dependent
-        d_model = 512
-        n_heads = 8
-        d_ff = 512
-        e_layers = 2
-        dropout_emb = 0.1
-        dropout_aw = 0.1
-        dropout_sa = 0.1
-        dropout_ff = [0.0, 0.2]
-        res_attention = false
-        use_time_features = true
-        freq = "hour"
-        scaler_cls_path = ""
-        scaler_params = {}
-        prep_type = "none"
-        use_revin = true
-        revin_affine = false
-        revin_eps = 1e-5
-        use_lc = false
-        lc_end_epoch = 20
-        lc_rate = 0.9
-        ```
     """
     def _setup(
         self, seq_len: int, pred_len: int, c_in: int,

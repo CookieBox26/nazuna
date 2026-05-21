@@ -34,24 +34,42 @@ pred_len = {{ pred_len }}
 period_len = {{ period_len }}
 
 [definitions.Last2Cycles]
-base = "Last1Cycle"
-params = { seq_len = {{ period_len_2 }} }
+cls_path = "nazuna.models.simple_average.SimpleAverage"
+[definitions.Last2Cycles.params]
+seq_len = {{ period_len_2 }}
+pred_len = {{ pred_len }}
+period_len = {{ period_len }}
 
 [definitions.Last4Cycles]
-base = "Last1Cycle"
-params = { seq_len = {{ period_len_4 }} }
+cls_path = "nazuna.models.simple_average.SimpleAverage"
+[definitions.Last4Cycles.params]
+seq_len = {{ period_len_4 }}
+pred_len = {{ pred_len }}
+period_len = {{ period_len }}
 
 [definitions.Last1CycleD]
-base = "Last1Cycle"
-params = { prep_type = "diff" }
+cls_path = "nazuna.models.simple_average.SimpleAverage"
+[definitions.Last1CycleD.params]
+seq_len = {{ period_len }}
+pred_len = {{ pred_len }}
+period_len = {{ period_len }}
+prep_type = "diff"
 
 [definitions.Last2CyclesD]
-base = "Last2Cycles"
-params = { prep_type = "diff" }
+cls_path = "nazuna.models.simple_average.SimpleAverage"
+[definitions.Last2CyclesD.params]
+seq_len = {{ period_len_2 }}
+pred_len = {{ pred_len }}
+period_len = {{ period_len }}
+prep_type = "diff"
 
 [definitions.Last4CyclesD]
-base = "Last4Cycles"
-params = { prep_type = "diff" }
+cls_path = "nazuna.models.simple_average.SimpleAverage"
+[definitions.Last4CyclesD.params]
+seq_len = {{ period_len_4 }}
+pred_len = {{ pred_len }}
+period_len = {{ period_len }}
+prep_type = "diff"
 
 # =============== Batch sampler ===============
 [definitions.BSS32]

@@ -1,0 +1,68 @@
+[definitions.Autoformer]
+cls_path = "nazuna.models.autoformer.Autoformer"
+[definitions.Autoformer.params]
+seq_len_raw = {{ seq_len_raw }}
+seq_len = {{ seq_len }}
+pred_len = {{ pred_len }}
+c_in = {{ n_channel }}
+label_len = 48  # decoder input is label_len + pred_len (defaults to seq_len // 2)
+use_time_features = true
+freq = "hour"  # for time feature extraction
+e_layers = 2  # number of encoder layers
+d_layers = 1  # number of decoder layers
+d_model = 512
+n_heads = 8
+d_ff = 2048
+decomp_kernel = 25
+n_moving_avg = 1
+topk_factor = 3.0  # keep top-k = floor(topk_factor log (L+1)) lags
+dropout_emb = 0.05  # dropout after embedding
+dropout_aw = 0.1  # dropout on attention weights
+dropout_ac = 0.1  # dropout on AutoCorrelation output
+dropout_ff = [ 0.0, 0.1,]  # dropout before and after the FFN intermediate layer
+res_attention = false
+approx_durning_training = true  # whether to approximate AutoCorrelation during training
+independent_heads = false  # whether to pick top-k lags per head
+use_last_value_as_trend_init = false
+scaler_cls_path = "nazuna.models.common.IqrScaler"
+scaler_params = { "stat_types" = [ "qtile_full", "saved",] }
+prep_type = "none"
+use_revin = false
+revin_affine = false
+revin_eps = 1e-5
+use_lc = false
+lc_end_epoch = 20
+lc_rate = 0.9
+
+[definitions.AutoformerLight]
+cls_path = "nazuna.models.autoformer.AutoformerLight"
+[definitions.AutoformerLight.params]
+seq_len_raw = {{ seq_len_raw }}
+seq_len = {{ seq_len }}
+pred_len = {{ pred_len }}
+c_in = {{ n_channel }}
+use_time_features = false
+freq = "hour"  # for time feature extraction
+e_layers = 2  # number of encoder layers
+d_model = 128
+n_heads = 4
+d_ff = 256
+decomp_kernel = 25
+n_moving_avg = 1
+topk_factor = 3.0  # keep top-k = floor(topk_factor log (L+1)) lags
+dropout_emb = 0.05  # dropout after embedding
+dropout_aw = 0.1  # dropout on attention weights
+dropout_ac = 0.1  # dropout on AutoCorrelation output
+dropout_ff = [ 0.0, 0.2,]  # dropout before and after the FFN intermediate layer
+res_attention = false
+approx_durning_training = true  # whether to approximate AutoCorrelation during training
+independent_heads = false  # whether to pick top-k lags per head
+scaler_cls_path = "nazuna.models.common.IqrScaler"
+scaler_params = { "stat_types" = [ "qtile_full", "saved",] }
+prep_type = "none"
+use_revin = false
+revin_affine = false
+revin_eps = 1e-5
+use_lc = false
+lc_end_epoch = 20
+lc_rate = 0.9

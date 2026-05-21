@@ -8,17 +8,6 @@ from nazuna.models.dlinear import (
 from nazuna.criteria import MSE
 import torch
 import pytest
-from tests.utils import create_from_doc
-
-
-@pytest.mark.parametrize('model_cls', [
-    DLinear, DLinearChannelwise,
-    DLinearCrossChannel, DLinearStacked,
-    NLinear, NLinearChannelwise,
-    NLinearCrossChannel, NLinearStacked,
-])
-def test_doc(device, model_cls):
-    _ = create_from_doc(model_cls, device)
 
 
 def test_forward(device, dummy_data):

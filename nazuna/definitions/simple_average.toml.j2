@@ -1,0 +1,28 @@
+[definitions.SimpleAverage]
+cls_path = "nazuna.models.simple_average.SimpleAverage"
+[definitions.SimpleAverage.params]
+seq_len_raw = {{ seq_len_raw }}
+seq_len = {{ seq_len }}
+pred_len = {{ pred_len }}
+period_len = 24
+decay_rate = 1.0
+prep_type = "none"
+
+[definitions.SimpleAverageVariableDecay]
+cls_path = "nazuna.models.simple_average.SimpleAverageVariableDecay"
+[definitions.SimpleAverageVariableDecay.params]
+seq_len_raw = {{ seq_len_raw }}
+seq_len = {{ seq_len }}
+pred_len = {{ pred_len }}
+period_len = 24
+prep_type = "none"
+
+[definitions.SimpleAverageVariableDecayChannelwise]
+cls_path = "nazuna.models.simple_average.SimpleAverageVariableDecayChannelwise"
+[definitions.SimpleAverageVariableDecayChannelwise.params]
+seq_len_raw = {{ seq_len_raw }}
+seq_len = {{ seq_len }}
+pred_len = {{ pred_len }}
+period_len = 24
+n_channel = {{ n_channel }}
+prep_type = "none"

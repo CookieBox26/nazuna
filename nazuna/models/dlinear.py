@@ -13,27 +13,6 @@ class DLinear(BasicBaseModel):
           (AAAI 2023), vol. 37, pp. 11121-11128, 2023.
           [arXiv](https://arxiv.org/abs/2205.13504) |
           [GitHub](https://github.com/cure-lab/LTSF-Linear)
-
-    !!! tip "Example parameter configurations"
-        ```toml
-        [definitions.DLinear]
-        cls_path = "nazuna.models.dlinear.DLinear"
-        [definitions.DLinear.params]
-        seq_len = 96  # task-dependent
-        pred_len = 24  # task-dependent
-        kernel_size = 25
-        bias = true
-        n_moving_avg = 1
-        scaler_cls_path = "nazuna.models.common.IqrScaler"
-        scaler_params = { "stat_types" = [ "qtile_full", "saved",] }
-        prep_type = "none"
-        use_revin = false
-        revin_affine = false
-        revin_eps = 1e-5
-        use_lc = false
-        lc_end_epoch = 20
-        lc_rate = 0.9
-        ```
     """
     def _setup(
         self,
@@ -74,26 +53,6 @@ class DLinear(BasicBaseModel):
 
 
 class DLinearChannelwise(BasicBaseModel):
-    """
-    !!! tip "Example parameter configurations"
-        ```toml
-        [definitions.DLinearChannelwise]
-        cls_path = "nazuna.models.dlinear.DLinearChannelwise"
-        [definitions.DLinearChannelwise.params]
-        seq_len = 96  # task-dependent
-        pred_len = 24  # task-dependent
-        c_in = 7  # task-dependent
-        kernel_size = 25
-        bias = true
-        n_moving_avg = 1
-        scaler_cls_path = "nazuna.models.common.IqrScaler"
-        scaler_params = { "stat_types" = [ "qtile_full", "saved",] }
-        prep_type = "none"
-        use_revin = false
-        revin_affine = false
-        revin_eps = 1e-5
-        ```
-    """
     def _setup(
         self,
         seq_len: int,
@@ -142,26 +101,6 @@ class DLinearChannelwise(BasicBaseModel):
 
 
 class DLinearCrossChannel(BasicBaseModel):
-    """
-    !!! tip "Example parameter configurations"
-        ```toml
-        [definitions.DLinearCrossChannel]
-        cls_path = "nazuna.models.dlinear.DLinearCrossChannel"
-        [definitions.DLinearCrossChannel.params]
-        seq_len = 96  # task-dependent
-        pred_len = 24  # task-dependent
-        c_in = 7  # task-dependent
-        kernel_size = 25
-        bias = true
-        n_moving_avg = 1
-        scaler_cls_path = "nazuna.models.common.IqrScaler"
-        scaler_params = { "stat_types" = [ "qtile_full", "saved",] }
-        prep_type = "none"
-        use_revin = false
-        revin_affine = false
-        revin_eps = 1e-5
-        ```
-    """
     def _setup(
         self,
         seq_len: int,
@@ -206,26 +145,6 @@ class DLinearCrossChannel(BasicBaseModel):
 
 
 class DLinearStacked(BasicBaseModel):
-    """
-    !!! tip "Example parameter configurations"
-        ```toml
-        [definitions.DLinearStacked]
-        cls_path = "nazuna.models.dlinear.DLinearStacked"
-        [definitions.DLinearStacked.params]
-        seq_len = 96  # task-dependent
-        pred_len = 24  # task-dependent
-        c_in = 7  # task-dependent
-        kernel_size = 25
-        bias = true
-        n_moving_avg = 1
-        scaler_cls_path = "nazuna.models.common.IqrScaler"
-        scaler_params = { "stat_types" = [ "qtile_full", "saved",] }
-        prep_type = "none"
-        use_revin = false
-        revin_affine = false
-        revin_eps = 1e-5
-        ```
-    """
     def _setup(
         self,
         seq_len: int,
@@ -278,26 +197,6 @@ class DLinearStacked(BasicBaseModel):
 
 
 class NLinear(BasicBaseModel):
-    """
-    !!! tip "Example parameter configurations"
-        ```toml
-        [definitions.NLinear]
-        cls_path = "nazuna.models.dlinear.NLinear"
-        [definitions.NLinear.params]
-        seq_len = 96  # task-dependent
-        pred_len = 24  # task-dependent
-        bias = true
-        scaler_cls_path = "nazuna.models.common.IqrScaler"
-        scaler_params = { "stat_types" = [ "qtile_full", "saved",] }
-        prep_type = "none"
-        use_revin = false
-        revin_affine = false
-        revin_eps = 1e-5
-        use_lc = false
-        lc_end_epoch = 20
-        lc_rate = 0.9
-        ```
-    """
     def _setup(
         self,
         seq_len: int,
@@ -332,24 +231,6 @@ class NLinear(BasicBaseModel):
 
 
 class NLinearChannelwise(BasicBaseModel):
-    """
-    !!! tip "Example parameter configurations"
-        ```toml
-        [definitions.NLinearChannelwise]
-        cls_path = "nazuna.models.dlinear.NLinearChannelwise"
-        [definitions.NLinearChannelwise.params]
-        seq_len = 96  # task-dependent
-        pred_len = 24  # task-dependent
-        c_in = 7  # task-dependent
-        bias = true
-        scaler_cls_path = "nazuna.models.common.IqrScaler"
-        scaler_params = { "stat_types" = [ "qtile_full", "saved",] }
-        prep_type = "none"
-        use_revin = false
-        revin_affine = false
-        revin_eps = 1e-5
-        ```
-    """
     def _setup(
         self,
         seq_len: int,
@@ -387,24 +268,6 @@ class NLinearChannelwise(BasicBaseModel):
 
 
 class NLinearCrossChannel(BasicBaseModel):
-    """
-    !!! tip "Example parameter configurations"
-        ```toml
-        [definitions.NLinearCrossChannel]
-        cls_path = "nazuna.models.dlinear.NLinearCrossChannel"
-        [definitions.NLinearCrossChannel.params]
-        seq_len = 96  # task-dependent
-        pred_len = 24  # task-dependent
-        c_in = 7  # task-dependent
-        bias = true
-        scaler_cls_path = "nazuna.models.common.IqrScaler"
-        scaler_params = { "stat_types" = [ "qtile_full", "saved",] }
-        prep_type = "none"
-        use_revin = false
-        revin_affine = false
-        revin_eps = 1e-5
-        ```
-    """
     def _setup(
         self,
         seq_len: int,
@@ -444,25 +307,6 @@ class NLinearCrossChannel(BasicBaseModel):
 
 
 class NLinearStacked(BasicBaseModel):
-    """
-    !!! tip "Example parameter configurations"
-        ```toml
-        [definitions.NLinearStacked]
-        cls_path = "nazuna.models.dlinear.NLinearStacked"
-        [definitions.NLinearStacked.params]
-        seq_len = 96  # task-dependent
-        pred_len = 24  # task-dependent
-        c_in = 7  # task-dependent
-        bias = true
-        freeze_nlinear = false
-        scaler_cls_path = "nazuna.models.common.IqrScaler"
-        scaler_params = { "stat_types" = [ "qtile_full", "saved",] }
-        prep_type = "none"
-        use_revin = false
-        revin_affine = false
-        revin_eps = 1e-5
-        ```
-    """
     def _setup(
         self,
         seq_len: int,

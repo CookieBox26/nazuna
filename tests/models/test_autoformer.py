@@ -4,12 +4,7 @@ from nazuna.criteria import MSE
 import numpy as np
 import torch
 import pytest
-from tests.utils import set_training, create_from_doc
-
-
-@pytest.mark.parametrize('model_cls', [Autoformer, AutoformerLight])
-def test_doc(device, model_cls):
-    _ = create_from_doc(Autoformer, device)
+from tests.utils import set_training
 
 
 @pytest.mark.parametrize('independent_heads, mean_corr', [

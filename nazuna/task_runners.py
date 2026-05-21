@@ -14,6 +14,7 @@ import optuna
 import torch
 from nazuna.data_manager import TimeSeriesDataManager
 from nazuna.criteria import BaseImprovement
+from nazuna.models._base import BasicBaseModel
 from nazuna.analysis.optuna_utils import OptunaUtils
 from nazuna.analysis.diagnoser import Diagnoser
 from nazuna.analysis.inspector import Inspector
@@ -147,6 +148,8 @@ class EvalTaskRunner(BaseTaskRunner):
     @classmethod
     def extract_model_config(cls, conf):
         cls_, params_ = load_class(conf['cls_path']), conf['params']
+        if issubclass(cls_, BasicBaseModel):
+            params_ = cls_._resolve_seq_len(params_)
         scaler_cls_path = params_.pop('scaler_cls_path', '')
         if scaler_cls_path:
             params_['scaler_cls'] = load_class(scaler_cls_path)
