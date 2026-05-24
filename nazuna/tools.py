@@ -1,10 +1,11 @@
 from nazuna.workflow import normalize_config, WorkflowTemplateResolver, Workflow
 from nazuna.task_runners import BaseTaskRunner
+from nazuna.models._base import BasicBaseModel
 import re
 import types
 import pandas as pd
 import collections
-from nazuna.utils import load_toml
+from nazuna.utils import load_class, load_toml
 
 
 class WorkflowResult(Workflow):
@@ -109,14 +110,20 @@ class WorkflowResult(Workflow):
         row['Elapsed_pilot'] = cls.shorten_time(trial.pilot.result['elapsed'])
         row['Elapsed'] = cls.shorten_time(trial.train.result['elapsed'])
         row['n_parameters'] = trial.eval.result.get('parameters_trainable', -1)
+
         row_model = collections.OrderedDict([('index', index_)])
-        for k, v in trial.train.conf['model']['params'].items():
+        mo = trial.train.conf['model']
+        cls_, params_ = load_class(mo['cls_path']), mo['params']
+        if issubclass(cls_, BasicBaseModel):
+            params_ = cls_._resolve_seq_len(params_)
+        for k, v in params_.items():
             if k == 'scaler_cls_path':
                 row_model['scaler_cls'] = cls.cls_path_to_name(v)
             elif k == 'scaler_params':
                 row_model[k] = cls.params_to_str(v)
             else:
                 row_model[k] = v
+
         bs = cls.cls_to_str(trial.train.conf['batch_sampler'])
         row_train = collections.OrderedDict([
             ('index', index_),
