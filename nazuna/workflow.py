@@ -296,7 +296,7 @@ class WorkflowTemplateResolver:
     def get_task_pilot(cls, d, i_trial=0):
         task = {
             'task_type': 'train', 'name': f'Pilot {i_trial}', 'early_stop': True,
-            'model_state_path': None,
+            'model_state_path': None, 'seed': 0,
         }
         keys = ['data_range_train_pilot', 'data_range_eval_pilot', 'criterion_target'] + \
             ['model', 'batch_sampler', 'optimizer', 'lr_scheduler', 'n_epoch', 'patience']
@@ -306,7 +306,10 @@ class WorkflowTemplateResolver:
 
     @classmethod
     def get_task_train(cls, d, i_trial=0):
-        task = {'task_type': 'train', 'name': f'Train {i_trial}', 'model_state_path': None}
+        task = {
+            'task_type': 'train', 'name': f'Train {i_trial}',
+            'model_state_path': None, 'seed': 0,
+        }
         task['n_epoch'] = {'task_name': f'Pilot {i_trial}'}
         keys = ['data_range_train', 'criterion_target'] + \
             ['model', 'batch_sampler', 'optimizer', 'lr_scheduler']

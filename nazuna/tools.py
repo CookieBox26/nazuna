@@ -3,6 +3,7 @@ from nazuna.task_runners import BaseTaskRunner
 from nazuna.models._base import BasicBaseModel
 import re
 import types
+import numpy as np
 import pandas as pd
 import collections
 from nazuna.utils import load_class, load_toml
@@ -84,7 +85,7 @@ class WorkflowResult(Workflow):
         return f'{int(m.group(1)):2d}m{int(m.group(2)):2d}s'
 
     @classmethod
-    def get_row(cls, trial, index_):
+    def get_trial_row(cls, trial, index_):
         if any(k is None for k in [
             trial.baseline, trial.pilot, trial.train,
             trial.eval, trial.imprate,
@@ -94,51 +95,54 @@ class WorkflowResult(Workflow):
         row = collections.OrderedDict([
             ('index', index_),
             ('Model', cls.cls_path_to_name(trial.train.conf['model']['cls_path'])),
-            # ('criterion', cls.cls_to_str()),
-            (f'{criterion}_bl', trial.baseline.result['loss_per_sample']),
-            (f'{criterion}_mo', trial.eval.result['loss_per_sample']),
+            ('\\#Params', trial.eval.result.get('parameters_trainable', -1)),
+            (f'{criterion}(Naive)', trial.baseline.result['loss_per_sample']),
+            (f'{criterion}(Model)', trial.eval.result['loss_per_sample']),
         ])
+        row['Model'] = row['Model'].replace('CrossChannel', 'CC')
+        row[f'{criterion}(ImpRate)'] = 1.0 - row[f'{criterion}(Model)'] / row[f'{criterion}(Naive)']
         for criterion_a in trial.criteria_additional:
-            row[f'{criterion_a}_bl'] = \
+            row[f'{criterion_a}(Naive)'] = \
                 getattr(trial, f'eval_baseline_{criterion_a.lower()}').result['loss_per_sample']
-            row[f'{criterion_a}_mo'] = \
+            row[f'{criterion_a}(Model)'] = \
                 getattr(trial, f'eval_{criterion_a.lower()}').result['loss_per_sample']
-        row['ImpRate'] = trial.imprate.result['loss_per_sample']
-        row['seed'] = trial.train.conf.get('seed', 0)
-        row['n_epoch'] = str(trial.pilot.result['i_epoch_best'] + 1) + ' / ' + \
+            row[f'{criterion_a}(ImpRate)'] = \
+                1.0 - row[f'{criterion_a}(Model)'] / row[f'{criterion_a}(Naive)']
+        row['ImpRate\\dag'] = trial.imprate.result['loss_per_sample']
+        row['Seed'] = trial.train.conf.get('seed', 0)
+        row['\\#Epochs'] = str(trial.pilot.result['i_epoch_best'] + 1) + ' / ' + \
             str(trial.pilot.conf['n_epoch'])
-        row['Elapsed_pilot'] = cls.shorten_time(trial.pilot.result['elapsed'])
+        row['Elapsed(Pilot)'] = cls.shorten_time(trial.pilot.result['elapsed'])
         row['Elapsed'] = cls.shorten_time(trial.train.result['elapsed'])
-        row['n_parameters'] = trial.eval.result.get('parameters_trainable', -1)
 
-        row_model = collections.OrderedDict([('index', index_)])
+        row_arch = collections.OrderedDict([('index', index_)])
         mo = trial.train.conf['model']
         cls_, params_ = load_class(mo['cls_path']), mo['params']
         if issubclass(cls_, BasicBaseModel):
             params_ = cls_._resolve_seq_len(params_)
         for k, v in params_.items():
             if k == 'scaler_cls_path':
-                row_model['scaler_cls'] = cls.cls_path_to_name(v)
+                row_arch['scaler_cls'] = cls.cls_path_to_name(v)
             elif k == 'scaler_params':
-                row_model[k] = cls.params_to_str(v)
+                row_arch[k] = cls.params_to_str(v)
             else:
-                row_model[k] = v
+                row_arch[k] = v
 
         bs = cls.cls_to_str(trial.train.conf['batch_sampler'])
-        row_train = collections.OrderedDict([
+        row_opt = collections.OrderedDict([
             ('index', index_),
             ('criterion', cls.cls_to_str(trial.train.conf['criterion'])),
             ('batch_sampler', re.sub('^BatchSampler', '', bs).replace('batch_size=', '')),
             ('optimizer', cls.cls_to_str(trial.train.conf['optimizer'])),
             ('lr_scheduler', cls.cls_to_str(trial.train.conf['lr_scheduler'])),
         ])
-        return {'loss': row, 'model': row_model, 'train': row_train}
+        return {'loss': row, 'arch': row_arch, 'opt': row_opt}
 
     @classmethod
-    def get_rows(cls, trials):
+    def get_trial_rows(cls, trials):
         rows = {}
         for index_, trial in trials.items():
-            row = cls.get_row(trial, index_=index_)
+            row = cls.get_trial_row(trial, index_=index_)
             if row is None:
                 continue
             for k, v in row.items():
@@ -148,16 +152,52 @@ class WorkflowResult(Workflow):
         return rows
 
     @classmethod
-    def rows_to_df(cls, rows):
-        common = list(rows[0].keys())
-        for row in rows[1:]:
-            s = set(row.keys())
-            common = [c for c in common if c in s]
-        df = pd.DataFrame([{k: r[k] for k in common} for r in rows])
-        df = df.set_index('index').rename_axis(None)
-        return df
+    def rows_to_df(cls, rows, how='inner'):
+        assert how in ['inner', 'outer']
+        if how == 'inner':
+            keys = list(rows[0].keys())
+            for row in rows[1:]:
+                s = set(row.keys())
+                keys = [k for k in keys if k in s]
+        elif how == 'outer':
+            keys = []
+            seen = set()
+            for row in rows:
+                for k in row.keys():
+                    if k not in seen:
+                        keys.append(k)
+                        seen.add(k)
+        df = pd.DataFrame([{k: r.get(k) for k in keys} for r in rows])
+        df = df.convert_dtypes(dtype_backend='numpy_nullable')
+        return df.set_index('index').rename_axis(None)
 
     @classmethod
-    def get_dfs(cls, trials):
-        rows = cls.get_rows(trials)
-        return {k: cls.rows_to_df(v) for k, v in rows.items()}
+    def get_trial_dfs(cls, trials, how='inner'):
+        rows = cls.get_trial_rows(trials)
+        dfs = {k: cls.rows_to_df(v, how=how) for k, v in rows.items()}
+
+        df = dfs['loss']
+        s = df['MAE(Naive)']
+        if np.isclose(s, s.iloc[0], rtol=1e-6).all():
+            df = df.reset_index()
+            new_row = pd.DataFrame([{'index': '', 'Model': '(Naive)', '\\#Params': 0}])
+            if 'MSE(Naive)' in df.columns:
+                new_row['MSE(Model)'] = df['MSE(Naive)'].iloc[0]
+                new_row['MSE(ImpRate)'] = 0.0
+            new_row['MAE(Model)'] = df['MAE(Naive)'].iloc[0]
+            new_row['MAE(ImpRate)'] = 0.0
+            new_row['ImpRate\\dag'] = 0.0
+            new_row['Seed'] = df['Seed'].iloc[0]
+            new_row['\\#Epochs'] = ''
+            new_row['Elapsed(Pilot)'] = ''
+            new_row['Elapsed'] = ''
+            df = pd.concat([new_row, df], ignore_index=True)
+            df.drop(columns=['MAE(Naive)', 'MSE(Naive)'], inplace=True, errors='ignore')
+            df.rename(columns={
+                'MAE(Model)': 'MAE',
+                'MSE(Model)': 'MSE',
+            }, inplace=True, errors='ignore')
+            df = df.set_index('index').rename_axis(None)
+            dfs['loss'] = df
+
+        return dfs
