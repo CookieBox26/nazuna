@@ -85,6 +85,7 @@ class BaseTaskRunner(ABC):
             self.result_path.unlink()
         if self.log_path.exists():
             self.log_path.unlink()
+        print(f'[Task] Starting task: {self.out_path.as_posix()}')
         self._log('Started')
         self.result['env'] = get_env_info()
         with measure_time(self.result):
@@ -403,10 +404,11 @@ class TrainTaskRunner(EvalTaskRunner):
     def save_model(self, filename):
         torch.save(self.model.state_dict(), self.out_path / filename)
 
-    def train(self, i_epoch=-1):  # i_epoch is for model saving and the loss curriculum
+    def train(self, i_epoch=-1):
         data_loader = self.data_loader_train
         loss_total = 0.0
         self.model.train()
+        self.model.on_epoch_start(i_epoch)
         for i_batch, batch in enumerate(data_loader):
             self.optimizer.zero_grad()
             loss = self.model.get_loss_and_backward(batch, self.criterion, i_epoch)

@@ -55,6 +55,7 @@ class Workflow:
     """
 
     out_dir: str | Path = ''
+    comment: str = ''
     exist_ok: bool = True
     device: str = ''
     definitions: dict = None
@@ -186,10 +187,10 @@ class Workflow:
 
     def to_toml_str(self):
         assert [field.name for field in dataclasses.fields(self)] == \
-            ['out_dir', 'exist_ok', 'device', 'definitions', 'data', 'tasks'], \
+            ['out_dir', 'comment', 'exist_ok', 'device', 'definitions', 'data', 'tasks'], \
             'Update the custom TOML stringification when fields are changed.'
         header = {
-            'out_dir': self.out_dir,
+            'out_dir': self.out_dir, 'comment': self.comment,
             # 'exist_ok': self.exist_ok,
             # 'device': self.device,
         }

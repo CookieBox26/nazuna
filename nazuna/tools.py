@@ -99,6 +99,7 @@ class WorkflowResult(Workflow):
             (f'{criterion}(Naive)', trial.baseline.result['loss_per_sample']),
             (f'{criterion}(Model)', trial.eval.result['loss_per_sample']),
         ])
+        row['Model'] = row['Model'].replace('Channelwise', 'Cw')
         row['Model'] = row['Model'].replace('CrossChannel', 'CC')
         row[f'{criterion}(ImpRate)'] = 1.0 - row[f'{criterion}(Model)'] / row[f'{criterion}(Naive)']
         for criterion_a in trial.criteria_additional:

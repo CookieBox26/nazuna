@@ -108,6 +108,9 @@ class BaseModel(torch.nn.Module, ABC):
         args |= optimizer_params
         return [args]
 
+    def on_epoch_start(self, i_epoch):
+        pass
+
     def count_trainable_parameters(self):
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
 
