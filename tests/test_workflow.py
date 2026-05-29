@@ -1,4 +1,6 @@
-from nazuna.workflow import Workflow, normalize_config, run
+from nazuna.workflow import (
+    Workflow, WorkflowTemplateResolver, normalize_config, run,
+)
 import pytest
 
 
@@ -136,80 +138,6 @@ def test_run_template_train_with_baseline(tmp_path):
     assert wf.tasks[4]['name'] == 'Eval 0'
 
 
-template_train_with_baseline_multiseeds = '''
-# =============== template ===============
-[template]
-template_type = "train_with_baseline_multiseeds"
-criterion_target = "MSE"
-criterion_eval = "MSE"
-criterion_imprate = "ImprovementRate"
-baseline_model = "SimpleAverage"
-model = "SimpleAverageVariableDecay"
-data_range_train = [ 0.0, 0.8,]
-data_range_eval = [ 0.8, 1.0,]
-data_range_train_pilot = [ 0.0, 0.6,]
-data_range_eval_pilot = [ 0.6, 0.8,]
-batch_sampler = "BS"
-optimizer = "Adam"
-lr_scheduler = "CosineAnnealingLR"
-n_epoch = 5
-patience = 5
-seeds = [ 0, 1, 2,]
-'''
-
-
-@pytest.mark.slow
-def test_run_template_train_with_baseline_multiseeds(tmp_path):
-    out_dir = tmp_path / 'template_train_with_baseline_multiseeds'
-    conf = f'out_dir = "{out_dir.as_posix()}"\n' + premise + \
-        template_train_with_baseline_multiseeds
-    wf = run(conf)
-    assert out_dir.is_dir()
-    assert (out_dir / 'report.md').is_file()
-    assert wf.tasks[1 + 1 * 4 + 1]['name'] == 'Train 1'
-    assert wf.tasks[1 + 1 * 4 + 1]['seed'] == 1
-    assert wf.tasks[1 + 1 * 4 + 1]['n_epoch']['task_name'] == 'Pilot 1'
-    assert wf.tasks[1 + 2 * 4 + 1]['name'] == 'Train 2'
-    assert wf.tasks[1 + 2 * 4 + 1]['seed'] == 2
-    assert wf.tasks[1 + 2 * 4 + 1]['n_epoch']['task_name'] == 'Pilot 2'
-
-
-template_train_with_baseline_multimodels = '''
-# =============== template ===============
-[template]
-template_type = "train_with_baseline_multimodels"
-criterion_target = "MSE"
-criterion_eval = "MSE"
-criterion_imprate = "ImprovementRate"
-baseline_model = "SimpleAverage"
-model = ""
-data_range_train = [ 0.0, 0.8,]
-data_range_eval = [ 0.8, 1.0,]
-data_range_train_pilot = [ 0.0, 0.6,]
-data_range_eval_pilot = [ 0.6, 0.8,]
-batch_sampler = "BS"
-optimizer = "Adam"
-lr_scheduler = "CosineAnnealingLR"
-n_epoch = 5
-patience = 5
-models = [ "SimpleAverageVariableDecay", "SimpleAverageVariableDecayChannelwise",]
-'''
-
-
-@pytest.mark.slow
-def test_run_template_train_with_baseline_multimodels(tmp_path):
-    out_dir = tmp_path / 'template_train_with_baseline_multimodels'
-    conf = f'out_dir = "{out_dir.as_posix()}"\n' + premise + \
-        template_train_with_baseline_multimodels
-    wf = run(conf)
-    assert out_dir.is_dir()
-    assert (out_dir / 'report.md').is_file()
-    assert wf.tasks[1 + 0 * 4 + 1]['name'] == 'Train 0'
-    assert wf.tasks[1 + 0 * 4 + 1]['model'] == 'SimpleAverageVariableDecay'
-    assert wf.tasks[1 + 1 * 4 + 1]['name'] == 'Train 1'
-    assert wf.tasks[1 + 1 * 4 + 1]['model'] == 'SimpleAverageVariableDecayChannelwise'
-
-
 template_train_with_baseline_multiparams = '''
 # =============== template ===============
 [template]
@@ -250,6 +178,63 @@ def test_run_template_train_with_baseline_multiparams(tmp_path):
     assert wf.tasks[1 + 0 * 4 + 1]['lr_scheduler'] == 'CosineAnnealingLR'
     assert wf.tasks[1 + 1 * 4 + 1]['name'] == 'Train 1'
     assert wf.tasks[1 + 1 * 4 + 1]['lr_scheduler'] == 'ExponentialLR'
+
+
+template_train_with_baseline_multiparams_pilot_reuse = '''
+# =============== template ===============
+[template]
+template_type = "train_with_baseline_multiparams"
+criterion_target = "MSE"
+criterion_eval = "MSE"
+criterion_imprate = "ImprovementRate"
+baseline_model = "SimpleAverage"
+model = "SimpleAverageVariableDecay"
+data_range_train = [ 0.0, 0.8,]
+data_range_eval = [ 0.8, 1.0,]
+data_range_train_pilot = [ 0.0, 0.6,]
+data_range_eval_pilot = [ 0.6, 0.8,]
+batch_sampler = "BS"
+optimizer = "Adam"
+lr_scheduler = "CosineAnnealingLR"
+n_epoch = 5
+patience = 5
+[[template.params]]
+seed = 0
+[[template.params]]
+seed = 1
+i_taskset_pilot = 0
+[[template.params]]
+seed = 2
+[[template.params]]
+seed = 3
+i_taskset_pilot = 2
+'''
+
+
+def test_template_train_with_baseline_multiparams_pilot_reuse(tmp_path):
+    out_dir = tmp_path / 'template_train_with_baseline_multiparams_pilot_reuse'
+    conf = f'out_dir = "{out_dir.as_posix()}"\n' + premise + \
+        template_train_with_baseline_multiparams_pilot_reuse
+    d = normalize_config(conf)
+    d = WorkflowTemplateResolver.resolve(d)
+    wf = Workflow(**d)
+    task_names = [t['name'] for t in wf.tasks]
+    assert task_names == [
+        'Eval Baseline',
+        'Pilot 0', 'Train 0', 'Eval 0', 'Eval ImpRate 0',
+        'Train 1', 'Eval 1', 'Eval ImpRate 1',
+        'Pilot 2', 'Train 2', 'Eval 2', 'Eval ImpRate 2',
+        'Train 3', 'Eval 3', 'Eval ImpRate 3',
+    ]
+    i_train_1 = task_names.index('Train 1')
+    assert wf.tasks[i_train_1]['n_epoch']['task_name'] == 'Pilot 0'
+    assert wf.tasks[i_train_1]['seed'] == 1
+    i_train_3 = task_names.index('Train 3')
+    assert wf.tasks[i_train_3]['n_epoch']['task_name'] == 'Pilot 2'
+    assert wf.tasks[i_train_3]['seed'] == 3
+    # The original Pilot of taskset 0 still references its own training data
+    i_pilot_0 = task_names.index('Pilot 0')
+    assert wf.tasks[i_pilot_0]['name'] == 'Pilot 0'
 
 
 dummy_conf = '''

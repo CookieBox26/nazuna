@@ -270,7 +270,8 @@ class NLinearCrossChannel(BasicBaseModel):
 class NLinearPrunedCrossChannel(NLinearCrossChannel):
     def _setup(
         self, seq_len: int, pred_len: int, c_in: int, bias: bool,
-        n_ref_channels_target: int, n_epoch_full_ref: int, prune_channels_per_step: int,
+        ref_state_path: str,
+        ref_ratio: float,
         scaler_cls: type | None = IqrScaler,
         scaler_params: dict | None = {'stat_types': ('qtile_full', 'saved')},
         prep_type: str = 'none',
@@ -283,35 +284,26 @@ class NLinearPrunedCrossChannel(NLinearCrossChannel):
             use_lc=use_lc, lc_end_epoch=lc_end_epoch, lc_rate=lc_rate,
         )
         self.c_in = c_in
-        self.n_ref_channels_target = n_ref_channels_target
-        self.n_epoch_full_ref = n_epoch_full_ref
-        self.prune_channels_per_step = prune_channels_per_step
-        ref_mask = torch.ones(c_in, c_in, dtype=torch.bool)
-        ref_mask.fill_diagonal_(False)
+        self.ref_ratio = ref_ratio
+
+        ref_state = torch.load(ref_state_path, map_location='cpu')
+        ref_weight = ref_state['weight']  # [c_out, c_in, seq_len, pred_len]
+        assert ref_weight.shape[0] == ref_weight.shape[1] == c_in
+        scores = ref_weight.abs().sum(dim=(2, 3))  # [c_out, c_in]
+        self_scores = scores.diag()  # [c_out]
+        ref_mask = scores > (ref_ratio * self_scores[:, None])  # [c_out, c_in]
+        ref_mask = ref_mask | torch.eye(c_in, dtype=torch.bool)  # self always True
         self.register_buffer('ref_mask', ref_mask)
 
-    def on_epoch_start(self, i_epoch):
-        if i_epoch < self.n_epoch_full_ref:
-            return
-        n_steps = i_epoch - self.n_epoch_full_ref + 1
-        n_refs_should_be = self.n_ref_channels_target
-        if self.prune_channels_per_step > 0:
-            n_refs_should_be = max(
-                self.n_ref_channels_target,
-                self.c_in - 1 - n_steps * self.prune_channels_per_step,
-            )
+        # Per-output-channel init: weight[o, c] ∝ scores[o, c] on active inputs,
+        # normalized so the effective sum over active (c, s) equals 1.
+        masked_scores = scores * ref_mask  # zero on pruned inputs
+        active_score_sum = masked_scores.sum(dim=1).clamp(min=1e-12)  # [c_out]
+        weight_init = masked_scores / (seq_len * active_score_sum[:, None])
         with torch.no_grad():
-            scores = self.weight.abs().sum(dim=(2, 3))  # [c_out, c_in]
-            for o in range(self.c_in):
-                active = self.ref_mask[o].clone()
-                n_active = active.sum().item()
-                if n_active <= n_refs_should_be:
-                    continue
-                n_prune = n_active - n_refs_should_be
-                candidates = torch.where(active)[0]
-                cand_scores = scores[o, candidates]
-                prune_local = torch.topk(cand_scores, k=n_prune, largest=False).indices
-                self.ref_mask[o, candidates[prune_local]] = False
+            self.weight.data.copy_(
+                weight_init[:, :, None, None].expand_as(self.weight),
+            )
 
     def forward(self, x):  # x: [B, L, C]
         x_last = x[:, -1:, :]  # [B, 1, C]

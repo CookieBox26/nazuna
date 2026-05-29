@@ -85,9 +85,17 @@ cls_path = "nazuna.batch_samplers.BatchSamplerShuffle"
 params = { batch_size = 128 }
 
 # =============== Optimizer ===============
+[definitions.SGD001]
+cls_path = "torch.optim.SGD"
+params = { lr = 0.01, momentum = 0.9, weight_decay = 1e-4 }
+
 [definitions.Adam00001]
 cls_path = "torch.optim.Adam"
 params = { lr = 0.0001 }
+
+[definitions.Adam00003]
+cls_path = "torch.optim.Adam"
+params = { lr = 0.0003 }
 
 [definitions.Adam00005]
 cls_path = "torch.optim.Adam"

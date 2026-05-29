@@ -39,9 +39,9 @@ class WorkflowResult(Workflow):
             return types.SimpleNamespace(conf=conf, result=result)
         return (conf, result)
 
-    def get_trial(self, i_trial=None):
+    def get_taskset(self, i_taskset=None):
         d = {}
-        suffix = '' if i_trial is None else f' {i_trial}'
+        suffix = '' if i_taskset is None else f' {i_taskset}'
         d['baseline'] = self.get_conf_and_result('Eval Baseline', as_sn=True)
         d['pilot'] = self.get_conf_and_result(f'Pilot{suffix}', as_sn=True)
         d['train'] = self.get_conf_and_result(f'Train{suffix}', as_sn=True)
@@ -55,16 +55,16 @@ class WorkflowResult(Workflow):
         d['imprate'] = self.get_conf_and_result(f'Eval ImpRate{suffix}', as_sn=True)
         return types.SimpleNamespace(**d)
 
-    def get_trials(self, prefix, target_trials=None):
-        if target_trials is None:
-            target_trials = list(range(10))
-        trials = {}
-        for i_trial in target_trials:
-            trial = self.get_trial(i_trial)
-            if trial.pilot is None:
+    def get_tasksets(self, prefix, target_tasksets=None):
+        if target_tasksets is None:
+            target_tasksets = list(range(10))
+        tasksets = {}
+        for i_taskset in target_tasksets:
+            taskset = self.get_taskset(i_taskset)
+            if taskset.pilot is None:
                 break
-            trials[f'{prefix}({i_trial})'] = trial
-        return trials
+            tasksets[f'{prefix}({i_taskset})'] = taskset
+        return tasksets
 
     @classmethod
     def cls_path_to_name(cls, cls_path):
@@ -85,39 +85,39 @@ class WorkflowResult(Workflow):
         return f'{int(m.group(1)):2d}m{int(m.group(2)):2d}s'
 
     @classmethod
-    def get_trial_row(cls, trial, index_):
+    def get_taskset_row(cls, taskset, index_):
         if any(k is None for k in [
-            trial.baseline, trial.pilot, trial.train,
-            trial.eval, trial.imprate,
+            taskset.baseline, taskset.pilot, taskset.train,
+            taskset.eval, taskset.imprate,
         ]):
             return None
-        criterion = cls.cls_path_to_name(trial.eval.conf['criterion']['cls_path'])
+        criterion = cls.cls_path_to_name(taskset.eval.conf['criterion']['cls_path'])
         row = collections.OrderedDict([
             ('index', index_),
-            ('Model', cls.cls_path_to_name(trial.train.conf['model']['cls_path'])),
-            ('\\#Params', trial.eval.result.get('parameters_trainable', -1)),
-            (f'{criterion}(Naive)', trial.baseline.result['loss_per_sample']),
-            (f'{criterion}(Model)', trial.eval.result['loss_per_sample']),
+            ('Model', cls.cls_path_to_name(taskset.train.conf['model']['cls_path'])),
+            ('\\#Params', taskset.eval.result.get('parameters_trainable', -1)),
+            (f'{criterion}(Naive)', taskset.baseline.result['loss_per_sample']),
+            (f'{criterion}(Model)', taskset.eval.result['loss_per_sample']),
         ])
         row['Model'] = row['Model'].replace('Channelwise', 'Cw')
         row['Model'] = row['Model'].replace('CrossChannel', 'CC')
         row[f'{criterion}(ImpRate)'] = 1.0 - row[f'{criterion}(Model)'] / row[f'{criterion}(Naive)']
-        for criterion_a in trial.criteria_additional:
+        for criterion_a in taskset.criteria_additional:
             row[f'{criterion_a}(Naive)'] = \
-                getattr(trial, f'eval_baseline_{criterion_a.lower()}').result['loss_per_sample']
+                getattr(taskset, f'eval_baseline_{criterion_a.lower()}').result['loss_per_sample']
             row[f'{criterion_a}(Model)'] = \
-                getattr(trial, f'eval_{criterion_a.lower()}').result['loss_per_sample']
+                getattr(taskset, f'eval_{criterion_a.lower()}').result['loss_per_sample']
             row[f'{criterion_a}(ImpRate)'] = \
                 1.0 - row[f'{criterion_a}(Model)'] / row[f'{criterion_a}(Naive)']
-        row['ImpRate\\dag'] = trial.imprate.result['loss_per_sample']
-        row['Seed'] = trial.train.conf.get('seed', 0)
-        row['\\#Epochs'] = str(trial.pilot.result['i_epoch_best'] + 1) + ' / ' + \
-            str(trial.pilot.conf['n_epoch'])
-        row['Elapsed(Pilot)'] = cls.shorten_time(trial.pilot.result['elapsed'])
-        row['Elapsed'] = cls.shorten_time(trial.train.result['elapsed'])
+        row['ImpRate\\dag'] = taskset.imprate.result['loss_per_sample']
+        row['Seed'] = taskset.train.conf.get('seed', 0)
+        row['\\#Epochs'] = str(taskset.pilot.result['i_epoch_best'] + 1) + ' / ' + \
+            str(taskset.pilot.conf['n_epoch'])
+        row['Elapsed(Pilot)'] = cls.shorten_time(taskset.pilot.result['elapsed'])
+        row['Elapsed'] = cls.shorten_time(taskset.train.result['elapsed'])
 
         row_arch = collections.OrderedDict([('index', index_)])
-        mo = trial.train.conf['model']
+        mo = taskset.train.conf['model']
         cls_, params_ = load_class(mo['cls_path']), mo['params']
         if issubclass(cls_, BasicBaseModel):
             params_ = cls_._resolve_seq_len(params_)
@@ -129,21 +129,21 @@ class WorkflowResult(Workflow):
             else:
                 row_arch[k] = v
 
-        bs = cls.cls_to_str(trial.train.conf['batch_sampler'])
+        bs = cls.cls_to_str(taskset.train.conf['batch_sampler'])
         row_opt = collections.OrderedDict([
             ('index', index_),
-            ('criterion', cls.cls_to_str(trial.train.conf['criterion'])),
+            ('criterion', cls.cls_to_str(taskset.train.conf['criterion'])),
             ('batch_sampler', re.sub('^BatchSampler', '', bs).replace('batch_size=', '')),
-            ('optimizer', cls.cls_to_str(trial.train.conf['optimizer'])),
-            ('lr_scheduler', cls.cls_to_str(trial.train.conf['lr_scheduler'])),
+            ('optimizer', cls.cls_to_str(taskset.train.conf['optimizer'])),
+            ('lr_scheduler', cls.cls_to_str(taskset.train.conf['lr_scheduler'])),
         ])
         return {'loss': row, 'arch': row_arch, 'opt': row_opt}
 
     @classmethod
-    def get_trial_rows(cls, trials):
+    def get_taskset_rows(cls, tasksets):
         rows = {}
-        for index_, trial in trials.items():
-            row = cls.get_trial_row(trial, index_=index_)
+        for index_, taskset in tasksets.items():
+            row = cls.get_taskset_row(taskset, index_=index_)
             if row is None:
                 continue
             for k, v in row.items():
@@ -173,8 +173,8 @@ class WorkflowResult(Workflow):
         return df.set_index('index').rename_axis(None)
 
     @classmethod
-    def get_trial_dfs(cls, trials, how='inner'):
-        rows = cls.get_trial_rows(trials)
+    def get_taskset_dfs(cls, tasksets, how='inner'):
+        rows = cls.get_taskset_rows(tasksets)
         dfs = {k: cls.rows_to_df(v, how=how) for k, v in rows.items()}
 
         df = dfs['loss']

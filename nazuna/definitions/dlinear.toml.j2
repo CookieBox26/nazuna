@@ -96,9 +96,8 @@ seq_len = {{ seq_len }}
 pred_len = {{ pred_len }}
 c_in = {{ n_channel }}
 bias = true
-n_ref_channels_target = 5
-n_epoch_full_ref = 0
-prune_channels_per_step = -1
+ref_state_path = ""
+ref_ratio = 0.5
 scaler_cls_path = "nazuna.models.common.IqrScaler"
 scaler_params = { "stat_types" = [ "qtile_full", "saved",] }
 prep_type = "none"
