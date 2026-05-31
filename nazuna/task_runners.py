@@ -620,8 +620,16 @@ class OptunaTaskRunner(BaseTaskRunner):
         self._best_trial_number = None
 
     @classmethod
+    def _parse_choices(cls, spec):
+        choices = spec['choices'].split(',')
+        if spec['type'] == 'int':
+            choices = [int(c) for c in choices]
+        if spec['type'] == 'float':
+            choices = [float(c) for c in choices]
+        return choices
+
+    @classmethod
     def suggest_param(cls, trial, name, spec):
-        print(name, spec)
         method = spec['method']
         if method == 'log_uniform':
             low, high = float(spec['range'][0]), float(spec['range'][1])
@@ -633,18 +641,24 @@ class OptunaTaskRunner(BaseTaskRunner):
             low, high = int(spec['range'][0]), int(spec['range'][1])
             return trial.suggest_int(name, low, high)
         elif method in ['index', 'categorical']:
-            type_ = spec['type']
-            choices = spec['choices'].split(',')
-            if type_ == 'int':
-                choices = [int(c) for c in choices]
-            if type_ == 'float':
-                choices = [float(c) for c in choices]
+            choices = cls._parse_choices(spec)
             if method == 'categorical':
                 return trial.suggest_categorical(name, choices)
             i = trial.suggest_int(f'{name}_index', 0, len(choices) - 1)
             return choices[i]
         else:
             raise ValueError(f'Unknown search space method: {method}')
+
+    @classmethod
+    def resolve_params(cls, params, search_space):
+        resolved = dict(params)
+        for target_specs in search_space.values():
+            for name, spec in target_specs.items():
+                if spec['method'] != 'index':
+                    continue
+                i = resolved.pop(f'{name}_index')
+                resolved[name] = cls._parse_choices(spec)[i]
+        return resolved
 
     def get_suggested_params(self, trial, target):
         base_params = getattr(self, target)
@@ -701,6 +715,7 @@ class OptunaTaskRunner(BaseTaskRunner):
             if fold_loss < best_loss_this_trial:
                 best_loss_this_trial = fold_loss
                 best_model_state_this_trial = copy.deepcopy(runner.model.state_dict())
+        self._fold_losses[i_trial] = losses
         mean_loss = sum(losses) / len(losses)
         if self._best_model_state is None or mean_loss < self.result.get('best_value', float('inf')):
             self._best_model_state = best_model_state_this_trial
@@ -718,6 +733,7 @@ class OptunaTaskRunner(BaseTaskRunner):
             storage=storage, study_name=self.name, load_if_exists=self.load_if_exists,
         )
         self._n_failed = 0
+        self._fold_losses = {}
         study.optimize(self._create_objective(), n_trials=self.n_trials)
         n_total = len(study.trials)
         n_completed = n_total - self._n_failed
@@ -729,9 +745,13 @@ class OptunaTaskRunner(BaseTaskRunner):
             self.result['best_trial_number'] = study.best_trial.number
             self.result['best_value'] = study.best_value
             self.result['best_params'] = study.best_params
+            self.result['best_params_resolved'] = \
+                self.resolve_params(study.best_params, self.search_space)
         trials_history = []
         for t in study.trials:
             record = {'number': t.number, 'state': t.state.name, 'value': t.value, 'params': t.params}
+            if t.number in self._fold_losses:
+                record['fold_losses'] = self._fold_losses[t.number]
             trials_history.append(record)
         self.result['trials'] = trials_history
         if self._best_model_state is not None:
