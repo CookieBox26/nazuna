@@ -57,12 +57,10 @@ class WorkflowResult(Workflow):
 
     def get_tasksets(self, prefix, target_tasksets=None):
         if target_tasksets is None:
-            target_tasksets = list(range(10))
+            target_tasksets = list(range(20))
         tasksets = {}
         for i_taskset in target_tasksets:
             taskset = self.get_taskset(i_taskset)
-            if taskset.pilot is None:
-                break
             tasksets[f'{prefix}({i_taskset})'] = taskset
         return tasksets
 
@@ -87,7 +85,7 @@ class WorkflowResult(Workflow):
     @classmethod
     def get_taskset_row(cls, taskset, index_):
         if any(k is None for k in [
-            taskset.baseline, taskset.pilot, taskset.train,
+            taskset.baseline, taskset.train,
             taskset.eval, taskset.imprate,
         ]):
             return None
@@ -111,9 +109,12 @@ class WorkflowResult(Workflow):
                 1.0 - row[f'{criterion_a}(Model)'] / row[f'{criterion_a}(Naive)']
         row['ImpRate\\dag'] = taskset.imprate.result['loss_per_sample']
         row['Seed'] = taskset.train.conf.get('seed', 0)
-        row['\\#Epochs'] = str(taskset.pilot.result['i_epoch_best'] + 1) + ' / ' + \
-            str(taskset.pilot.conf['n_epoch'])
-        row['Elapsed(Pilot)'] = cls.shorten_time(taskset.pilot.result['elapsed'])
+        row['\\#Epochs'] = ''
+        row['Elapsed(Pilot)'] = ''
+        if taskset.pilot is not None:
+            row['\\#Epochs'] = str(taskset.pilot.result['i_epoch_best'] + 1) + ' / ' + \
+                str(taskset.pilot.conf['n_epoch'])
+            row['Elapsed(Pilot)'] = cls.shorten_time(taskset.pilot.result['elapsed'])
         row['Elapsed'] = cls.shorten_time(taskset.train.result['elapsed'])
 
         row_arch = collections.OrderedDict([('index', index_)])

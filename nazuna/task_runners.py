@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import IO
+from typing import IO, ClassVar
 import os
 from enum import Enum
 import dataclasses
@@ -8,14 +8,12 @@ import copy
 from pathlib import Path
 import datetime
 import inspect
-import pickle
 import numpy as np
 import optuna
 import torch
 from nazuna.data_manager import TimeSeriesDataManager
 from nazuna.criteria import BaseImprovement
 from nazuna.models._base import BasicBaseModel
-from nazuna.analysis.optuna_utils import OptunaUtils
 from nazuna.analysis.diagnoser import Diagnoser
 from nazuna.analysis.inspector import Inspector
 from nazuna.utils import (
@@ -536,13 +534,11 @@ class OptunaTaskRunner(BaseTaskRunner):
     Search for optimal hyperparameters using Optuna.
 
     Attributes:
-        n_trials (int = 10): Number of Optuna trials to run.
-        direction (str = 'minimize'): Optimization direction ('minimize' or 'maximize').
-        search_space (dict = None): Hyperparameter search space definition **(required)**.
-            Keys are parameter names, values are lists like ['log_uniform', low, high],
-            ['uniform', low, high], ['int', low, high], or ['categorical', choices].
+        search_space (dict = None): Search space **(required)**.
         data_ranges (list = None): List of data range dicts for cross-validation **(required)**.
             Each dict should have 'train' and 'eval' keys with (start, end) ratio tuples.
+        n_trials (int = 10): Number of Optuna trials to run.
+        direction (str = 'minimize'): Optimization direction ('minimize' or 'maximize').
         data_offset_train (int = 0): Offset for training data.
         data_rolling_window_train (int = 4): Rolling window size for training data.
         data_offset_eval (int = 0): Offset for evaluation data.
@@ -561,31 +557,49 @@ class OptunaTaskRunner(BaseTaskRunner):
         n_epoch (int = 0): Number of training epochs per trial **(required)**.
         early_stop (bool = False): Whether to enable early stopping within each trial.
     """
-    n_trials: int = 10
-    direction: str = 'minimize'
+    load_if_exists: bool = True
     search_space: dict = None
-    data_ranges: list = None
+    direction: str = 'minimize'
+    n_trials: int = 10
 
+    data_ranges_with_train_seeds: list = None
     data_offset_train: int = 0
     data_rolling_window_train: int = 4
     data_offset_eval: int = 0
     data_rolling_window_eval: int = 4
-    batch_size_eval: int = 32
 
+    batch_size_eval: int = 32
     criterion: dict = None
     model: dict = None
+
     batch_sampler: dict = None
     optimizer: dict = None
     lr_scheduler: dict = None
 
     n_epoch: int = 0
     early_stop: bool = False
+    patience: int = 5
+
+    search_targets: ClassVar[list[str]] = [
+        'model_params', 'batch_sampler_params',
+        'optimizer_params', 'lr_scheduler_params',
+    ]
 
     def __post_init__(self):
         super().__post_init__()
-        assert self.search_space is not None, 'search_space is required'
-        assert self.data_ranges is not None, 'data_ranges is required'
-        assert len(self.data_ranges) > 0, 'data_ranges must not be empty'
+        assert self.search_space, 'search_space is required'
+        assert set(self.search_space) <= set(OptunaTaskRunner.search_targets)
+        assert 'lr_scheduler' not in self.search_space or self.lr_scheduler, \
+            'lr_scheduler config is required when search_space contains "lr_scheduler"'
+        for d in self.data_ranges_with_train_seeds:
+            assert 'train' in d
+            assert 'eval' in d
+            assert set(d) <= {'train', 'eval', 'seed'}
+
+        assert self.data_ranges_with_train_seeds is not None, \
+            'data_ranges_with_train_seeds is required'
+        assert len(self.data_ranges_with_train_seeds) > 0, \
+            'data_ranges_with_train_seeds must not be empty'
         assert self.n_trials > 0, 'n_trials must be positive'
         assert self.n_epoch > 0, 'n_epoch must be positive'
 
@@ -598,54 +612,74 @@ class OptunaTaskRunner(BaseTaskRunner):
         self.optimizer_cls_path = self.optimizer['cls_path']
         self.optimizer_params = self.optimizer['params']
         self.lr_scheduler_cls_path = None
+        self.lr_scheduler_params = None
         if self.lr_scheduler:
             self.lr_scheduler_cls_path = self.lr_scheduler['cls_path']
             self.lr_scheduler_params = self.lr_scheduler['params']
-
         self._best_model_state = None
         self._best_trial_number = None
 
-    def _create_objective(self):
-        fail_value = (
-            float('inf') if self.direction == 'minimize'
-            else float('-inf')
-        )
+    @classmethod
+    def suggest_param(cls, trial, name, spec):
+        print(name, spec)
+        method = spec['method']
+        if method == 'log_uniform':
+            low, high = float(spec['range'][0]), float(spec['range'][1])
+            return trial.suggest_float(name, low, high, log=True)
+        elif method == 'uniform':
+            low, high = float(spec['range'][0]), float(spec['range'][1])
+            return trial.suggest_float(name, low, high)
+        elif method == 'int':
+            low, high = int(spec['range'][0]), int(spec['range'][1])
+            return trial.suggest_int(name, low, high)
+        elif method in ['index', 'categorical']:
+            type_ = spec['type']
+            choices = spec['choices'].split(',')
+            if type_ == 'int':
+                choices = [int(c) for c in choices]
+            if type_ == 'float':
+                choices = [float(c) for c in choices]
+            if method == 'categorical':
+                return trial.suggest_categorical(name, choices)
+            i = trial.suggest_int(f'{name}_index', 0, len(choices) - 1)
+            return choices[i]
+        else:
+            raise ValueError(f'Unknown search space method: {method}')
 
+    def get_suggested_params(self, trial, target):
+        base_params = getattr(self, target)
+        params = copy.deepcopy(base_params) if base_params else {}
+        for name, spec in self.search_space.get(target, {}).items():
+            params[name] = OptunaTaskRunner.suggest_param(trial, name, spec)
+        return params
+
+    def _create_objective(self):
+        fail_value = float('inf') if self.direction == 'minimize' else float('-inf')
         def objective(trial):
+            params_all = {}
+            for target in OptunaTaskRunner.search_targets:
+                params_all[target] = self.get_suggested_params(trial, target)
             try:
-                return self._run_trial(trial)
+                return self._run_trial(trial.number, **params_all)
             except Exception as e:
-                print(
-                    f'[Optuna] Trial {trial.number} failed: '
-                    f'{type(e).__name__}: {e}'
-                )
+                print(f'[Optuna] Trial {trial.number} failed: {type(e).__name__}: {e}')
                 self._n_failed += 1
                 return fail_value
-
         return objective
 
-    def _run_trial(self, trial):
-        self._log(f'Trial {trial.number} started')
-        model_params, optimizer_params, batch_sampler_params = \
-            OptunaUtils.build_params_for_trial(
-                trial, self.search_space, self.model_params,
-                self.optimizer_params, self.batch_sampler_params,
-            )
-
+    def _run_trial(
+        self, i_trial, model_params, batch_sampler_params, optimizer_params, lr_scheduler_params,
+    ):
+        self._log(f'Trial {i_trial} started')
         losses = []
         best_model_state_this_trial = None
         best_loss_this_trial = float('inf')
-
-        for i_fold, data_range in enumerate(self.data_ranges):
-            data_range_train = data_range['train']
-            data_range_eval = data_range['eval']
-
+        for i_fold, d in enumerate(self.data_ranges_with_train_seeds):
             runner = TrainTaskRunner(
-                dm=self.dm, device=self.device, name=f'Trial {trial.number} Fold {i_fold}',
-                out_dir=(self.out_path / f'trial_{trial.number}' / f'fold_{i_fold}'),
-                exist_ok=self.exist_ok,
-                data_range_train=data_range_train,
-                data_range_eval=data_range_eval,
+                seed=d.get('seed', 0),
+                dm=self.dm, device=self.device, name=f'Trial {i_trial} Fold {i_fold}',
+                out_dir=(self.out_path / f'trial_{i_trial}' / f'fold_{i_fold}'), exist_ok=True,
+                data_range_train=d['train'], data_range_eval=d['eval'],
                 data_offset_train=self.data_offset_train,
                 data_rolling_window_train=self.data_rolling_window_train,
                 data_offset_eval=self.data_offset_eval,
@@ -656,79 +690,52 @@ class OptunaTaskRunner(BaseTaskRunner):
                 batch_sampler={'cls_path': self.batch_sampler_cls_path, 'params': batch_sampler_params},
                 optimizer={'cls_path': self.optimizer_cls_path, 'params': optimizer_params},
                 lr_scheduler=({
-                    'cls_path': self.lr_scheduler_cls_path,
-                    'params': self.lr_scheduler_params,
+                    'cls_path': self.lr_scheduler_cls_path, 'params': lr_scheduler_params,
                 } if self.lr_scheduler_cls_path else None),
-                n_epoch=self.n_epoch,
-                early_stop=self.early_stop,
+                n_epoch=self.n_epoch, early_stop=self.early_stop, patience=self.patience,
             )
             runner.out_path.mkdir(parents=True, exist_ok=True)
             runner._run()
             fold_loss = runner.result.get('loss_per_sample_eval_best', float('inf'))
             losses.append(fold_loss)
-
             if fold_loss < best_loss_this_trial:
                 best_loss_this_trial = fold_loss
                 best_model_state_this_trial = copy.deepcopy(runner.model.state_dict())
-
         mean_loss = sum(losses) / len(losses)
-
-        if (
-            self._best_model_state is None
-            or mean_loss < self.result.get('best_value', float('inf'))
-        ):
+        if self._best_model_state is None or mean_loss < self.result.get('best_value', float('inf')):
             self._best_model_state = best_model_state_this_trial
-            self._best_trial_number = trial.number
-
+            self._best_trial_number = i_trial
         return mean_loss
 
     def _run(self):
+        optuna_db_path = self.out_path / 'optuna.db'
+        storage = f'sqlite:///{optuna_db_path.as_posix()}'
+        if not self.load_if_exists and optuna_db_path.is_file():
+            if self.name in optuna.get_all_study_names(storage=storage):
+                optuna.delete_study(storage=storage, study_name=self.name)
+        study = optuna.create_study(
+            direction=self.direction, sampler=optuna.samplers.TPESampler(seed=self.seed),
+            storage=storage, study_name=self.name, load_if_exists=self.load_if_exists,
+        )
         self._n_failed = 0
-
-        study = optuna.create_study(direction=self.direction)
         study.optimize(self._create_objective(), n_trials=self.n_trials)
-
         n_total = len(study.trials)
         n_completed = n_total - self._n_failed
-
-        trial_summary = (
-            f'{n_total} trials: '
-            f'{n_completed} completed, {self._n_failed} failed'
-        )
-        (self.out_path / 'trial_summary.txt').write_text(
-            trial_summary + '\n', newline='\n', encoding='utf8',
-        )
-        print(f'[Optuna] {trial_summary}')
-
+        print(f'[Optuna] {n_total} trials: {n_completed} completed, {self._n_failed} failed')
         self.result['n_trials'] = n_total
         self.result['n_completed'] = n_completed
         self.result['n_failed'] = self._n_failed
-
         if n_completed > 0:
             self.result['best_trial_number'] = study.best_trial.number
             self.result['best_value'] = study.best_value
             self.result['best_params'] = study.best_params
-
         trials_history = []
         for t in study.trials:
-            record = {
-                'number': t.number,
-                'params': t.params,
-                'state': t.state.name,
-            }
-            if t.value is not None:
-                record['value'] = t.value
+            record = {'number': t.number, 'state': t.state.name, 'value': t.value, 'params': t.params}
             trials_history.append(record)
         self.result['trials'] = trials_history
-
         if self._best_model_state is not None:
-            torch.save(
-                self._best_model_state,
-                self.out_path / 'best_model_state.pth',
-            )
-
-        with open(self.out_path / 'study.pkl', 'wb') as f:
-            pickle.dump(study, f)
+            torch.save(self._best_model_state, self.out_path / 'model_state.pth')
 
 
 class TaskType(Enum):

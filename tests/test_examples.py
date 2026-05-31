@@ -15,5 +15,5 @@ def test_examples(identifier):
     conf_toml_path = nazuna.examples.get_conf_toml_path(identifier)
     out_dir = load_toml(conf_toml_path)['out_dir']
     Path(f'{out_dir}/report.md').unlink(missing_ok=True)
-    run(conf_toml_path)
+    run(conf_toml_path, force_rerun=True)
     assert Path(f'{out_dir}/report.md').is_file()

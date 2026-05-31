@@ -21,8 +21,8 @@ seq_len = 97
 pred_len = 24
 kernel_size = 25
 bias = true
-quantile_mode_train = "full"
-quantile_mode_eval = "saved"
+scaler_cls_path = "nazuna.models.common.IqrScaler"
+scaler_params = { "stat_types" = [ "qtile_full", "saved",] }
 
 [definitions.BatchSamplerShuffle]
 cls_path = "nazuna.batch_samplers.BatchSamplerShuffle"
@@ -35,17 +35,21 @@ params = { lr = 0.001 }
 # =============== tasks ===============
 [[tasks]]
 task_type = "optuna"
-name = "Optuna"
-n_trials = 2
-n_epoch = 2
+name = "Optuna 0"
+load_if_exists = false
+n_trials = 3
+n_epoch = 3
 criterion = "MSE"
 model = "DLinear"
 batch_sampler = "BatchSamplerShuffle"
 optimizer = "Adam"
-data_ranges = [
-  { train = [ 0.0, 0.2,], eval = [ 0.2, 0.3,] },
-  { train = [ 0.1, 0.3,], eval = [ 0.3, 0.4,] },
+data_ranges_with_train_seeds = [
+  { train = [ 0.0, 0.2,], eval = [ 0.2, 0.3,], seed = 0 },
+  { train = [ 0.1, 0.3,], eval = [ 0.3, 0.4,], seed = 1 },
 ]
-[tasks.search_space]
-lr = [ "log_uniform", "0.0001", "0.1",]
-kernel_size = [ "categorical", "int", "15,25,35",]
+
+[tasks.search_space.model_params]
+kernel_size = { method = "index", type = "int", choices = "15,25,35" }
+
+[tasks.search_space.optimizer_params]
+lr = { method = "log_uniform", range = ["0.0001", "0.1",] }

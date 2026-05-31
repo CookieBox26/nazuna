@@ -64,7 +64,9 @@ def test_optuna_task_runner(tmp_path, get_data_manager):
         name='Optuna Task 0',
         out_dir=tmp_path / 'task_0',
         n_trials=2,
-        search_space={'lr': ['log_uniform', 1e-4, 1e-1]},
+        search_space={'optimizer': {
+            'lr': {'method': 'log_uniform', 'range': [1e-4, 1e-1]},
+        }},
         data_ranges=[
             {'train': (0.0, 0.6), 'eval': (0.6, 0.8)},
             {'train': (0.0, 0.8), 'eval': (0.8, 1.0)},
@@ -117,7 +119,9 @@ def test_optuna_task_runner_with_failures(
         name='Optuna Fail Test',
         out_dir=tmp_path / 'task_fail',
         n_trials=4,
-        search_space={'lr': ['log_uniform', 1e-4, 1e-1]},
+        search_space={'optimizer': {
+            'lr': {'method': 'log_uniform', 'range': [1e-4, 1e-1]},
+        }},
         data_ranges=[
             {'train': (0.0, 0.6), 'eval': (0.6, 0.8)},
         ],
@@ -142,11 +146,11 @@ def test_optuna_task_runner_with_failures(
     original_run_trial = runner._run_trial
     call_count = [0]
 
-    def sometimes_failing_run_trial(trial):
+    def sometimes_failing_run_trial(trial, *args, **kwargs):
         call_count[0] += 1
         if call_count[0] % 2 == 0:
             raise AssertionError('simulated constraint violation')
-        return original_run_trial(trial)
+        return original_run_trial(trial, *args, **kwargs)
 
     with patch.object(
         runner, '_run_trial', side_effect=sometimes_failing_run_trial,

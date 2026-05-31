@@ -69,7 +69,7 @@ class Workflow:
         'criterion', 'baseline_model', 'model',
         'batch_sampler', 'optimizer', 'lr_scheduler',
         # a list
-        'batch_size_eval', 'data_range_train', 'data_range_eval',
+        'batch_size_eval', 'data_range_train', 'data_range_eval', 'data_ranges',
         # an integer
         'n_epoch',
     ]

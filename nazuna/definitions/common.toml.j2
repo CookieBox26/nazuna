@@ -4,6 +4,9 @@ DataRangeEval = [ 0.8, 1.0,]
 DataRangeTrain = [ 0.0, 0.8,]
 DataRangeEvalPilot = [ 0.6, 0.8,]
 DataRangeTrainPilot = [ 0.0, 0.6,]
+DataRangesOptuna = [
+  { train = [ 0.0, 0.6,], eval = [ 0.6, 0.8,] },
+]
 
 # =============== Criteria ===============
 [definitions.MSE]
@@ -104,6 +107,10 @@ params = { lr = 0.0005 }
 [definitions.Adam0001]
 cls_path = "torch.optim.Adam"
 params = { lr = 0.001 }
+
+[definitions.AdamW00001]
+cls_path = "torch.optim.AdamW"
+params = { lr = 0.0001, weight_decay = 1e-4 }
 
 # =============== Learning rate scheduler ===============
 [definitions.ExponentialLR09]
