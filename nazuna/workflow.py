@@ -233,6 +233,7 @@ class Workflow:
         suppress_plot: bool = False,
         force_replot: bool = False,
         report_only: bool = False,
+        dryrun: bool = False,
     ):
         skip_task_ids = type(self).parse_skip_task_ids(skip_task_ids_)
         target_tasks = [t for t in target_tasks_.split(',') if t != '']
@@ -258,12 +259,15 @@ class Workflow:
                         else:
                             print('Result already exists. Skipping.')
                             continue
+                    if dryrun:
+                        print(f'[Dry-run] Would run task: {task_runner.name}')
+                        continue
                     if not any_task_run:
                         self.out_path.mkdir(parents=True, exist_ok=self.exist_ok)
                         any_task_run = True
                     task_runner.run()
                     report(report_path, self.to_toml_str(), task_runners, suppress_plot)
-            if not any_task_run:
+            if not any_task_run and not dryrun:
                 report(report_path, self.to_toml_str(), task_runners, suppress_plot, force_replot)
         print(f'Finished: {report_path.as_posix()} ({info.get("elapsed")})')
 
@@ -481,6 +485,7 @@ def run(
     suppress_plot: bool = False,
     force_replot: bool = False,
     report_only: bool = False,
+    dryrun: bool = False,
 ):
     d = normalize_config(source)
     d = WorkflowTemplateResolver.resolve(d)
@@ -492,5 +497,6 @@ def run(
         suppress_plot=suppress_plot,
         force_replot=force_replot,
         report_only=report_only,
+        dryrun=dryrun,
     )
     return wf

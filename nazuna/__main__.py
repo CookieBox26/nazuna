@@ -13,6 +13,7 @@ def main():
     parser.add_argument('--force_replot', action='store_true')
     parser.add_argument('--report_only', action='store_true')
     parser.add_argument('--example', action='store_true')
+    parser.add_argument('--dryrun', action='store_true')
     args = parser.parse_args()
 
     conf = args.conf
@@ -20,7 +21,7 @@ def main():
         conf = nazuna.examples.get_conf_toml_path(conf)
     run(
         conf, args.skip_task_ids, args.target_tasks, args.force_rerun,
-        args.suppress_plot, args.force_replot, args.report_only,
+        args.suppress_plot, args.force_replot, args.report_only, args.dryrun,
     )
 
 
