@@ -677,7 +677,7 @@ class OptunaTaskRunner(BaseTaskRunner):
             for target in OptunaTaskRunner.search_targets:
                 params_all[target] = self.get_suggested_params(trial, target)
             try:
-                return self._run_trial(trial.number, **params_all)
+                return self._run_trial(trial, **params_all)
             except Exception as e:
                 print(f'[Optuna] Trial {trial.number} failed: {type(e).__name__}: {e}')
                 self._n_failed += 1
@@ -685,8 +685,9 @@ class OptunaTaskRunner(BaseTaskRunner):
         return objective
 
     def _run_trial(
-        self, i_trial, model_params, batch_sampler_params, optimizer_params, lr_scheduler_params,
+        self, trial, model_params, batch_sampler_params, optimizer_params, lr_scheduler_params,
     ):
+        i_trial = trial.number
         self._log(f'Trial {i_trial} started')
         losses = []
         i_epoch_bests = []
@@ -720,8 +721,8 @@ class OptunaTaskRunner(BaseTaskRunner):
             if fold_loss < best_loss_this_trial:
                 best_loss_this_trial = fold_loss
                 best_model_state_this_trial = copy.deepcopy(runner.model.state_dict())
-        self._fold_losses[i_trial] = losses
-        self._fold_i_epoch_bests[i_trial] = i_epoch_bests
+        trial.set_user_attr('fold_losses', losses)
+        trial.set_user_attr('fold_i_epoch_bests', i_epoch_bests)
         mean_loss = sum(losses) / len(losses)
         if self._best_model_state is None or mean_loss < self.result.get('best_value', float('inf')):
             self._best_model_state = best_model_state_this_trial
@@ -740,7 +741,7 @@ class OptunaTaskRunner(BaseTaskRunner):
         print(f'Deleting incomplete trials: {incomplete_trial_ids}')
         engine = create_engine(storage)
         with engine.connect() as conn:
-            for table_name in ['trial_params', 'trial_values', 'trials']:
+            for table_name in ['trial_params', 'trial_values', 'trial_user_attributes', 'trials']:
                 stmt = f'DELETE FROM {table_name} WHERE trial_id IN :trial_ids'
                 stmt = text(stmt).bindparams(bindparam('trial_ids', expanding=True))
                 conn.execute(stmt, {'trial_ids': incomplete_trial_ids})
@@ -766,8 +767,6 @@ class OptunaTaskRunner(BaseTaskRunner):
             return
 
         self._n_failed = 0
-        self._fold_losses = {}
-        self._fold_i_epoch_bests = {}
         study.optimize(self._create_objective(), n_trials=n_trials)
         n_total = len(study.trials)
         n_completed = n_total - self._n_failed
@@ -784,9 +783,9 @@ class OptunaTaskRunner(BaseTaskRunner):
         trials_history = []
         for t in study.trials:
             record = {'number': t.number, 'state': t.state.name, 'value': t.value, 'params': t.params}
-            if t.number in self._fold_losses:
-                record['fold_losses'] = self._fold_losses[t.number]
-                record['fold_i_epoch_bests'] = self._fold_i_epoch_bests[t.number]
+            if 'fold_losses' in t.user_attrs:
+                record['fold_losses'] = t.user_attrs['fold_losses']
+                record['fold_i_epoch_bests'] = t.user_attrs['fold_i_epoch_bests']
             trials_history.append(record)
         self.result['trials'] = trials_history
         if self._best_model_state is not None:
