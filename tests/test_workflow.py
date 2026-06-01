@@ -237,6 +237,58 @@ def test_template_train_with_baseline_multiparams_pilot_reuse(tmp_path):
     assert wf.tasks[i_pilot_0]['name'] == 'Pilot 0'
 
 
+template_train_with_baseline_multiparams_nopilot = '''
+# =============== template ===============
+[template]
+template_type = "train_with_baseline_multiparams"
+criterion_target = "MSE"
+criterion_eval = "MSE"
+criterion_imprate = "ImprovementRate"
+baseline_model = "SimpleAverage"
+model = "SimpleAverageVariableDecay"
+data_range_train = [ 0.0, 0.8,]
+data_range_eval = [ 0.8, 1.0,]
+data_range_train_pilot = [ 0.0, 0.6,]
+data_range_eval_pilot = [ 0.6, 0.8,]
+batch_sampler = "BS"
+optimizer = "Adam"
+lr_scheduler = "CosineAnnealingLR"
+n_epoch = 5
+patience = 5
+[[template.params]]
+seed = 0
+[[template.params]]
+seed = 1
+i_taskset_pilot = 0
+[[template.params]]
+seed = 2
+nopilot = true
+n_epoch = 3
+'''
+
+
+def test_template_train_with_baseline_multiparams_nopilot(tmp_path):
+    out_dir = tmp_path / 'template_train_with_baseline_multiparams_nopilot'
+    conf = f'out_dir = "{out_dir.as_posix()}"\n' + premise + \
+        template_train_with_baseline_multiparams_nopilot
+    d = normalize_config(conf)
+    d = WorkflowTemplateResolver.resolve(d)
+    wf = Workflow(**d)
+    task_names = [t['name'] for t in wf.tasks]
+    assert task_names == [
+        'Eval Baseline',
+        'Pilot 0', 'Train 0', 'Eval 0', 'Eval ImpRate 0',
+        'Train 1', 'Eval 1', 'Eval ImpRate 1',
+        'Train 2', 'Eval 2', 'Eval ImpRate 2',
+    ]
+    i_train_1 = task_names.index('Train 1')
+    assert wf.tasks[i_train_1]['seed'] == 1
+    assert wf.tasks[i_train_1]['n_epoch']['task_name'] == 'Pilot 0'
+    i_train_2 = task_names.index('Train 2')
+    assert wf.tasks[i_train_2]['seed'] == 2
+    assert wf.tasks[i_train_2]['n_epoch'] == 3
+
+
 dummy_conf = '''
 definition_includes = [
 { bundled = "common" },

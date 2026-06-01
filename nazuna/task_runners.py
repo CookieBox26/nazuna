@@ -560,7 +560,8 @@ class OptunaTaskRunner(BaseTaskRunner):
     load_if_exists: bool = True
     search_space: dict = None
     direction: str = 'minimize'
-    n_trials: int = 10
+    n_trials: int = -1
+    n_trials_to_add: int = -1
 
     data_ranges_with_train_seeds: list = None
     data_offset_train: int = 0
@@ -600,7 +601,8 @@ class OptunaTaskRunner(BaseTaskRunner):
             'data_ranges_with_train_seeds is required'
         assert len(self.data_ranges_with_train_seeds) > 0, \
             'data_ranges_with_train_seeds must not be empty'
-        assert self.n_trials > 0, 'n_trials must be positive'
+        assert (self.n_trials >= 0) != (self.n_trials_to_add >= 0), \
+            'Specify exactly one of n_trials or n_trials_to_add as a non-negative value'
         assert self.n_epoch > 0, 'n_epoch must be positive'
 
         self.criterion_cls = load_class(self.criterion['cls_path'])
@@ -686,6 +688,7 @@ class OptunaTaskRunner(BaseTaskRunner):
     ):
         self._log(f'Trial {i_trial} started')
         losses = []
+        i_epoch_bests = []
         best_model_state_this_trial = None
         best_loss_this_trial = float('inf')
         for i_fold, d in enumerate(self.data_ranges_with_train_seeds):
@@ -712,10 +715,12 @@ class OptunaTaskRunner(BaseTaskRunner):
             runner._run()
             fold_loss = runner.result.get('loss_per_sample_eval_best', float('inf'))
             losses.append(fold_loss)
+            i_epoch_bests.append(runner.result.get('i_epoch_best', -1))
             if fold_loss < best_loss_this_trial:
                 best_loss_this_trial = fold_loss
                 best_model_state_this_trial = copy.deepcopy(runner.model.state_dict())
         self._fold_losses[i_trial] = losses
+        self._fold_i_epoch_bests[i_trial] = i_epoch_bests
         mean_loss = sum(losses) / len(losses)
         if self._best_model_state is None or mean_loss < self.result.get('best_value', float('inf')):
             self._best_model_state = best_model_state_this_trial
@@ -732,9 +737,18 @@ class OptunaTaskRunner(BaseTaskRunner):
             direction=self.direction, sampler=optuna.samplers.TPESampler(seed=self.seed),
             storage=storage, study_name=self.name, load_if_exists=self.load_if_exists,
         )
+
+        n_trials = self.n_trials_to_add
+        if n_trials < 0:
+            n_trials = self.n_trials - len(study.trials)
+        if n_trials <= 0:
+            print('The required number of trials has already been completed.')
+            return
+
         self._n_failed = 0
         self._fold_losses = {}
-        study.optimize(self._create_objective(), n_trials=self.n_trials)
+        self._fold_i_epoch_bests = {}
+        study.optimize(self._create_objective(), n_trials=n_trials)
         n_total = len(study.trials)
         n_completed = n_total - self._n_failed
         print(f'[Optuna] {n_total} trials: {n_completed} completed, {self._n_failed} failed')
@@ -752,6 +766,7 @@ class OptunaTaskRunner(BaseTaskRunner):
             record = {'number': t.number, 'state': t.state.name, 'value': t.value, 'params': t.params}
             if t.number in self._fold_losses:
                 record['fold_losses'] = self._fold_losses[t.number]
+                record['fold_i_epoch_bests'] = self._fold_i_epoch_bests[t.number]
             trials_history.append(record)
         self.result['trials'] = trials_history
         if self._best_model_state is not None:

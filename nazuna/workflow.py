@@ -304,17 +304,20 @@ class WorkflowTemplateResolver:
         return cls.update(task, d, keys, rename)
 
     @classmethod
-    def get_task_train(cls, d, i_taskset=0, i_taskset_pilot=None):
-        if i_taskset_pilot is None:
-            i_taskset_pilot = i_taskset
+    def get_task_train(cls, d, i_taskset=0, i_taskset_pilot=None, nopilot=False):
         task = {
             'task_type': 'train', 'name': f'Train {i_taskset}',
             'model_state_path': None, 'seed': 0,
         }
-        task['n_epoch'] = {'task_name': f'Pilot {i_taskset_pilot}'}
         keys = ['data_range_train', 'criterion_target'] + \
             ['model', 'batch_sampler', 'optimizer', 'lr_scheduler']
         rename = {'criterion_target': 'criterion'}
+        if nopilot:
+            keys.append('n_epoch')
+        else:
+            if i_taskset_pilot is None:
+                i_taskset_pilot = i_taskset
+            task['n_epoch'] = {'task_name': f'Pilot {i_taskset_pilot}'}
         return cls.update(task, d, keys, rename)
 
     @classmethod
@@ -345,15 +348,16 @@ class WorkflowTemplateResolver:
         return tasks
 
     @classmethod
-    def get_taskset(cls, d, i_taskset=0, i_taskset_pilot=None):
+    def get_taskset(cls, d, i_taskset=0, i_taskset_pilot=None, nopilot=False):
         # When i_taskset_pilot is None, generate a Pilot for this taskset and
         # have Train reference it. When given, skip Pilot generation and have
-        # Train reference Pilot of taskset `i_taskset_pilot`.
+        # Train reference Pilot of taskset `i_taskset_pilot`. When nopilot is
+        # set, generate no Pilot and have Train use a fixed n_epoch instead.
         tasks = []
-        if i_taskset_pilot is None:
+        if not nopilot and i_taskset_pilot is None:
             tasks.append(cls.get_task_pilot(d, i_taskset))
         tasks.append(cls.get_task_train(
-            d, i_taskset, i_taskset_pilot=i_taskset_pilot,
+            d, i_taskset, i_taskset_pilot=i_taskset_pilot, nopilot=nopilot,
         ))
         tasks.append(cls.get_task_eval(d, i_taskset))
         if 'criteria_additional' in d:
@@ -375,9 +379,12 @@ class WorkflowTemplateResolver:
         tasks = cls.get_tasks_baseline(d)
         for i_taskset, params in enumerate(d['params']):
             params = dict(params)
+            nopilot = params.pop('nopilot', False)
             i_taskset_pilot = params.pop('i_taskset_pilot', None)
+            assert not (nopilot and i_taskset_pilot is not None), \
+                'i_taskset_pilot cannot be used when nopilot is set'
             tasks_ = cls.get_taskset(
-                d, i_taskset, i_taskset_pilot=i_taskset_pilot,
+                d, i_taskset, i_taskset_pilot=i_taskset_pilot, nopilot=nopilot,
             )
             for k, v in params.items():
                 for i_task in range(len(tasks_)):
