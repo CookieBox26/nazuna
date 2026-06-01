@@ -379,6 +379,7 @@ class TrainTaskRunner(EvalTaskRunner):
         self.optimizer_params = self.optimizer['params']
         self.lr_scheduler_cls = None
         if self.lr_scheduler:
+            assert self.lr_scheduler_interval in {'epoch', 'step'}
             self.lr_scheduler_cls = load_class(self.lr_scheduler['cls_path'])
             self.lr_scheduler_params = self.lr_scheduler['params']
 
@@ -581,6 +582,7 @@ class OptunaTaskRunner(BaseTaskRunner):
     batch_sampler: dict = None
     optimizer: dict = None
     lr_scheduler: dict = None
+    lr_scheduler_interval: str = 'epoch'  # 'epoch' or 'step'
 
     n_epoch: int = 0
     early_stop: bool = False
@@ -621,6 +623,7 @@ class OptunaTaskRunner(BaseTaskRunner):
         self.lr_scheduler_cls_path = None
         self.lr_scheduler_params = None
         if self.lr_scheduler:
+            assert self.lr_scheduler_interval in {'epoch', 'step'}
             self.lr_scheduler_cls_path = self.lr_scheduler['cls_path']
             self.lr_scheduler_params = self.lr_scheduler['params']
         self._best_model_state = None
@@ -715,6 +718,7 @@ class OptunaTaskRunner(BaseTaskRunner):
                 lr_scheduler=({
                     'cls_path': self.lr_scheduler_cls_path, 'params': lr_scheduler_params,
                 } if self.lr_scheduler_cls_path else None),
+                lr_scheduler_interval=self.lr_scheduler_interval,
                 n_epoch=self.n_epoch, early_stop=self.early_stop, patience=self.patience,
             )
             runner.out_path.mkdir(parents=True, exist_ok=True)
