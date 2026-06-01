@@ -759,9 +759,10 @@ class OptunaTaskRunner(BaseTaskRunner):
 
     def _get_study(self, optuna_db_path):
         storage = f'sqlite:///{optuna_db_path.as_posix()}'
-        if not self.load_if_exists and optuna_db_path.is_file():
+        if not self.load_if_exists:
             if self.name in optuna.get_all_study_names(storage=storage):
                 optuna.delete_study(storage=storage, study_name=self.name)
+            return self._create_study(storage)
         study = self._create_study(storage)
         OptunaTaskRunner.delete_trailing_incomplete_trials(study, storage)
         return self._create_study(storage)
