@@ -19,6 +19,7 @@ from nazuna.analysis.inspector import Inspector
 from nazuna.utils import (
     fix_seed, load_class, measure_time, get_timestamp, get_env_info, load_toml,
 )
+from sqlalchemy import create_engine, text, bindparam
 
 
 @dataclasses.dataclass
@@ -727,6 +728,24 @@ class OptunaTaskRunner(BaseTaskRunner):
             self._best_trial_number = i_trial
         return mean_loss
 
+    @staticmethod
+    def delete_trailing_incomplete_trials(study, storage):
+        incomplete_trial_ids = []
+        for trial in reversed(study.trials):
+            if trial.state.name == 'COMPLETE':
+                break
+            incomplete_trial_ids.append(trial._trial_id)
+        if len(incomplete_trial_ids) == 0:
+            return
+        print(f'Deleting incomplete trials: {incomplete_trial_ids}')
+        engine = create_engine(storage)
+        with engine.connect() as conn:
+            for table_name in ['trial_params', 'trial_values', 'trials']:
+                stmt = f'DELETE FROM {table_name} WHERE trial_id IN :trial_ids'
+                stmt = text(stmt).bindparams(bindparam('trial_ids', expanding=True))
+                conn.execute(stmt, {'trial_ids': incomplete_trial_ids})
+            conn.commit()
+
     def _run(self):
         optuna_db_path = self.out_path / 'optuna.db'
         storage = f'sqlite:///{optuna_db_path.as_posix()}'
@@ -737,6 +756,7 @@ class OptunaTaskRunner(BaseTaskRunner):
             direction=self.direction, sampler=optuna.samplers.TPESampler(seed=self.seed),
             storage=storage, study_name=self.name, load_if_exists=self.load_if_exists,
         )
+        OptunaTaskRunner.delete_trailing_incomplete_trials(study, storage)
 
         n_trials = self.n_trials_to_add
         if n_trials < 0:
