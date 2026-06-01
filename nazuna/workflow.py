@@ -303,6 +303,8 @@ class WorkflowTemplateResolver:
         }
         keys = ['data_range_train_pilot', 'data_range_eval_pilot', 'criterion_target'] + \
             ['model', 'batch_sampler', 'optimizer', 'lr_scheduler', 'n_epoch', 'patience']
+        if 'lr_scheduler_interval' in d:
+            keys.append('lr_scheduler_interval')
         rename = {f'data_range_{t}_pilot': f'data_range_{t}' for t in ['train', 'eval']}
         rename |= {'criterion_target': 'criterion'}
         return cls.update(task, d, keys, rename)
@@ -315,6 +317,8 @@ class WorkflowTemplateResolver:
         }
         keys = ['data_range_train', 'criterion_target'] + \
             ['model', 'batch_sampler', 'optimizer', 'lr_scheduler']
+        if 'lr_scheduler_interval' in d:
+            keys.append('lr_scheduler_interval')
         rename = {'criterion_target': 'criterion'}
         if nopilot:
             keys.append('n_epoch')

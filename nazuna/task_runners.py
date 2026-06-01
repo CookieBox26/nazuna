@@ -359,6 +359,7 @@ class TrainTaskRunner(EvalTaskRunner):
     batch_sampler: dict = None
     optimizer: dict = None
     lr_scheduler: dict = None
+    lr_scheduler_interval: str = 'epoch'  # 'epoch' or 'step'
 
     n_epoch: int = 0
     n_epoch_path: str | Path = None
@@ -415,6 +416,11 @@ class TrainTaskRunner(EvalTaskRunner):
             if self.save_model_state_every_epoch and (i_epoch == 0):
                 self.save_model('model_state_ini.pth')
             self.optimizer.step()
+            if self.lr_scheduler is not None and self.lr_scheduler_interval == 'step':
+                self.lr_scheduler.step()
+
+        if self.lr_scheduler is not None and self.lr_scheduler_interval == 'epoch':
+            self.lr_scheduler.step()
 
         if self.save_model_state_every_epoch and (i_epoch > -1):
             self.save_model(f'model_state_{i_epoch}.pth')
@@ -461,8 +467,6 @@ class TrainTaskRunner(EvalTaskRunner):
             loss_train = self.train(i_epoch)
             epoch_record['train'] = loss_train
 
-            if self.lr_scheduler is not None:
-                self.lr_scheduler.step()
             if self.data_range_eval is None:
                 loss_history.append(epoch_record)
                 continue
@@ -747,17 +751,24 @@ class OptunaTaskRunner(BaseTaskRunner):
                 conn.execute(stmt, {'trial_ids': incomplete_trial_ids})
             conn.commit()
 
-    def _run(self):
-        optuna_db_path = self.out_path / 'optuna.db'
+    def _create_study(self, storage):
+        return optuna.create_study(
+            direction=self.direction, sampler=optuna.samplers.TPESampler(seed=self.seed),
+            storage=storage, study_name=self.name, load_if_exists=self.load_if_exists,
+        )
+
+    def _get_study(self, optuna_db_path):
         storage = f'sqlite:///{optuna_db_path.as_posix()}'
         if not self.load_if_exists and optuna_db_path.is_file():
             if self.name in optuna.get_all_study_names(storage=storage):
                 optuna.delete_study(storage=storage, study_name=self.name)
-        study = optuna.create_study(
-            direction=self.direction, sampler=optuna.samplers.TPESampler(seed=self.seed),
-            storage=storage, study_name=self.name, load_if_exists=self.load_if_exists,
-        )
+        study = self._create_study(storage)
         OptunaTaskRunner.delete_trailing_incomplete_trials(study, storage)
+        return self._create_study(storage)
+
+    def _run(self):
+        optuna_db_path = self.out_path / 'optuna.db'
+        study = self._get_study(optuna_db_path)
 
         n_trials = self.n_trials_to_add
         if n_trials < 0:

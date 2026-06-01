@@ -125,3 +125,7 @@ params = { T_max = 20 }
 [definitions.CosineAnnealingLR100]
 cls_path = "torch.optim.lr_scheduler.CosineAnnealingLR"
 params = { T_max = 100 }
+
+[definitions.WarmupInverseSqrtLR1000]
+cls_path = "nazuna.lr_schedulers.WarmupInverseSqrtLR"
+params = { warmup_steps = 1000 }
