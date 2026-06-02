@@ -39,20 +39,6 @@ scaler_cls_path = "nazuna.models.common.IqrScaler"
 scaler_params = { "stat_types" = [ "qtile_full", "saved",] }
 prep_type = "none"
 
-[definitions.DLinearStacked]
-cls_path = "nazuna.models.dlinear.DLinearStacked"
-[definitions.DLinearStacked.params]
-seq_len_raw = {{ seq_len_raw }}
-seq_len = {{ seq_len }}
-pred_len = {{ pred_len }}
-c_in = {{ n_channel }}
-kernel_size = 25
-bias = true
-n_moving_avg = 1
-scaler_cls_path = "nazuna.models.common.IqrScaler"
-scaler_params = { "stat_types" = [ "qtile_full", "saved",] }
-prep_type = "none"
-
 [definitions.NLinear]
 cls_path = "nazuna.models.dlinear.NLinear"
 [definitions.NLinear.params]
@@ -98,19 +84,6 @@ c_in = {{ n_channel }}
 bias = true
 ref_state_path = ""
 ref_ratio = 0.5
-scaler_cls_path = "nazuna.models.common.IqrScaler"
-scaler_params = { "stat_types" = [ "qtile_full", "saved",] }
-prep_type = "none"
-
-[definitions.NLinearStacked]
-cls_path = "nazuna.models.dlinear.NLinearStacked"
-[definitions.NLinearStacked.params]
-seq_len_raw = {{ seq_len_raw }}
-seq_len = {{ seq_len }}
-pred_len = {{ pred_len }}
-c_in = {{ n_channel }}
-bias = true
-freeze_nlinear = false
 scaler_cls_path = "nazuna.models.common.IqrScaler"
 scaler_params = { "stat_types" = [ "qtile_full", "saved",] }
 prep_type = "none"

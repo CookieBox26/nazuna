@@ -1,9 +1,9 @@
 from nazuna.data_manager import TimeSeriesDataset
 from nazuna.models.dlinear import (
     DLinear, DLinearChannelwise,
-    DLinearCrossChannel, DLinearStacked,
+    DLinearCrossChannel,
     NLinear, NLinearChannelwise,
-    NLinearCrossChannel, NLinearStacked,
+    NLinearCrossChannel,
 )
 from nazuna.criteria import MSE
 import torch
@@ -42,7 +42,7 @@ def test_get_loss(device, dummy_data):
 
 
 @pytest.mark.parametrize('model_cls', [
-    DLinearChannelwise, DLinearCrossChannel, DLinearStacked,
+    DLinearChannelwise, DLinearCrossChannel,
 ])
 def test_derived_forward(device, dummy_data, model_cls):
     model = model_cls.create(
@@ -56,7 +56,7 @@ def test_derived_forward(device, dummy_data, model_cls):
 
 
 @pytest.mark.parametrize('model_cls', [
-    DLinearChannelwise, DLinearCrossChannel, DLinearStacked,
+    DLinearChannelwise, DLinearCrossChannel,
 ])
 def test_derived_get_loss(device, dummy_data, model_cls):
     model = model_cls.create(
@@ -113,7 +113,7 @@ def test_nlinear_get_loss(device, dummy_data):
 
 
 @pytest.mark.parametrize('model_cls', [
-    NLinearChannelwise, NLinearCrossChannel, NLinearStacked,
+    NLinearChannelwise, NLinearCrossChannel,
 ])
 def test_nlinear_derived_forward(device, dummy_data, model_cls):
     model = model_cls.create(
@@ -126,7 +126,7 @@ def test_nlinear_derived_forward(device, dummy_data, model_cls):
 
 
 @pytest.mark.parametrize('model_cls', [
-    NLinearChannelwise, NLinearCrossChannel, NLinearStacked,
+    NLinearChannelwise, NLinearCrossChannel,
 ])
 def test_nlinear_derived_get_loss(device, dummy_data, model_cls):
     model = model_cls.create(
