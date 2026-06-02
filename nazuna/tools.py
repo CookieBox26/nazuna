@@ -7,6 +7,8 @@ import numpy as np
 import pandas as pd
 import collections
 from nazuna.utils import load_class, load_toml
+import optuna
+from pathlib import Path
 
 
 class WorkflowResult(Workflow):
@@ -203,3 +205,37 @@ class WorkflowResult(Workflow):
             dfs['loss'] = df
 
         return dfs
+
+
+def print_study(storage, study_name):
+    study = optuna.load_study(storage=storage, study_name=study_name)
+    print(f'\nstudy_name: {study.study_name}')
+    if study.best_trial is not None:
+        print(f'best_trial_number: {study.best_trial.number}')
+        print(f'best_value: {study.best_value}')
+        print(f'best_params: {study.best_params}')
+        print(f'best_attrs: {study.best_trial.user_attrs}')
+        
+    print('trials:')
+    for t in study.trials:
+        print(
+            f'{t.number}: '
+            # f'state={t.state.name}, '
+            f'value={t.value}, '
+            f'params={t.params}'
+        )
+        print(f'{t.number}: attrs={t.user_attrs}')
+
+
+def print_storage(storage):
+    summaries = optuna.study.get_all_study_summaries(storage)
+    for s in summaries:
+        print_study(storage, s.study_name)
+
+
+def print_storages(out_path):
+    for sub_dir in Path(out_path).iterdir():
+        if sub_dir.is_dir():
+            storage = sub_dir / 'optuna.db'
+            if storage.is_file():
+                print_storage(f'sqlite:///{storage.as_posix()}')
