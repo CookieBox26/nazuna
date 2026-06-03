@@ -233,9 +233,9 @@ def print_storage(storage):
         print_study(storage, s.study_name)
 
 
-def print_storages(out_path):
-    for sub_dir in Path(out_path).iterdir():
-        if sub_dir.is_dir():
-            storage = sub_dir / 'optuna.db'
+def print_storages(wf_dir):
+    for task_dir in Path(wf_dir).iterdir():
+        if task_dir.is_dir():
+            storage = task_dir / 'optuna.db'
             if storage.is_file():
                 print_storage(f'sqlite:///{storage.as_posix()}')
