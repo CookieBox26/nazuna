@@ -395,9 +395,14 @@ class WorkflowTemplateResolver:
                 d, i_taskset, i_taskset_pilot=i_taskset_pilot, nopilot=nopilot,
             )
             for k, v in params.items():
-                for i_task in range(len(tasks_)):
-                    if k in tasks_[i_task]:
-                        tasks_[i_task][k] = v
+                if k == 'criterion_target':
+                    for task in tasks_:
+                        if task['task_type'] == 'train':
+                            task['criterion'] = v
+                else:
+                    for task in tasks_:
+                        if k in task:
+                            task[k] = v
             tasks += tasks_
         return tasks
 

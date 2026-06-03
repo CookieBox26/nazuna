@@ -1,0 +1,50 @@
+out_dir = "./out/jma11_baselines"
+exist_ok = true
+
+# =============== data ===============
+data = "JMA11"
+
+# =============== definitions ===============
+definition_includes = [
+{ bundled = "common" },
+{ bundled = "datasets" },
+{ bundled = "dlinear" },
+]
+
+[definition_includes_data]
+n_channel = 11
+seq_len_sample = 193
+pred_len_sample = 24
+seq_len_raw = 97
+pred_len = 24
+period_len = 24
+
+[definitions]
+NEpoch = 50
+Cyclic = { base = "Last4CyclesD" }
+
+[definitions.Model]
+base = "NLinear"
+
+# =============== template ===============
+[template]
+template_type = "train_with_baseline_multiparams"
+criterion_eval = "MAE"
+criterion_target = "MAE"
+criterion_imprate = "ImprovementRate"
+baseline_model = "Cyclic"
+model = ""
+data_range_eval = "DataRangeEval"
+data_range_train = "DataRangeTrain"
+data_range_eval_pilot = "DataRangeEvalPilot"
+data_range_train_pilot = "DataRangeTrainPilot"
+batch_sampler = "BSS128"
+optimizer = "Adam00001"
+lr_scheduler = "ExponentialLR09"
+n_epoch = "NEpoch"
+patience = 10
+
+[[template.params]]
+seed = 0
+model = "Model"
+criterion_target = "MAE"

@@ -14,6 +14,11 @@ params = { n_channel = {{ n_channel }}, pred_len = {{ pred_len }} }
 cls_path = "nazuna.criteria.MAE"
 params = { n_channel = {{ n_channel }}, pred_len = {{ pred_len }} }
 
+[definitions.MAE09]
+base = "MAE"
+[definitions.MAE09.params]
+decay_rate = 0.9
+
 [definitions.ImprovementRate]
 cls_path = "nazuna.criteria.ImprovementRate"
 params = { n_channel = {{ n_channel }}, pred_len = {{ pred_len }}, error_type = "mae" }
