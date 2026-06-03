@@ -10,6 +10,7 @@ n_moving_avg = 1
 scaler_cls_path = "nazuna.models.common.IqrScaler"
 scaler_params = { "stat_types" = [ "qtile_full", "saved",] }
 prep_type = "none"
+c_in = {{ n_channel }}
 
 [definitions.DLinearChannelwise]
 cls_path = "nazuna.models.dlinear.DLinearChannelwise"
@@ -49,6 +50,7 @@ bias = true
 scaler_cls_path = "nazuna.models.common.IqrScaler"
 scaler_params = { "stat_types" = [ "qtile_full", "saved",] }
 prep_type = "none"
+c_in = {{ n_channel }}
 
 [definitions.NLinearChannelwise]
 cls_path = "nazuna.models.dlinear.NLinearChannelwise"

@@ -38,14 +38,16 @@ uv sync --extra torch-cpu  # CPU
 Run tasks defined in a TOML config file:
 ```bash
 # Run example configurations that use bundled JMA weather data
-uv run nazuna --example jma_train_dlinear
-uv run nazuna --example jma_optuna_dlinear
+uv run nazuna --example _example_train_dlinear
+uv run nazuna --example _example_optuna_dlinear
+uv run nazuna --example jma11_baselines
+uv run nazuna --example jma11_linears
 
 # Run tasks defined in a TOML config file:
 uv run nazuna config.toml
 
 # Skip all tasks and regenerate the report only (force replot graphs)
-uv run nazuna config.toml -s 0-99 -f
+uv run nazuna config.toml --report_only --force_replot
 ```
 For details on how to write the TOML config file, see [How to Run](how_to_run.md).
 

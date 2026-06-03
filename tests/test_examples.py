@@ -7,8 +7,8 @@ from nazuna.utils import load_toml
 
 @pytest.mark.parametrize(
     'identifier', [
-        pytest.param('jma_train_dlinear', marks=pytest.mark.slow),
-        pytest.param('jma_optuna_dlinear', marks=pytest.mark.slow),
+        pytest.param('_example_train_dlinear', marks=pytest.mark.slow),
+        pytest.param('_example_optuna_dlinear', marks=pytest.mark.slow),
     ],
 )
 def test_examples(identifier):

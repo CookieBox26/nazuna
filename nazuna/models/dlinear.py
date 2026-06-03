@@ -129,7 +129,7 @@ class DLinearCrossChannel(BasicBaseModel):
 
 class NLinear(BasicBaseModel):
     def _setup(
-        self, seq_len: int, pred_len: int, bias: bool,
+        self, seq_len: int, pred_len: int, bias: bool, subtract_last: bool = True,
         scaler_cls: type | None = IqrScaler,
         scaler_params: dict | None = {'stat_types': ('qtile_full', 'saved')},
         prep_type: str = 'none',
@@ -142,17 +142,20 @@ class NLinear(BasicBaseModel):
             use_revin=use_revin, revin_eps=revin_eps, revin_affine=revin_affine, c_in=c_in,
             use_lc=use_lc, lc_end_epoch=lc_end_epoch, lc_rate=lc_rate,
         )
+        self.subtract_last = subtract_last
         self.Linear = torch.nn.Linear(seq_len, pred_len, bias=bias)
         w = 1.0 / seq_len
         self.Linear.weight = torch.nn.Parameter(torch.ones(pred_len, seq_len) * w)
 
     def forward(self, x):  # x: [B, L, C]
-        x_last = x[:, -1:, :]  # [B, 1, C]
-        x = x - x_last
+        if self.subtract_last:
+            x_last = x[:, -1:, :]  # [B, 1, C]
+            x = x - x_last
         x = x.permute(0, 2, 1)  # [B, C, L]
         x = self.Linear(x)  # [B, C, T]
         x = x.permute(0, 2, 1)  # [B, T, C]
-        x = x + x_last
+        if self.subtract_last:
+            x = x + x_last
         return x, {}
 
 

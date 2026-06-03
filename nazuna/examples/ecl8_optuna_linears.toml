@@ -1,0 +1,49 @@
+out_dir = "./out/ecl8_optuna_linears"
+exist_ok = true
+
+# =============== data ===============
+data = "ECL8"
+
+# =============== definitions ===============
+definition_includes = [
+{ bundled = "common" },
+{ bundled = "datasets" },
+{ bundled = "dlinear" },
+]
+
+[definition_includes_data]
+n_channel = 8
+seq_len_sample = 1344
+pred_len_sample = 168
+seq_len_raw = 672
+pred_len = 168
+period_len = 168
+
+[definitions.Model00]
+base = "NLinear"
+
+# =============== tasks ===============
+[[tasks]]
+task_type = "optuna"
+name = "Optuna Adam"
+load_if_exists = true
+n_trials = 10
+n_epoch = 50
+patience = 5
+early_stop = true
+criterion = "MAE"
+model = "Model00"
+batch_sampler = "BSS32"
+optimizer = "Adam00001"
+lr_scheduler = "ExponentialLR09"
+data_ranges_with_train_seeds = [
+{ train = [ 0.0, 0.4,], eval = [ 0.4, 0.6,], seed = 0 },
+{ train = [ 0.1, 0.5,], eval = [ 0.5, 0.7,], seed = 1 },
+{ train = [ 0.2, 0.6,], eval = [ 0.6, 0.8,], seed = 2 },
+]
+[tasks.search_space.batch_sampler_params]
+batch_size = { method = "index", type = "int", choices = "16,32,64,128" }
+[tasks.search_space.optimizer_params]
+lr = { method = "index", type = "float", choices = "0.0003,0.001,0.003" }
+[tasks.search_space.lr_scheduler_params]
+gamma = { method = "index", type = "float", choices = "0.9,0.99" }

@@ -1,0 +1,69 @@
+out_dir = "./out/ecl8_baselines"
+exist_ok = true
+
+# =============== data ===============
+data = "ECL8"
+
+# =============== definitions ===============
+definition_includes = [
+{ bundled = "common" },
+{ bundled = "datasets" },
+]
+
+[definition_includes_data]
+n_channel = 8
+seq_len_sample = 1344
+pred_len_sample = 168
+seq_len_raw = 672
+pred_len = 168
+period_len = 168
+
+# =============== tasks ===============
+[[tasks]]
+task_type = "eval"
+name = "Eval LastValue"
+data_range_eval = "DataRangeEval"
+criterion = "MAE"
+model = "LastValue"
+
+[[tasks]]
+task_type = "eval"
+name = "Eval Last1Cycle"
+data_range_eval = "DataRangeEval"
+criterion = "MAE"
+model = "Last1Cycle"
+
+[[tasks]]
+task_type = "eval"
+name = "Eval Last2Cycles"
+data_range_eval = "DataRangeEval"
+criterion = "MAE"
+model = "Last2Cycles"
+
+[[tasks]]
+task_type = "eval"
+name = "Eval Last4Cycles"
+data_range_eval = "DataRangeEval"
+criterion = "MAE"
+model = "Last4Cycles"
+
+[[tasks]]
+task_type = "eval"
+name = "Eval Last1CycleD"
+data_range_eval = "DataRangeEval"
+criterion = "MAE"
+model = "Last1CycleD"
+
+[[tasks]]
+task_type = "eval"
+name = "Eval Last2CyclesD"
+data_range_eval = "DataRangeEval"
+criterion = "MAE"
+model = "Last2CyclesD"
+
+[[tasks]]
+task_type = "eval"
+name = "Eval Last4CyclesD"
+data_range_eval = "DataRangeEval"
+criterion = "MAE"
+model = "Last4CyclesD"

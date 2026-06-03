@@ -1,4 +1,4 @@
-out_dir = "./out/jma_optuna_dlinear"
+out_dir = "./out/_example_optuna_dlinear"
 exist_ok = true
 
 # =============== data ===============

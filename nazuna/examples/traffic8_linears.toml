@@ -1,8 +1,8 @@
-out_dir = "./out/jma11_linears"
+out_dir = "./out/traffic8_linears"
 exist_ok = true
 
 # =============== data ===============
-data = "JMA11"
+data = "Traffic8"
 
 # =============== definitions ===============
 definition_includes = [
@@ -12,16 +12,16 @@ definition_includes = [
 ]
 
 [definition_includes_data]
-n_channel = 11
-seq_len_sample = 193
-pred_len_sample = 24
-seq_len_raw = 97
-pred_len = 24
-period_len = 24
+n_channel = 8
+seq_len_sample = 1344
+pred_len_sample = 168
+seq_len_raw = 672
+pred_len = 168
+period_len = 168
 
 [definitions]
 NEpoch = 50
-Cyclic = { base = "Last4CyclesD" }
+Cyclic = { base = "Last4Cycles" }
 
 [definitions.Model]
 base = "NLinear"

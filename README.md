@@ -51,8 +51,10 @@ uv sync --extra torch-cpu  # CPU
 ### Usage
 ```sh
 # Run example configurations that use bundled JMA weather data
-uv run nazuna --example jma_train_dlinear
-uv run nazuna --example jma_optuna_dlinear
+uv run nazuna --example _example_train_dlinear
+uv run nazuna --example _example_optuna_dlinear
+uv run nazuna --example jma11_baselines
+uv run nazuna --example jma11_linears
 
 # Run tasks defined in a TOML config file:
 uv run nazuna config.toml
