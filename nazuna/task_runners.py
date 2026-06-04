@@ -613,7 +613,7 @@ class OptunaTaskRunner(BaseTaskRunner):
     def __post_init__(self):
         super().__post_init__()
         assert self.search_space, 'search_space is required'
-        assert set(self.search_space) <= set(OptunaTaskRunner.search_targets)
+        assert set(self.search_space) <= set(OptunaTaskRunner.search_targets) | {'seed'}
         assert 'lr_scheduler' not in self.search_space or self.lr_scheduler, \
             'lr_scheduler config is required when search_space contains "lr_scheduler"'
         for d in self.data_ranges_with_train_seeds:
@@ -700,8 +700,11 @@ class OptunaTaskRunner(BaseTaskRunner):
             params_all = {}
             for target in OptunaTaskRunner.search_targets:
                 params_all[target] = self.get_suggested_params(trial, target)
+            seed = None
+            for name, spec in self.search_space.get('seed', {}).items():
+                seed = OptunaTaskRunner.suggest_param(trial, name, spec)
             try:
-                return self._run_trial(trial, **params_all)
+                return self._run_trial(trial, seed=seed, **params_all)
             except Exception as e:
                 print(f'[Optuna] Trial {trial.number} failed: {type(e).__name__}: {e}')
                 self._n_failed += 1
@@ -709,7 +712,8 @@ class OptunaTaskRunner(BaseTaskRunner):
         return objective
 
     def _run_trial(
-        self, trial, model_params, batch_sampler_params, optimizer_params, lr_scheduler_params,
+        self, trial, model_params, batch_sampler_params, optimizer_params,
+        lr_scheduler_params, seed=None,
     ):
         i_trial = trial.number
         self._log(f'Trial {i_trial} started')
@@ -719,7 +723,7 @@ class OptunaTaskRunner(BaseTaskRunner):
         best_loss_this_trial = float('inf')
         for i_fold, d in enumerate(self.data_ranges_with_train_seeds):
             runner = TrainTaskRunner(
-                seed=d.get('seed', 0),
+                seed=(d.get('seed', 0) if seed is None else seed),
                 dm=self.dm, device=self.device, name=f'Trial {i_trial} Fold {i_fold}',
                 out_dir=(self.out_path / f'trial_{i_trial}' / f'fold_{i_fold}'), exist_ok=True,
                 data_range_train=d['train'], data_range_eval=d['eval'],

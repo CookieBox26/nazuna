@@ -60,12 +60,14 @@ def test_train_task_runner_run(tmp_path, get_data_manager):
     assert runner.out_path.is_dir()
 
 
-def get_optuna_task_runner(dm, out_dir):
+def get_optuna_task_runner(dm, out_dir, search_space=None):
+    if search_space is None:
+        search_space = {
+            'optimizer_params': {'lr': {'method': 'log_uniform', 'range': [1e-4, 1e-1]}},
+        }
     return OptunaTaskRunner(
         dm=dm, name='Optuna Task 0', out_dir=out_dir, n_trials=4,
-        search_space={
-            'optimizer_params': {'lr': {'method': 'log_uniform', 'range': [1e-4, 1e-1]}},
-        },
+        search_space=search_space,
         data_ranges_with_train_seeds=[
             {'train': (0.0, 0.6), 'eval': (0.6, 0.8)},
             {'train': (0.0, 0.8), 'eval': (0.8, 1.0)},
@@ -114,6 +116,30 @@ def test_optuna_task_runner_run(tmp_path, get_data_manager):
     assert len(runner.result['trials']) == 4
     for t in runner.result['trials']:
         assert t['state'] == 'COMPLETE'
+
+
+def test_optuna_task_runner_suggest_seed(tmp_path, get_data_manager):
+    dm = get_data_manager()
+    runner = get_optuna_task_runner(
+        dm, tmp_path / 'task_0',
+        search_space={
+            'optimizer_params': {'lr': {'method': 'log_uniform', 'range': [1e-4, 1e-1]}},
+            'seed': {'seed': {'method': 'categorical', 'type': 'int', 'choices': '7,8'}},
+        },
+    )
+    seeds = []
+    real_cls = TrainTaskRunner
+
+    def recording_cls(*args, seed=0, **kwargs):
+        seeds.append(seed)
+        return real_cls(*args, seed=seed, **kwargs)
+
+    with patch('nazuna.task_runners.TrainTaskRunner', side_effect=recording_cls):
+        runner.run()
+
+    # The suggested seed is used for every fold, overriding the per-fold default 0.
+    assert seeds and set(seeds) <= {7, 8}
+    assert runner.result['best_params']['seed'] in {7, 8}
 
 
 def test_optuna_task_runner_run_with_failures(tmp_path, get_data_manager):
