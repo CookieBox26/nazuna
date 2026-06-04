@@ -66,7 +66,7 @@ class Workflow:
     # resolve it using the definitions
     task_keys_accepting_definitions: ClassVar[list[str]] = [
         # a dict with cls_path and params keys
-        'criterion', 'baseline_model', 'model',
+        'criterion', 'criterion_target', 'baseline_model', 'model',
         'batch_sampler', 'optimizer', 'lr_scheduler',
         # a list
         'batch_size_eval', 'data_range_train', 'data_range_eval', 'data_ranges',
@@ -301,12 +301,18 @@ class WorkflowTemplateResolver:
             'task_type': 'train', 'name': f'Pilot {i_taskset}', 'early_stop': True,
             'model_state_path': None, 'seed': 0,
         }
-        keys = ['data_range_train_pilot', 'data_range_eval_pilot', 'criterion_target'] + \
+        keys = ['data_range_train_pilot', 'data_range_eval_pilot', 'criterion_eval'] + \
             ['model', 'batch_sampler', 'optimizer', 'lr_scheduler', 'n_epoch', 'patience']
         if 'lr_scheduler_interval' in d:
             keys.append('lr_scheduler_interval')
         rename = {f'data_range_{t}_pilot': f'data_range_{t}' for t in ['train', 'eval']}
-        rename |= {'criterion_target': 'criterion'}
+        rename |= {'criterion_eval': 'criterion'}
+        if 'criterion_train' in d:
+            keys.append('criterion_train')
+            rename |= {'criterion_train': 'criterion'}
+        if 'criterion_train_target' in d:
+            keys.append('criterion_train_target')
+            rename |= {'criterion_train_target': 'criterion_target'}
         return cls.update(task, d, keys, rename)
 
     @classmethod
@@ -315,11 +321,17 @@ class WorkflowTemplateResolver:
             'task_type': 'train', 'name': f'Train {i_taskset}',
             'model_state_path': None, 'seed': 0,
         }
-        keys = ['data_range_train', 'criterion_target'] + \
+        keys = ['data_range_train', 'criterion_eval'] + \
             ['model', 'batch_sampler', 'optimizer', 'lr_scheduler']
         if 'lr_scheduler_interval' in d:
             keys.append('lr_scheduler_interval')
-        rename = {'criterion_target': 'criterion'}
+        rename = {'criterion_eval': 'criterion'}
+        if 'criterion_train' in d:
+            keys.append('criterion_train')
+            rename |= {'criterion_train': 'criterion'}
+        if 'criterion_train_target' in d:
+            keys.append('criterion_train_target')
+            rename |= {'criterion_train_target': 'criterion_target'}
         if nopilot:
             keys.append('n_epoch')
         else:
@@ -395,10 +407,14 @@ class WorkflowTemplateResolver:
                 d, i_taskset, i_taskset_pilot=i_taskset_pilot, nopilot=nopilot,
             )
             for k, v in params.items():
-                if k == 'criterion_target':
+                if k == 'criterion_train':
                     for task in tasks_:
                         if task['task_type'] == 'train':
                             task['criterion'] = v
+                elif k == 'criterion_train_target':
+                    for task in tasks_:
+                        if task['task_type'] == 'train':
+                            task['criterion_target'] = v
                 else:
                     for task in tasks_:
                         if k in task:

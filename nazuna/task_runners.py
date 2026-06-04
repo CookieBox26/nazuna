@@ -342,6 +342,9 @@ class TrainTaskRunner(EvalTaskRunner):
         data_offset_train (int = 0): Offset for training data.
         data_rolling_window_train (int = 4): Rolling window size for computing quartiles for scaling
             (unused if quartile-based rolling-window scaling is disabled).
+        criterion_target (dict = None): Criterion configuration for the training loss.
+            Must have 'cls_path' (str) and 'params' (dict) keys.
+            If not specified, the eval `criterion` is used for the training loss.
         batch_sampler (dict = None): Batch sampler configuration **(required)**.
             Must have 'cls_path' (str) and 'params' (dict) keys.
         optimizer (dict = None): Optimizer configuration **(required)**.
@@ -355,6 +358,8 @@ class TrainTaskRunner(EvalTaskRunner):
     data_range_train: tuple[int, int] = None
     data_offset_train: int = 0
     data_rolling_window_train: int = 4
+
+    criterion_target: dict = None
 
     batch_sampler: dict = None
     optimizer: dict = None
@@ -372,6 +377,13 @@ class TrainTaskRunner(EvalTaskRunner):
     def __post_init__(self):
         super().__post_init__()
         assert self.data_range_train is not None
+
+        self.criterion_target_cls = None
+        if self.criterion_target is not None:
+            self.criterion_target_cls = load_class(self.criterion_target['cls_path'])
+            self.criterion_target_params = self.criterion_target['params']
+            self._validate_params(self.criterion_target_cls._setup, self.criterion_target_params)
+
         self.batch_sampler_cls = load_class(self.batch_sampler['cls_path'])
         self.batch_sampler_params = self.batch_sampler['params']
 
@@ -412,7 +424,7 @@ class TrainTaskRunner(EvalTaskRunner):
         self.model.on_epoch_start(i_epoch)
         for i_batch, batch in enumerate(data_loader):
             self.optimizer.zero_grad()
-            loss = self.model.get_loss_and_backward(batch, self.criterion, i_epoch)
+            loss = self.model.get_loss_and_backward(batch, self.criterion_target, i_epoch)
             loss_total += loss.get_sum()
             if self.save_model_state_every_epoch and (i_epoch == 0):
                 self.save_model('model_state_ini.pth')
@@ -441,6 +453,11 @@ class TrainTaskRunner(EvalTaskRunner):
             self.set_data_loader_eval()
 
         self.criterion = self.criterion_cls.create(self.device, **self.criterion_params)
+        if self.criterion_target_cls is None:
+            self.criterion_target = self.criterion
+        else:
+            self.criterion_target = \
+                self.criterion_target_cls.create(self.device, **self.criterion_target_params)
         self.model = self.model_cls.create(self.device, **self.model_params)
         self.optimizer = \
             self.optimizer_cls(self.model.get_args_for_optimizer(self.optimizer_params))
@@ -476,7 +493,7 @@ class TrainTaskRunner(EvalTaskRunner):
             if self.inspector_params is not None:
                 inspected = Inspector.inspect(
                     model=self.model,
-                    criterion=self.criterion,
+                    criterion=self.criterion_target,
                     batches=self.data_loader_eval,
                     **self.inspector_params,
                 )

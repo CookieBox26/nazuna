@@ -109,7 +109,7 @@ template_train_with_baseline = '''
 # =============== template ===============
 [template]
 template_type = "train_with_baseline"
-criterion_target = "MSE"
+criterion_train_target = "MSE"
 criterion_eval = "MSE"
 criteria_additional = [ "MAE",]
 criterion_imprate = "ImprovementRate"
@@ -142,7 +142,7 @@ template_train_with_baseline_multiparams = '''
 # =============== template ===============
 [template]
 template_type = "train_with_baseline_multiparams"
-criterion_target = "MSE"
+criterion_train_target = "MSE"
 criterion_eval = "MSE"
 criterion_imprate = "ImprovementRate"
 baseline_model = "SimpleAverage"
@@ -184,7 +184,7 @@ template_train_with_baseline_multiparams_pilot_reuse = '''
 # =============== template ===============
 [template]
 template_type = "train_with_baseline_multiparams"
-criterion_target = "MSE"
+criterion_train_target = "MSE"
 criterion_eval = "MSE"
 criterion_imprate = "ImprovementRate"
 baseline_model = "SimpleAverage"
@@ -241,7 +241,7 @@ template_train_with_baseline_multiparams_nopilot = '''
 # =============== template ===============
 [template]
 template_type = "train_with_baseline_multiparams"
-criterion_target = "MSE"
+criterion_train_target = "MSE"
 criterion_eval = "MSE"
 criterion_imprate = "ImprovementRate"
 baseline_model = "SimpleAverage"
@@ -287,6 +287,88 @@ def test_template_train_with_baseline_multiparams_nopilot(tmp_path):
     i_train_2 = task_names.index('Train 2')
     assert wf.tasks[i_train_2]['seed'] == 2
     assert wf.tasks[i_train_2]['n_epoch'] == 3
+
+
+template_criterion_routing_base = '''
+# =============== template ===============
+[template]
+template_type = "train_with_baseline"
+criterion_eval = "MSE"
+baseline_model = "SimpleAverage"
+model = "SimpleAverageVariableDecay"
+data_range_train = [ 0.0, 0.8,]
+data_range_eval = [ 0.8, 1.0,]
+data_range_train_pilot = [ 0.0, 0.6,]
+data_range_eval_pilot = [ 0.6, 0.8,]
+batch_sampler = "BS"
+optimizer = "Adam"
+lr_scheduler = "CosineAnnealingLR"
+n_epoch = 5
+patience = 5
+'''
+
+
+def _resolve_template_criterion_routing(extra):
+    d = normalize_config(template_criterion_routing_base + extra)
+    d = WorkflowTemplateResolver.resolve(d)
+    return {t['name']: t for t in d['tasks']}
+
+
+def test_template_criterion_routing():
+    # Without criterion_train / criterion_train_target, the Pilot / Train
+    # criterion falls back to criterion_eval and no criterion_target is set.
+    tasks = _resolve_template_criterion_routing('')
+    for name in ['Pilot 0', 'Train 0']:
+        assert tasks[name]['criterion'] == 'MSE'
+        assert 'criterion_target' not in tasks[name]
+
+    # criterion_train overrides the Pilot / Train criterion and
+    # criterion_train_target sets criterion_target, while Eval keeps
+    # criterion_eval.
+    tasks = _resolve_template_criterion_routing(
+        'criterion_train = "MAE"\ncriterion_train_target = "MSE"\n'
+    )
+    for name in ['Pilot 0', 'Train 0']:
+        assert tasks[name]['criterion'] == 'MAE'
+        assert tasks[name]['criterion_target'] == 'MSE'
+    assert tasks['Eval 0']['criterion'] == 'MSE'
+
+
+template_multiparams_criterion_override = '''
+# =============== template ===============
+[template]
+template_type = "train_with_baseline_multiparams"
+criterion_eval = "MSE"
+baseline_model = "SimpleAverage"
+model = "SimpleAverageVariableDecay"
+data_range_train = [ 0.0, 0.8,]
+data_range_eval = [ 0.8, 1.0,]
+data_range_train_pilot = [ 0.0, 0.6,]
+data_range_eval_pilot = [ 0.6, 0.8,]
+batch_sampler = "BS"
+optimizer = "Adam"
+lr_scheduler = "CosineAnnealingLR"
+n_epoch = 5
+patience = 5
+[[template.params]]
+criterion_train = "MAE"
+criterion_train_target = "MSE"
+[[template.params]]
+'''
+
+
+def test_template_multiparams_criterion_override():
+    d = normalize_config(template_multiparams_criterion_override)
+    d = WorkflowTemplateResolver.resolve(d)
+    tasks = {t['name']: t for t in d['tasks']}
+    # Per-taskset criterion_train / criterion_train_target override the
+    # train tasks of that taskset only.
+    for name in ['Pilot 0', 'Train 0']:
+        assert tasks[name]['criterion'] == 'MAE'
+        assert tasks[name]['criterion_target'] == 'MSE'
+    for name in ['Pilot 1', 'Train 1']:
+        assert tasks[name]['criterion'] == 'MSE'
+        assert 'criterion_target' not in tasks[name]
 
 
 dummy_conf = '''
