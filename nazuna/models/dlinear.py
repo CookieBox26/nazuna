@@ -271,6 +271,7 @@ class NLinearPrunedCrossChannel(NLinearCrossChannel):
 class NLinearStacked(BasicBaseModel):
     def _setup(
         self, seq_len: int, pred_len: int, c_in: int, bias: bool,
+        use_cross: bool = True,
         reg_pred_self: float = 1e-3, reg_pred_cross: float = 1e-2,
         reg_coef_self: float = 1e-3, reg_coef_cross: float = 1e-2,
         scaler_cls: type | None = IqrScaler,
@@ -284,6 +285,7 @@ class NLinearStacked(BasicBaseModel):
             use_revin=use_revin, revin_eps=revin_eps, revin_affine=revin_affine, c_in=c_in,
             use_lc=use_lc, lc_end_epoch=lc_end_epoch, lc_rate=lc_rate,
         )
+        self.use_cross = use_cross
         self.reg_pred_self = reg_pred_self
         self.reg_pred_cross = reg_pred_cross
         self.reg_coef_self = reg_coef_self
@@ -291,32 +293,39 @@ class NLinearStacked(BasicBaseModel):
         self.Linear = torch.nn.Linear(seq_len, pred_len, bias=bias)
         self.Linear.weight = torch.nn.Parameter(torch.ones(pred_len, seq_len) * (1.0 / seq_len))
         self.weight_self = torch.nn.Parameter(torch.empty(c_in, seq_len, pred_len))
-        self.weight_cross = torch.nn.Parameter(torch.empty(c_in, c_in, seq_len, pred_len))
         self.weight_self.data.fill_(0.01 / seq_len)
-        self.weight_cross.data.fill_(0.01 / (seq_len * c_in))
         self.a = torch.nn.Parameter(torch.tensor(1.0))
-        self.b = torch.nn.Parameter(torch.tensor(1.0))
+        if self.use_cross:
+            self.weight_cross = torch.nn.Parameter(torch.empty(c_in, c_in, seq_len, pred_len))
+            self.weight_cross.data.fill_(0.01 / (seq_len * c_in))
+            self.b = torch.nn.Parameter(torch.tensor(1.0))
 
     def forward(self, x):  # x: [B, L, C]
         x_last = x[:, -1:, :]  # [B, 1, C]
         xc = x - x_last
         y1 = self.Linear(xc.permute(0, 2, 1)).permute(0, 2, 1) + x_last
         y2 = torch.einsum('bsc,csp->bpc', xc, self.weight_self)
-        y3 = torch.einsum('bsc,ocsp->bpo', xc, self.weight_cross)
         corr_self = self.a * y2
-        corr_cross = self.b * y3
-        output = y1 + corr_self + corr_cross
-        return output, {'corr_self': corr_self, 'corr_cross': corr_cross}
+        output = y1 + corr_self
+        info = {'corr_self': corr_self}
+        if self.use_cross:
+            y3 = torch.einsum('bsc,ocsp->bpo', xc, self.weight_cross)
+            corr_cross = self.b * y3
+            output = output + corr_cross
+            info['corr_cross'] = corr_cross
+        return output, info
 
     def get_loss(self, batch, criterion, i_epoch=None) -> TimeSeriesError:
         loss = super().get_loss(batch, criterion, i_epoch)
         corr_self = loss.info['corr_self']
-        corr_cross = loss.info['corr_cross']
         penalty = (
             self.reg_pred_self * corr_self.pow(2).mean()
-            + self.reg_pred_cross * corr_cross.pow(2).mean()
             + self.reg_coef_self * self.a.pow(2)
-            + self.reg_coef_cross * self.b.pow(2)
         )
+        if self.use_cross:
+            penalty = penalty + (
+                self.reg_pred_cross * loss.info['corr_cross'].pow(2).mean()
+                + self.reg_coef_cross * self.b.pow(2)
+            )
         loss.grad_target = loss.grad_target + penalty
         return loss

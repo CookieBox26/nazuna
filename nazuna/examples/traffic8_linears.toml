@@ -20,24 +20,23 @@ pred_len = 168
 period_len = 168
 
 [definitions]
-NEpoch = 50
 Cyclic = { base = "Last4Cycles" }
 
-[definitions.Model]
-base = "NLinear"
+[definitions.NLinearStacked0]
+base = "NLinearStacked"
+[definitions.NLinearStacked0.params]
+use_cross = false
+reg_pred_self = 0.0001
+reg_coef_self = 0.1
 
-[definitions.Model01]
-base = "Model"
-[definitions.Model01.params]
-subtract_last = false
-use_revin = true
-
-[definitions.Model02]
-base = "Model"
-[definitions.Model02.params]
-subtract_last = false
-use_revin = true
-revin_affine = true
+[definitions.NLinearStacked1]
+base = "NLinearStacked"
+[definitions.NLinearStacked1.params]
+use_cross = true
+reg_pred_self = 0.0001
+reg_coef_self = 0.1
+reg_pred_cross = 0.1
+reg_coef_cross = 0.1
 
 # =============== template ===============
 [template]
@@ -51,23 +50,47 @@ data_range_eval = "DataRangeEval"
 data_range_train = "DataRangeTrain"
 data_range_eval_pilot = "DataRangeEvalPilot"
 data_range_train_pilot = "DataRangeTrainPilot"
-batch_sampler = "BSS128"
-optimizer = "Adam00003"
+batch_sampler = "BSS16"
+optimizer = "Adam0001"
 lr_scheduler = "ExponentialLR09"
-n_epoch = "NEpoch"
-patience = 10
+n_epoch = 0
 
 [[template.params]]
+nopilot = true
 seed = 0
-model = "Model"
+model = "NLinear"
 criterion_target = "MAE"
+batch_sampler = "BSS16"
+optimizer = "Adam0001"
+lr_scheduler = "ExponentialLR09"
+n_epoch = 48
 
 [[template.params]]
+nopilot = true
 seed = 0
-model = "Model01"
-criterion_target = "MAE"
+model = "NLinear"
+criterion_target = "MAE09"
+batch_sampler = "BSS16"
+optimizer = "Adam0001"
+lr_scheduler = "ExponentialLR09"
+n_epoch = 48
 
 [[template.params]]
+nopilot = true
 seed = 0
-model = "Model02"
+model = "NLinearStacked0"
 criterion_target = "MAE"
+batch_sampler = "BSS16"
+optimizer = "Adam0001"
+lr_scheduler = "ExponentialLR09"
+n_epoch = 48
+
+[[template.params]]
+nopilot = true
+seed = 0
+model = "NLinearStacked1"
+criterion_target = "MAE"
+batch_sampler = "BSS16"
+optimizer = "Adam0001"
+lr_scheduler = "ExponentialLR09"
+n_epoch = 48

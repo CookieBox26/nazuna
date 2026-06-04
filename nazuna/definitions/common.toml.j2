@@ -77,6 +77,10 @@ period_len = {{ period_len }}
 prep_type = "diff"
 
 # =============== Batch sampler ===============
+[definitions.BSS16]
+cls_path = "nazuna.batch_samplers.BatchSamplerShuffle"
+params = { batch_size = 16 }
+
 [definitions.BSS32]
 cls_path = "nazuna.batch_samplers.BatchSamplerShuffle"
 params = { batch_size = 32 }
@@ -109,6 +113,10 @@ params = { lr = 0.0005 }
 [definitions.Adam0001]
 cls_path = "torch.optim.Adam"
 params = { lr = 0.001 }
+
+[definitions.Adam0003]
+cls_path = "torch.optim.Adam"
+params = { lr = 0.003 }
 
 [definitions.AdamW00001]
 cls_path = "torch.optim.AdamW"

@@ -150,14 +150,15 @@ def test_nlinear_derived_get_loss(device, dummy_data, model_cls):
     assert loss.each_sample.mean().item() > 0.0
 
 
-def test_nlinear_stacked(device, dummy_data):
+@pytest.mark.parametrize('use_cross', [True, False])
+def test_nlinear_stacked(device, dummy_data, use_cross):
     model = NLinearStacked.create(
-        device=device, seq_len=4, pred_len=2, c_in=3, bias=True,
+        device=device, seq_len=4, pred_len=2, c_in=3, bias=True, use_cross=use_cross,
     )
     output, info = model(dummy_data((1, 4, 3)))
     assert list(output.size()) == [1, 2, 3]
     assert 'corr_self' in info
-    assert 'corr_cross' in info
+    assert ('corr_cross' in info) == use_cross
 
     batch = TimeSeriesDataset.TimeSeriesBatch(
         tsta=None,

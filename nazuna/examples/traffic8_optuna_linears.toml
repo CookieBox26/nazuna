@@ -22,10 +22,20 @@ period_len = 168
 [definitions.Model00]
 base = "NLinear"
 
+[definitions.Model1]
+base = "NLinearStacked"
+[definitions.Model1.params]
+use_cross = false
+
+[definitions.Model2]
+base = "NLinearStacked"
+[definitions.Model2.params]
+use_cross = true
+
 # =============== tasks ===============
 [[tasks]]
 task_type = "optuna"
-name = "Optuna Adam"
+name = "Optuna 0"
 load_if_exists = true
 n_trials = 10
 n_epoch = 50
@@ -47,3 +57,26 @@ batch_size = { method = "index", type = "int", choices = "16,32,64,128" }
 lr = { method = "index", type = "float", choices = "0.0003,0.001,0.003" }
 [tasks.search_space.lr_scheduler_params]
 gamma = { method = "index", type = "float", choices = "0.9,0.99" }
+
+# =============== tasks ===============
+[[tasks]]
+task_type = "optuna"
+name = "Optuna 1"
+load_if_exists = true
+n_trials = 10
+n_epoch = 50
+patience = 5
+early_stop = true
+criterion = "MAE"
+model = "Model1"
+batch_sampler = "BSS16"
+optimizer = "Adam0001"
+lr_scheduler = "ExponentialLR09"
+data_ranges_with_train_seeds = [
+{ train = [ 0.0, 0.4,], eval = [ 0.4, 0.6,], seed = 0 },
+{ train = [ 0.1, 0.5,], eval = [ 0.5, 0.7,], seed = 1 },
+{ train = [ 0.2, 0.6,], eval = [ 0.6, 0.8,], seed = 2 },
+]
+[tasks.search_space.model_params]
+reg_pred_self = { method = "index", type = "float", choices = "0.0001,0.001,0.1" }
+reg_coef_self = { method = "index", type = "float", choices = "0,0.0001,0.001,0.1" }
