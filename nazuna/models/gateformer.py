@@ -1,9 +1,8 @@
 from nazuna.models._base import BasicBaseModel
 from nazuna.models.common import \
-    MultiheadAttention, TransformerEncoderLayer
+    MultiheadAttention, TransformerEncoderLayer, Patchifier
 import math
 import torch
-import torch.nn.functional as F
 
 
 class Gateformer(BasicBaseModel):
@@ -39,10 +38,8 @@ class Gateformer(BasicBaseModel):
         )
 
         self.patch_len = patch_len
-        self.stride = stride
-        # Replication padding by `stride` on the right; mirrors original Gateformer.
-        self.padding = stride
-        self.n_patches = (seq_len + self.padding - patch_len) // stride + 1
+        self.patchifier = Patchifier(patch_len, stride, padding='end')
+        self.n_patches = self.patchifier.num_patches(seq_len)
 
         self.patch_proj = torch.nn.Linear(patch_len, d_model, bias=False)
         pe = self._build_sinusoidal_pe(self.n_patches, d_model)
@@ -103,20 +100,13 @@ class Gateformer(BasicBaseModel):
             norm_first=True,
         )
 
-    def _patchify(self, x):
-        # x: (B, L, C) -> (B, C, L)
-        x = x.transpose(1, 2)
-        x = F.pad(x, (0, self.padding), mode='replicate')
-        # (B, C, L + padding) -> (B, C, P, patch_len)
-        return x.unfold(dimension=2, size=self.patch_len, step=self.stride)
-
     def forward(self, x):
         B, L, C = x.shape
 
         global_h = self.global_proj(x.transpose(1, 2))  # (B, C, d_model)
         global_h = self.dropout_global(global_h)
 
-        patches = self._patchify(x)  # (B, C, P, patch_len)
+        patches = self.patchifier(x)  # (B, C, P, patch_len)
         P = patches.size(2)
         z = patches.reshape(B * C, P, self.patch_len)
         z = self.patch_proj(z) + self.pos_enc  # (B*C, P, d_model)

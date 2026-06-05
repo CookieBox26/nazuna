@@ -7,6 +7,7 @@ from nazuna.models.common.transformer import (
     TransformerEncoderLayer as TransformerEncoderLayer,
 )
 import torch
+import torch.nn.functional as F
 
 
 class RevIN(torch.nn.Module):
@@ -90,3 +91,29 @@ class BatchSeriesNorm(torch.nn.Module):
         x = self.batch_norm(x)
         x = x.transpose(1, 2)
         return x
+
+
+class Patchifier(torch.nn.Module):
+    def __init__(self, patch_len, stride, padding=None):
+        super().__init__()
+        self.patch_len = patch_len
+        self.stride = stride
+        assert padding in {'end', 'start', '', None}
+        self.padding = padding
+
+    def _pad_len(self):
+        return self.stride - 1 if self.padding in ('end', 'start') else 0
+
+    def num_patches(self, seq_len):
+        return (seq_len + self._pad_len() - self.patch_len) // self.stride + 1
+
+    def forward(self, x):
+        # x: (B, L, C) -> (B, C, L)
+        x = x.transpose(1, 2)
+        pad_len = self._pad_len()
+        if self.padding == 'end':
+            x = F.pad(x, (0, pad_len), mode='replicate')
+        elif self.padding == 'start':
+            x = F.pad(x, (pad_len, 0), mode='replicate')
+        # (B, C, L + pad_len) -> (B, C, P, patch_len)
+        return x.unfold(dimension=2, size=self.patch_len, step=self.stride)

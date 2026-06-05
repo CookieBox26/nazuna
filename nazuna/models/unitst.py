@@ -1,7 +1,6 @@
 from nazuna.models._base import BasicBaseModel
-from nazuna.models.common import BatchSeriesNorm, MultiheadAttention
+from nazuna.models.common import BatchSeriesNorm, MultiheadAttention, Patchifier
 import torch
-import torch.nn.functional as F
 
 
 class _DispatcherAttention(torch.nn.Module):
@@ -94,14 +93,10 @@ class UniTSTLike(BasicBaseModel):
         )
 
         self.c_in = c_in
-        self.patch_len = patch_len
-        self.stride = stride
-        self.padding_patch = padding_patch
-        self.n_patches = (seq_len - self.patch_len) // self.stride + 1
-        if self.padding_patch == 'end':
-            self.n_patches += 1
+        self.patchifier = Patchifier(patch_len, stride, padding_patch)
+        self.n_patches = self.patchifier.num_patches(seq_len)
 
-        self.patch_proj = torch.nn.Linear(self.patch_len, d_model)
+        self.patch_proj = torch.nn.Linear(patch_len, d_model)
         # Learnable 2D positional encoding shared across the batch.
         self.pos_enc = torch.nn.Parameter(
             torch.empty(c_in, self.n_patches, d_model)
@@ -126,16 +121,9 @@ class UniTSTLike(BasicBaseModel):
 
         self.out_proj = torch.nn.Linear(d_model * self.n_patches, self.pred_len)
 
-    def _patchify(self, x):
-        x = x.transpose(1, 2)  # (B, L_in, C) -> (B, C, L_in)
-        if self.padding_patch == 'end':
-            x = F.pad(x, (0, self.stride), mode='replicate')
-        # x: (B, C, L_in + stride) -> (B, C, P, patch_len)
-        return x.unfold(dimension=2, size=self.patch_len, step=self.stride)
-
     def forward(self, x):
         B, L, C = x.shape
-        patches = self._patchify(x)  # (B, C, P, patch_len)
+        patches = self.patchifier(x)  # (B, C, P, patch_len)
         P = patches.size(2)
         z = self.patch_proj(patches)  # (B, C, P, d_model)
         z = z + self.pos_enc.unsqueeze(0)  # broadcast (1, C, P, d_model)
