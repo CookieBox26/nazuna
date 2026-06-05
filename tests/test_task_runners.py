@@ -60,6 +60,15 @@ def test_train_task_runner_run(tmp_path, get_data_manager):
     assert runner.out_path.is_dir()
 
 
+def test_optuna_task_runner_parse_choices():
+    spec = {'type': 'int', 'choices': '15,25,35'}
+    choices = OptunaTaskRunner._parse_choices(spec)
+    assert choices == [15, 25, 35]
+    spec = {'type': 'bool'}
+    choices = OptunaTaskRunner._parse_choices(spec)
+    assert choices == [False, True]
+
+
 def get_optuna_task_runner(dm, out_dir, search_space=None):
     if search_space is None:
         search_space = {

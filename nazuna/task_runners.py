@@ -648,6 +648,8 @@ class OptunaTaskRunner(BaseTaskRunner):
 
     @classmethod
     def _parse_choices(cls, spec):
+        if spec['type'] == 'bool':
+            return [False, True]
         choices = spec['choices'].split(',')
         if spec['type'] == 'int':
             choices = [int(c) for c in choices]
