@@ -20,10 +20,14 @@ class _DispatcherAttention(torch.nn.Module):
 class _UniTSTBlock(torch.nn.Module):
     def __init__(
         self, d_model, n_heads, d_ff, dropout_aw=0.1, dropout_sa=0.1,
-        dropout_ff=(0.0, 0.1),
+        dropout_ff=(0.0, 0.1), use_dispatcher=True,
     ):
         super().__init__()
-        self.attn = _DispatcherAttention(d_model, n_heads, dropout_aw=dropout_aw)
+        self.use_dispatcher = use_dispatcher
+        if use_dispatcher:
+            self.attn = _DispatcherAttention(d_model, n_heads, dropout_aw=dropout_aw)
+        else:
+            self.attn = MultiheadAttention(d_model, n_heads, dropout_aw=dropout_aw)
         self.dropout_sa = torch.nn.Dropout(dropout_sa)
         self.norm_0 = BatchSeriesNorm(d_model)
         self.ff = torch.nn.Sequential(
@@ -37,7 +41,10 @@ class _UniTSTBlock(torch.nn.Module):
 
     def forward(self, x, dispatcher):
         x_save = x
-        x = self.attn(x, dispatcher)
+        if self.use_dispatcher:
+            x = self.attn(x, dispatcher)
+        else:
+            x, _ = self.attn(x, x, x)
         x = self.dropout_sa(x)
         x = x_save + x
         x = self.norm_0(x)
@@ -69,7 +76,7 @@ class UniTSTLike(BasicBaseModel):
         self, seq_len: int, pred_len: int, c_in: int,
         patch_len: int = 16, stride: int = 8, padding_patch: str | None = 'end',
         d_model: int = 128, n_heads: int = 8, d_ff: int = 256, e_layers: int = 2,
-        n_dispatchers: int = 8,
+        use_dispatcher: bool = True, n_dispatchers: int = 8,
         dropout_emb: float = 0.1, dropout_aw: float = 0.1, dropout_sa: float = 0.1,
         dropout_ff: tuple[float, float] = (0.0, 0.2),
         scaler_cls: type | None = None, scaler_params: dict | None = None,
@@ -102,14 +109,17 @@ class UniTSTLike(BasicBaseModel):
         torch.nn.init.uniform_(self.pos_enc, -0.02, 0.02)
         self.dropout_emb = torch.nn.Dropout(dropout_emb)
 
-        # Learnable dispatcher embeddings shared across the batch.
-        self.dispatcher = torch.nn.Parameter(torch.empty(n_dispatchers, d_model))
-        torch.nn.init.uniform_(self.dispatcher, -0.02, 0.02)
+        self.use_dispatcher = use_dispatcher
+        if use_dispatcher:
+            # Learnable dispatcher embeddings shared across the batch.
+            self.dispatcher = torch.nn.Parameter(torch.empty(n_dispatchers, d_model))
+            torch.nn.init.uniform_(self.dispatcher, -0.02, 0.02)
 
         self.blocks = torch.nn.ModuleList([
             _UniTSTBlock(
                 d_model=d_model, n_heads=n_heads, d_ff=d_ff,
                 dropout_aw=dropout_aw, dropout_sa=dropout_sa, dropout_ff=dropout_ff,
+                use_dispatcher=use_dispatcher,
             )
             for _ in range(e_layers)
         ])
@@ -132,7 +142,10 @@ class UniTSTLike(BasicBaseModel):
         z = self.dropout_emb(z)
         z = z.reshape(B, C * P, -1)  # (B, C*P, d_model)
 
-        dispatcher = self.dispatcher.unsqueeze(0).expand(B, -1, -1)
+        if self.use_dispatcher:
+            dispatcher = self.dispatcher.unsqueeze(0).expand(B, -1, -1)
+        else:
+            dispatcher = None
         for block in self.blocks:
             z = block(z, dispatcher)
 
