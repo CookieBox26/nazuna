@@ -697,7 +697,6 @@ class OptunaTaskRunner(BaseTaskRunner):
         return params
 
     def _create_objective(self):
-        fail_value = float('inf') if self.direction == 'minimize' else float('-inf')
         def objective(trial):
             params_all = {}
             for target in OptunaTaskRunner.search_targets:
@@ -710,7 +709,7 @@ class OptunaTaskRunner(BaseTaskRunner):
             except Exception as e:
                 print(f'[Optuna] Trial {trial.number} failed: {type(e).__name__}: {e}')
                 self._n_failed += 1
-                return fail_value
+                raise
         return objective
 
     def _run_trial(
@@ -806,7 +805,9 @@ class OptunaTaskRunner(BaseTaskRunner):
             return
 
         self._n_failed = 0
-        study.optimize(self._create_objective(), n_trials=n_trials)
+        study.optimize(
+            self._create_objective(), n_trials=n_trials, catch=(Exception,),
+        )
         n_total = len(study.trials)
         n_completed = n_total - self._n_failed
         print(f'[Optuna] {n_total} trials: {n_completed} completed, {self._n_failed} failed')
@@ -821,7 +822,9 @@ class OptunaTaskRunner(BaseTaskRunner):
                 self.resolve_params(study.best_params, self.search_space)
         trials_history = []
         for t in study.trials:
-            record = {'number': t.number, 'state': t.state.name, 'value': t.value, 'params': t.params}
+            record = {'number': t.number, 'state': t.state.name, 'params': t.params}
+            if t.value is not None:
+                record['value'] = t.value
             if 'fold_losses' in t.user_attrs:
                 record['fold_losses'] = t.user_attrs['fold_losses']
                 record['fold_i_epoch_bests'] = t.user_attrs['fold_i_epoch_bests']

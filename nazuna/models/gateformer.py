@@ -29,7 +29,7 @@ class Gateformer(BasicBaseModel):
         use_lc: bool = False,
         lc_end_epoch: int | None = None, lc_rate: float | None = None,
     ) -> None:
-        assert seq_len >= patch_len
+        assert seq_len >= patch_len >= stride
         super()._setup(
             seq_len, pred_len, scaler_cls, scaler_params, prep_type=prep_type,
             use_revin=use_revin, revin_eps=revin_eps,
