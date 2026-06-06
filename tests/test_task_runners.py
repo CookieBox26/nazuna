@@ -115,7 +115,6 @@ def test_optuna_task_runner_run(tmp_path, get_data_manager):
 
     assert runner.result_path.is_file()
     assert runner.out_path.is_dir()
-    assert (runner.out_path / 'model_state.pth').is_file()
     assert runner.result['n_trials'] == 4
     assert runner.result['n_completed'] == 4
     assert runner.result['n_failed'] == 0

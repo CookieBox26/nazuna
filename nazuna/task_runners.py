@@ -717,7 +717,7 @@ class OptunaTaskRunner(BaseTaskRunner):
                 return value
             except Exception as e:
                 print(f'[Optuna] Trial {trial.number} failed: {type(e).__name__}: {e}')
-                self._n_failed += 1
+                trial.set_user_attr('exception', type(e).__name__)
                 raise
         return objective
 
@@ -812,20 +812,19 @@ class OptunaTaskRunner(BaseTaskRunner):
             n_trials = self.n_trials - len(study.trials)
         if n_trials <= 0:
             print('The required number of trials has already been completed.')
-            return
-
-        self._n_failed = 0
-        timeout = self.timeout_hour * 3600 if self.timeout_hour > 0 else None
-        study.optimize(
-            self._create_objective(), n_trials=n_trials, timeout=timeout,
-            catch=(Exception,),
-        )
+        else:
+            timeout = self.timeout_hour * 3600 if self.timeout_hour > 0 else None
+            study.optimize(
+                self._create_objective(), n_trials=n_trials, timeout=timeout,
+                catch=(Exception,),
+            )
         n_total = len(study.trials)
-        n_completed = n_total - self._n_failed
-        print(f'[Optuna] {n_total} trials: {n_completed} completed, {self._n_failed} failed')
+        n_failed = sum(1 for t in study.trials if t.state.name == 'FAIL')
+        n_completed = n_total - n_failed
+        print(f'[Optuna] {n_total} trials: {n_completed} completed, {n_failed} failed')
         self.result['n_trials'] = n_total
         self.result['n_completed'] = n_completed
-        self.result['n_failed'] = self._n_failed
+        self.result['n_failed'] = n_failed
         if n_completed > 0:
             self.result['best_trial_number'] = study.best_trial.number
             self.result['best_value'] = study.best_value
@@ -840,10 +839,10 @@ class OptunaTaskRunner(BaseTaskRunner):
             if 'fold_losses' in t.user_attrs:
                 record['fold_losses'] = t.user_attrs['fold_losses']
                 record['fold_i_epoch_bests'] = t.user_attrs['fold_i_epoch_bests']
+            if 'exception' in t.user_attrs:
+                record['exception'] = t.user_attrs['exception']
             trials_history.append(record)
         self.result['trials'] = trials_history
-        if self._best_model_state is not None:
-            torch.save(self._best_model_state, self.out_path / 'model_state.pth')
 
 
 class TaskType(Enum):
