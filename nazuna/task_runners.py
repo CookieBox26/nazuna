@@ -372,6 +372,8 @@ class TrainTaskRunner(EvalTaskRunner):
     early_stop: bool = False
     patience: int = 5
 
+    raise_if_epoch_elapsed_over_min: int = -1
+
     save_model_state_every_epoch: bool = False
 
     def __post_init__(self):
@@ -482,7 +484,8 @@ class TrainTaskRunner(EvalTaskRunner):
             print(f'----- Epoch {i_epoch} -----')
             epoch_record = {'i_epoch': i_epoch}
 
-            loss_train = self.train(i_epoch)
+            with measure_time(raise_if_elapsed_over_min=self.raise_if_epoch_elapsed_over_min):
+                loss_train = self.train(i_epoch)
             epoch_record['train'] = loss_train
 
             if self.data_range_eval is None:
@@ -605,6 +608,10 @@ class OptunaTaskRunner(BaseTaskRunner):
     early_stop: bool = False
     patience: int = 5
 
+    raise_if_epoch_elapsed_over_min: int = -1
+    raise_if_trial_elapsed_over_min: int = -1
+    timeout_hour: float = -1
+
     search_targets: ClassVar[list[str]] = [
         'model_params', 'batch_sampler_params',
         'optimizer_params', 'lr_scheduler_params',
@@ -705,7 +712,9 @@ class OptunaTaskRunner(BaseTaskRunner):
             for name, spec in self.search_space.get('seed', {}).items():
                 seed = OptunaTaskRunner.suggest_param(trial, name, spec)
             try:
-                return self._run_trial(trial, seed=seed, **params_all)
+                with measure_time(raise_if_elapsed_over_min=self.raise_if_trial_elapsed_over_min):
+                    value = self._run_trial(trial, seed=seed, **params_all)
+                return value
             except Exception as e:
                 print(f'[Optuna] Trial {trial.number} failed: {type(e).__name__}: {e}')
                 self._n_failed += 1
@@ -742,6 +751,7 @@ class OptunaTaskRunner(BaseTaskRunner):
                 } if self.lr_scheduler_cls_path else None),
                 lr_scheduler_interval=self.lr_scheduler_interval,
                 n_epoch=self.n_epoch, early_stop=self.early_stop, patience=self.patience,
+                raise_if_epoch_elapsed_over_min=self.raise_if_epoch_elapsed_over_min,
             )
             runner.out_path.mkdir(parents=True, exist_ok=True)
             runner._run()
@@ -805,8 +815,10 @@ class OptunaTaskRunner(BaseTaskRunner):
             return
 
         self._n_failed = 0
+        timeout = self.timeout_hour * 3600 if self.timeout_hour > 0 else None
         study.optimize(
-            self._create_objective(), n_trials=n_trials, catch=(Exception,),
+            self._create_objective(), n_trials=n_trials, timeout=timeout,
+            catch=(Exception,),
         )
         n_total = len(study.trials)
         n_completed = n_total - self._n_failed

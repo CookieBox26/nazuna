@@ -45,14 +45,20 @@ def as_path_if_length_safe(s):
 
 
 @contextmanager
-def measure_time(info):
+def measure_time(info=None, raise_if_elapsed_over_min=-1):
     start = time.perf_counter()
     try:
         yield
     finally:
         elapsed = time.perf_counter() - start
         mins, secs = divmod(elapsed, 60)
-        info['elapsed'] = f'{int(mins)} min {int(secs)} sec'
+        if info is not None:
+            info['elapsed'] = f'{int(mins)} min {int(secs)} sec'
+    if raise_if_elapsed_over_min > 0:
+        if elapsed > raise_if_elapsed_over_min * 60:
+            msg = f'Elapsed time exceeded {raise_if_elapsed_over_min} min:' \
+                + f' {elapsed:.1f} sec'
+            raise TimeoutError(msg)
 
 
 def get_timestamp():
