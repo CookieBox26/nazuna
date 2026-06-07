@@ -718,7 +718,7 @@ class OptunaTaskRunner(BaseTaskRunner):
             except Exception as e:
                 print(f'[Optuna] Trial {trial.number} failed: {type(e).__name__}: {e}')
                 trial.set_user_attr('exception', type(e).__name__)
-                raise
+                return -1e9 if self.direction == 'maximize' else 1e9
         return objective
 
     def _run_trial(
@@ -819,7 +819,7 @@ class OptunaTaskRunner(BaseTaskRunner):
                 catch=(Exception,),
             )
         n_total = len(study.trials)
-        n_failed = sum(1 for t in study.trials if t.state.name == 'FAIL')
+        n_failed = sum(1 for t in study.trials if 'exception' in t.user_attrs)
         n_completed = n_total - n_failed
         print(f'[Optuna] {n_total} trials: {n_completed} completed, {n_failed} failed')
         self.result['n_trials'] = n_total
