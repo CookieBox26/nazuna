@@ -8,6 +8,7 @@ import copy
 from pathlib import Path
 import datetime
 import inspect
+# import traceback
 import numpy as np
 import optuna
 import torch
@@ -717,6 +718,7 @@ class OptunaTaskRunner(BaseTaskRunner):
                 return value
             except Exception as e:
                 print(f'[Optuna] Trial {trial.number} failed: {type(e).__name__}: {e}')
+                # print(traceback.format_exc())
                 trial.set_user_attr('exception', type(e).__name__)
                 return -1e9 if self.direction == 'maximize' else 1e9
         return objective

@@ -19,7 +19,7 @@ class Gateformer(BasicBaseModel):
     """
     def _setup(
         self, seq_len: int, pred_len: int, c_in: int,
-        patch_len: int = 8, stride: int = 8,
+        patch_len: int = 8, stride: int = 8, padding_patch: str | None = 'end',
         d_model: int = 512, n_heads: int = 8, d_ff: int = 2048, e_layers: int = 2,
         dropout_emb: float = 0.1, dropout_aw: float = 0.1, dropout_sa: float = 0.1,
         dropout_ff: tuple[float, float] = (0.0, 0.2),
@@ -38,7 +38,7 @@ class Gateformer(BasicBaseModel):
         )
 
         self.patch_len = patch_len
-        self.patchifier = Patchifier(patch_len, stride, padding='end')
+        self.patchifier = Patchifier(patch_len, stride, padding_patch)
         self.n_patches = self.patchifier.num_patches(seq_len)
 
         self.patch_proj = torch.nn.Linear(patch_len, d_model, bias=False)
