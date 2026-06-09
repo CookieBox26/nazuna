@@ -62,6 +62,53 @@ class ResidualModel(BasicBaseModel):
         return naive_out + neural_out, {'naive': naive_out}
 
 
+class ResidualDeseasonModel(ResidualModel):
+    """
+    Residual framework that feeds the neural model the deseasonalized input.
+    The naive model still forecasts on the raw (scaled) input, while the neural
+    model receives `x - seasonal(x)` so it focuses on what the seasonal mean
+    cannot explain. The final prediction is: naive_output + neural_output.
+    """
+    def _setup(
+        self,
+        seq_len: int,
+        pred_len: int,
+        period_len: int,
+        naive_model_cls_path: str,
+        naive_model_params: dict,
+        neural_model_cls_path: str,
+        neural_model_params: dict,
+        scaler_cls: type | None = IqrScaler,
+        scaler_params: dict | None = {'stat_types': ('qtile_full', 'saved')},
+    ) -> None:
+        super()._setup(
+            seq_len, pred_len,
+            naive_model_cls_path, naive_model_params,
+            neural_model_cls_path, neural_model_params,
+            scaler_cls, scaler_params,
+        )
+        self.period_len = period_len
+
+    def _seasonal_reconstruction(self, x):
+        # Per-phase mean over the window, tiled back to the input length.
+        # Phases are aligned to the end so the last step has phase 0.
+        batch_size, seq_len, n_channel = x.shape
+        pos = torch.arange(seq_len, device=x.device)
+        phase = (seq_len - 1 - pos) % self.period_len
+        profile = x.new_zeros(batch_size, self.period_len, n_channel)
+        profile.index_add_(1, phase, x)
+        counts = x.new_zeros(self.period_len)
+        counts.index_add_(0, phase, x.new_ones(seq_len))
+        profile = profile / counts.view(1, self.period_len, 1)
+        return profile.index_select(1, phase)
+
+    def forward(self, x):
+        naive_out = self._forward_submodel(self.naive_model, x)
+        residual_in = x - self._seasonal_reconstruction(x)
+        neural_out = self._forward_submodel(self.neural_model, residual_in)
+        return naive_out + neural_out, {'naive': naive_out}
+
+
 class ResidualModel1(ResidualModel):
     def get_loss(self, batch, criterion, i_epoch=None) -> TimeSeriesError:
         output, info = self._get_output(batch, False)
@@ -128,3 +175,51 @@ class ResidualModel3(ResidualModel2):
         loss_c = loss_model_c + alpha * penalty_c
         loss_model.grad_target = loss_c.mean()
         return loss_model
+
+
+class ResidualRegularizedModel(ResidualModel):
+    """
+    Residual framework that keeps the neural part a small correction.
+    The prediction is: naive_output + a * neural_output, with a learnable
+    scalar weight `a`. The training loss is penalized by both the magnitude of
+    the neural correction and the weight `a`, so the neural model is encouraged
+    to correct the naive forecast only where it helps.
+    """
+    def _setup(
+        self,
+        seq_len: int,
+        pred_len: int,
+        naive_model_cls_path: str,
+        naive_model_params: dict,
+        neural_model_cls_path: str,
+        neural_model_params: dict,
+        reg_pred: float = 1e-3,
+        reg_coef: float = 1e-3,
+        scaler_cls: type | None = IqrScaler,
+        scaler_params: dict | None = {'stat_types': ('qtile_full', 'saved')},
+    ) -> None:
+        super()._setup(
+            seq_len, pred_len,
+            naive_model_cls_path, naive_model_params,
+            neural_model_cls_path, neural_model_params,
+            scaler_cls, scaler_params,
+        )
+        self.reg_pred = reg_pred
+        self.reg_coef = reg_coef
+        self.a = torch.nn.Parameter(torch.tensor(1.0))
+
+    def forward(self, x):
+        naive_out = self._forward_submodel(self.naive_model, x)
+        neural_out = self._forward_submodel(self.neural_model, x)
+        corr = self.a * neural_out
+        return naive_out + corr, {'naive': naive_out, 'corr': corr}
+
+    def get_loss(self, batch, criterion, i_epoch=None) -> TimeSeriesError:
+        loss = super().get_loss(batch, criterion, i_epoch)
+        corr = loss.info['corr']
+        penalty = (
+            self.reg_pred * corr.pow(2).mean()
+            + self.reg_coef * self.a.pow(2)
+        )
+        loss.grad_target = loss.grad_target + penalty
+        return loss
