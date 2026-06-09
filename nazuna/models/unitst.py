@@ -71,6 +71,8 @@ class UniTSTLike(BasicBaseModel):
         function and dropout placement are not specified in the paper and follow
         choices common in PatchTST-style models.
     """
+    optimization_part_names = ['emb', 'body']
+
     def _setup(
         self, seq_len: int, pred_len: int, c_in: int,
         patch_len: int = 16, stride: int = 8, padding_patch: str | None = 'end',
@@ -145,3 +147,17 @@ class UniTSTLike(BasicBaseModel):
         y = self.out_proj(z)  # (B, C, pred_len)
         y = y.transpose(1, 2)  # (B, pred_len, C)
         return y, {}
+
+    def set_optimizers(self, optimizer_groups):
+        if set(optimizer_groups.groups) == {'model'}:
+            super().set_optimizers(optimizer_groups)
+            return
+        emb_params = [*self.patch_proj.parameters(), self.pos_enc]
+        emb_ids = {id(p) for p in emb_params}
+        body_params = [p for p in self.parameters() if id(p) not in emb_ids]
+        optimizer_groups.set_optimizer(
+            'emb', (p for p in emb_params if p.requires_grad),
+        )
+        optimizer_groups.set_optimizer(
+            'body', (p for p in body_params if p.requires_grad),
+        )
