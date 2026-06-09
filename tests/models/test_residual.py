@@ -51,6 +51,50 @@ def test_get_loss(device, dummy_data):
     assert loss.each_sample.mean().item() > 0.0
 
 
+def test_forward_naive_diff(device, dummy_data):
+    # The naive sub-model uses prep_type="diff", so its forward consumes
+    # seq_len = ResidualModel.seq_len - 1 after differencing.
+    model = ResidualModel.create(
+        device=device,
+        seq_len=17,
+        pred_len=4,
+        naive_model_cls_path='nazuna.models.simple_average.SimpleAverage',
+        naive_model_params={
+            'seq_len': 16, 'pred_len': 4, 'period_len': 4, 'prep_type': 'diff',
+        },
+        neural_model_cls_path='nazuna.models.dlinear.DLinear',
+        neural_model_params={
+            'seq_len': 17, 'pred_len': 4, 'kernel_size': 25, 'bias': True,
+        },
+    )
+    x = dummy_data((1, 17, 3))
+    output, _ = model(x)
+    assert list(output.size()) == [1, 4, 3]
+
+
+def test_forward_neural_revin(device, dummy_data):
+    # A neural sub-model with use_revin has RevIN applied inside forward.
+    model = ResidualModel.create(
+        device=device,
+        seq_len=16,
+        pred_len=4,
+        naive_model_cls_path='nazuna.models.simple_average.SimpleAverage',
+        naive_model_params={'seq_len': 16, 'pred_len': 4, 'period_len': 4},
+        neural_model_cls_path='nazuna.models.unitst.UniTSTLike',
+        neural_model_params={
+            'seq_len': 16, 'pred_len': 4, 'c_in': 3,
+            'patch_len': 8, 'stride': 8, 'd_model': 32, 'n_heads': 4,
+            'd_ff': 64, 'e_layers': 2, 'n_dispatchers': 4, 'use_revin': True,
+        },
+    )
+    x = dummy_data((1, 16, 3))
+    out_on, _ = model(x)
+    model.neural_model.use_revin = False
+    out_off, _ = model(x)
+    assert list(out_on.size()) == [1, 4, 3]
+    assert not torch.allclose(out_on, out_off)
+
+
 def test_residual_model2_forward(device, dummy_data):
     n_channel = 3
     model = ResidualModel2.create(

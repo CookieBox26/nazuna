@@ -16,9 +16,7 @@ def _make_concrete(cls):
 class ResidualModel(BasicBaseModel):
     """
     Residual learning framework that combines a naive model and a neural model.
-
     The final prediction is: naive_output + neural_output
-
     Both sub-models receive the same scaled input and their outputs are summed.
     """
     def _setup(
@@ -38,13 +36,29 @@ class ResidualModel(BasicBaseModel):
         neural_model_cls = _make_concrete(load_class(neural_model_cls_path))
         self.neural_model = neural_model_cls(device=self.device, **neural_model_params)
 
+    def _forward_submodel(self, model, x):
+        # Sub-models are called via forward directly, which bypasses their
+        # _extract_input/_get_output prep. Apply their diff and RevIN here in
+        # the same order (diff outside, RevIN inside) so that e.g. Last4CyclesD
+        # averages the differenced series.
+        current_value = None
+        if model.prep_type == type(model).PrepType.diff:
+            current_value = x[:, -1:, :]
+            x = x[:, 1:, :] - x[:, :-1, :]
+        if model.use_revin:
+            x, revin_mean, revin_std = model.revin.normalize(x)
+        out = model(x)
+        if isinstance(out, tuple):
+            out = out[0]
+        if model.use_revin:
+            out = model.revin.denormalize(out, revin_mean, revin_std)
+        if current_value is not None:
+            out = current_value + torch.cumsum(out, dim=1)
+        return out
+
     def forward(self, x):
-        naive_out = self.naive_model(x)
-        if isinstance(naive_out, tuple):
-            naive_out = naive_out[0]
-        neural_out = self.neural_model(x)
-        if isinstance(neural_out, tuple):
-            neural_out = neural_out[0]
+        naive_out = self._forward_submodel(self.naive_model, x)
+        neural_out = self._forward_submodel(self.neural_model, x)
         return naive_out + neural_out, {'naive': naive_out}
 
 
@@ -89,14 +103,8 @@ class ResidualModel2(ResidualModel):
         self.w_naive = torch.nn.Parameter(torch.full((n_channel,), 0.5))
 
     def forward(self, x):
-        naive_out = self.naive_model(x)
-        if isinstance(naive_out, tuple):
-            naive_out = naive_out[0]
-
-        neural_out = self.neural_model(x)
-        if isinstance(neural_out, tuple):
-            neural_out = neural_out[0]
-
+        naive_out = self._forward_submodel(self.naive_model, x)
+        neural_out = self._forward_submodel(self.neural_model, x)
         # w_naive: (n_channel,) -> (1, 1, n_channel)
         w = self.w_naive.unsqueeze(0).unsqueeze(0)
         output = w * naive_out + (1 - w) * neural_out
