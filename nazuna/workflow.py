@@ -115,6 +115,8 @@ class Workflow:
             for target in type(self).task_keys_accepting_definitions:
                 if target in params and isinstance(params[target], str):
                     _ = self.get_definition(params[target])
+            if 'optimizer_groups' in params:
+                self.resolve_optimizer_groups_definitions(params['optimizer_groups'])
 
     def get_data_param(self):
         if isinstance(self.data, str):
@@ -126,6 +128,12 @@ class Workflow:
         elif isinstance(param['path'], (list, tuple)):  # legacy compatibility
             param['path'] = get_dataset_path(*param['path'])
         return param
+
+    def resolve_optimizer_groups_definitions(self, optimizer_groups):
+        for group in optimizer_groups.values():
+            for key in ['optimizer', 'lr_scheduler']:
+                if key in group and isinstance(group[key], str):
+                    group[key] = self.get_definition(group[key])
 
     def get_definition(self, name, _depth=0):
         assert _depth <= 5, \
@@ -164,6 +172,8 @@ class Workflow:
         for target in type(self).task_keys_accepting_definitions:
             if target in params and isinstance(params[target], str):
                 params[target] = self.get_definition(params[target])
+        if 'optimizer_groups' in params:
+            self.resolve_optimizer_groups_definitions(params['optimizer_groups'])
 
         if 'n_epoch' in params and isinstance(params['n_epoch'], dict):
             target_path = self.out_paths[params['n_epoch']['task_name']]
@@ -289,6 +299,17 @@ class WorkflowTemplateResolver:
         return d_dst
 
     @classmethod
+    def _optimizer_keys(cls, d):
+        if 'optimizer_groups' in d:
+            assert 'optimizer' not in d and 'lr_scheduler' not in d, \
+                "Set either 'optimizer_groups' or 'optimizer'/'lr_scheduler', not both"
+            return ['optimizer_groups']
+        keys = ['optimizer', 'lr_scheduler']
+        if 'lr_scheduler_interval' in d:
+            keys.append('lr_scheduler_interval')
+        return keys
+
+    @classmethod
     def get_task_eval_baseline(cls, d):
         task = {'task_type': 'eval', 'name': 'Eval Baseline', 'dump_pred_data': False}
         keys = ['data_range_eval', 'criterion_eval', 'baseline_model']
@@ -302,9 +323,7 @@ class WorkflowTemplateResolver:
             'model_state_path': None, 'seed': 0,
         }
         keys = ['data_range_train_pilot', 'data_range_eval_pilot', 'criterion_eval'] + \
-            ['model', 'batch_sampler', 'optimizer', 'lr_scheduler', 'n_epoch', 'patience']
-        if 'lr_scheduler_interval' in d:
-            keys.append('lr_scheduler_interval')
+            ['model', 'batch_sampler', 'n_epoch', 'patience'] + cls._optimizer_keys(d)
         rename = {f'data_range_{t}_pilot': f'data_range_{t}' for t in ['train', 'eval']}
         rename |= {'criterion_eval': 'criterion'}
         if 'criterion_train' in d:
@@ -321,10 +340,8 @@ class WorkflowTemplateResolver:
             'task_type': 'train', 'name': f'Train {i_taskset}',
             'model_state_path': None, 'seed': 0,
         }
-        keys = ['data_range_train', 'criterion_eval'] + \
-            ['model', 'batch_sampler', 'optimizer', 'lr_scheduler']
-        if 'lr_scheduler_interval' in d:
-            keys.append('lr_scheduler_interval')
+        keys = ['data_range_train', 'criterion_eval', 'model', 'batch_sampler'] + \
+            cls._optimizer_keys(d)
         rename = {'criterion_eval': 'criterion'}
         if 'criterion_train' in d:
             keys.append('criterion_train')

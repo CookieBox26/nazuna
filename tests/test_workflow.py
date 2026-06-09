@@ -371,6 +371,43 @@ def test_template_multiparams_criterion_override():
         assert 'criterion_target' not in tasks[name]
 
 
+template_optimizer_groups = '''
+# =============== template ===============
+[template]
+template_type = "train_with_baseline"
+criterion_eval = "MSE"
+baseline_model = "SimpleAverage"
+model = "SimpleAverageVariableDecay"
+data_range_train = [ 0.0, 0.8,]
+data_range_eval = [ 0.8, 1.0,]
+data_range_train_pilot = [ 0.0, 0.6,]
+data_range_eval_pilot = [ 0.6, 0.8,]
+batch_sampler = "BS"
+n_epoch = 5
+patience = 5
+[template.optimizer_groups.model.optimizer]
+cls_path = "torch.optim.Adam"
+params = { lr = 0.01 }
+[template.optimizer_groups.model.lr_scheduler]
+cls_path = "torch.optim.lr_scheduler.CosineAnnealingLR"
+params = { T_max = 5 }
+'''
+
+
+def test_template_optimizer_groups():
+    d = normalize_config(template_optimizer_groups)
+    d = WorkflowTemplateResolver.resolve(d)
+    tasks = {t['name']: t for t in d['tasks']}
+    # When the template defines optimizer_groups, the train tasks carry it
+    # instead of optimizer / lr_scheduler.
+    for name in ['Pilot 0', 'Train 0']:
+        assert 'optimizer' not in tasks[name]
+        assert 'lr_scheduler' not in tasks[name]
+        assert set(tasks[name]['optimizer_groups']) == {'model'}
+        group = tasks[name]['optimizer_groups']['model']
+        assert group['optimizer']['cls_path'] == 'torch.optim.Adam'
+
+
 dummy_conf = '''
 definition_includes = [
 { bundled = "common" },
@@ -423,6 +460,43 @@ def test_normalize_config(tmp_path):
         'cls_path': 'nazuna.criteria.MSE',
         'params': {'n_channel': 4, 'pred_len': 24},
     }
+
+
+def test_workflow_resolve_optimizer_groups_definitions():
+    d = {
+        'data': {},
+        'definitions': {
+            'Adam': {'cls_path': 'torch.optim.Adam', 'params': {'lr': 0.0001}},
+            'CosineAnnealingLR': {
+                'cls_path': 'torch.optim.lr_scheduler.CosineAnnealingLR',
+                'params': {'T_max': 5},
+            },
+            'SimpleAverageVariableDecay': {
+                'cls_path': 'nazuna.models.simple_average.SimpleAverageVariableDecay',
+                'params': {'seq_len': 97, 'pred_len': 24, 'period_len': 24},
+            },
+            'MSE': {'cls_path': 'nazuna.criteria.MSE', 'params': {'n_channel': 4, 'pred_len': 24}},
+            'BS': {
+                'cls_path': 'nazuna.batch_samplers.BatchSamplerShuffle',
+                'params': {'batch_size': 32},
+            },
+        },
+        'tasks': [{
+            'task_type': 'train', 'name': 'Train',
+            'data_range_train': [0.0, 0.8], 'data_range_eval': [0.8, 1.0],
+            'criterion': 'MSE', 'model': 'SimpleAverageVariableDecay',
+            'batch_sampler': 'BS', 'n_epoch': 5,
+            'optimizer_groups': {
+                'model': {'optimizer': 'Adam', 'lr_scheduler': 'CosineAnnealingLR'},
+            },
+        }],
+    }
+    wf = Workflow(**d)
+    _, params = wf.parse_task_runner_config(0)
+    group = params['optimizer_groups']['model']
+    assert group['optimizer']['cls_path'] == 'torch.optim.Adam'
+    assert group['lr_scheduler']['cls_path'] == \
+        'torch.optim.lr_scheduler.CosineAnnealingLR'
 
 
 def test_workflow_get_task_runner():

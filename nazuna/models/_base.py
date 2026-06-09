@@ -8,6 +8,8 @@ import os
 
 
 class BaseModel(torch.nn.Module, ABC):
+    optimization_part_names = ['model']
+
     """
     Base class for time-series forecasting models.
     """
@@ -103,10 +105,17 @@ class BaseModel(torch.nn.Module, ABC):
             model.load_state_dict(state_dict, strict=False)
         return model
 
-    def get_args_for_optimizer(self, optimizer_params):
-        args = {'params': (p for p in self.parameters() if p.requires_grad)}
-        args |= optimizer_params
-        return [args]
+    @classmethod
+    def validate_optimizer_groups(cls, optimizer_groups):
+        groups = optimizer_groups.groups
+        if set(groups) == {'model'}:  # Always allow the single key 'model'
+            return
+        assert set(groups) == set(cls.optimization_part_names), \
+            'optimizer_groups keys are inconsistent'
+
+    def set_optimizers(self, optimizer_groups):
+        params = (p for p in self.parameters() if p.requires_grad)
+        optimizer_groups.set_optimizer('model', params)
 
     def on_epoch_start(self, i_epoch):
         pass

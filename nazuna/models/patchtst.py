@@ -27,10 +27,10 @@ class PatchTST(BasicBaseModel):
         use_lc: bool = False,
         lc_end_epoch: int | None = None, lc_rate: float | None = None,
     ) -> None:
-        assert seq_len >= patch_len >= stride
-        assert d_model <= d_ff <= 4 * d_model
-        assert d_model % n_heads == 0
-        assert d_model // n_heads >= 8
+        assert seq_len >= patch_len >= stride, 'Expected seq_len >= patch_len >= stride'
+        assert d_model <= d_ff <= 4 * d_model, 'Expected d_model <= d_ff <= 4 * d_model'
+        assert d_model % n_heads == 0, 'Expected d_model to be divisible by n_heads'
+        assert d_model // n_heads >= 8, 'Expected head_dim >= 8'
         super()._setup(
             seq_len, pred_len, scaler_cls, scaler_params, prep_type=prep_type,
             use_revin=use_revin, revin_eps=revin_eps,

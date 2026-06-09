@@ -8,7 +8,7 @@ import copy
 from pathlib import Path
 import datetime
 import inspect
-# import traceback
+import traceback
 import numpy as np
 import optuna
 import torch
@@ -348,6 +348,11 @@ class TrainTaskRunner(EvalTaskRunner):
             If not specified, the eval `criterion` is used for the training loss.
         batch_sampler (dict = None): Batch sampler configuration **(required)**.
             Must have 'cls_path' (str) and 'params' (dict) keys.
+        optimizer_groups (dict = None): Per-part optimizer configuration for models
+            that use a separate optimizer for each part. Keyed by the part names
+            defined by the model, with each value a dict of 'optimizer',
+            'lr_scheduler', and 'lr_scheduler_interval'. When this is set,
+            'optimizer' must not be set (error).
         optimizer (dict = None): Optimizer configuration **(required)**.
             Must have 'cls_path' (str) and 'params' (dict) keys.
         lr_scheduler (dict = None): Learning rate scheduler configuration. Optional.
@@ -363,6 +368,9 @@ class TrainTaskRunner(EvalTaskRunner):
     criterion_target: dict = None
 
     batch_sampler: dict = None
+
+    optimizer_groups: dict = None
+
     optimizer: dict = None
     lr_scheduler: dict = None
     lr_scheduler_interval: str = 'epoch'  # 'epoch' or 'step'
@@ -374,8 +382,49 @@ class TrainTaskRunner(EvalTaskRunner):
     patience: int = 5
 
     raise_if_epoch_elapsed_over_min: int = -1
-
     save_model_state_every_epoch: bool = False
+
+    class _OptimizerGroups:
+        class _OptimizerGroup:
+            def __init__(self, config):
+                assert set(config) <= \
+                    {'optimizer', 'lr_scheduler', 'lr_scheduler_interval'}
+                self.optimizer_cls = load_class(config['optimizer']['cls_path'])
+                self.optimizer_params = config['optimizer']['params']
+                self.lr_scheduler = None
+                self.lr_scheduler_cls = None
+                if 'lr_scheduler' in config and config['lr_scheduler'] is not None:
+                    self.lr_scheduler_cls = load_class(config['lr_scheduler']['cls_path'])
+                    self.lr_scheduler_params = config['lr_scheduler']['params']
+                self.lr_scheduler_interval = config.get('lr_scheduler_interval', 'epoch')
+                assert self.lr_scheduler_interval in {'epoch', 'step'}
+            def set_optimizer(self, params):
+                args = {'params': params} | self.optimizer_params
+                self.optimizer = self.optimizer_cls(**args)
+                if self.lr_scheduler_cls is not None:
+                    self.lr_scheduler = \
+                        self.lr_scheduler_cls(self.optimizer, **self.lr_scheduler_params)
+        def __init__(self, configs):
+            assert configs
+            self.groups = {}
+            for name, config in configs.items():
+                self.groups[name] = self._OptimizerGroup(config)
+        def set_optimizer(self, name, params):
+            self.groups[name].set_optimizer(params)
+        def zero_grad(self):
+            for group in self.groups.values():
+                group.optimizer.zero_grad()
+        def step_optimizer(self):
+            for group in self.groups.values():
+                group.optimizer.step()
+        def step_lr_scheduler(self, interval):
+            assert interval in {'epoch', 'step'}
+            for group in self.groups.values():
+                if group.lr_scheduler is None:
+                    continue
+                if group.lr_scheduler_interval != interval:
+                    continue
+                group.lr_scheduler.step()
 
     def __post_init__(self):
         super().__post_init__()
@@ -390,13 +439,16 @@ class TrainTaskRunner(EvalTaskRunner):
         self.batch_sampler_cls = load_class(self.batch_sampler['cls_path'])
         self.batch_sampler_params = self.batch_sampler['params']
 
-        self.optimizer_cls = load_class(self.optimizer['cls_path'])
-        self.optimizer_params = self.optimizer['params']
-        self.lr_scheduler_cls = None
-        if self.lr_scheduler:
-            assert self.lr_scheduler_interval in {'epoch', 'step'}
-            self.lr_scheduler_cls = load_class(self.lr_scheduler['cls_path'])
-            self.lr_scheduler_params = self.lr_scheduler['params']
+        assert (self.optimizer_groups is None) != (self.optimizer is None)
+        if self.optimizer_groups is not None:
+            self.optimizer_groups = self._OptimizerGroups(self.optimizer_groups)
+        else:
+            self.optimizer_groups = self._OptimizerGroups({'model': {
+                'optimizer': self.optimizer,
+                'lr_scheduler': self.lr_scheduler,
+                'lr_scheduler_interval': self.lr_scheduler_interval,
+            }})
+        self.model_cls.validate_optimizer_groups(self.optimizer_groups)
 
         if self.n_epoch_path is None:
             assert self.n_epoch > 0
@@ -425,18 +477,16 @@ class TrainTaskRunner(EvalTaskRunner):
         loss_total = 0.0
         self.model.train()
         self.model.on_epoch_start(i_epoch)
+
         for i_batch, batch in enumerate(data_loader):
-            self.optimizer.zero_grad()
+            self.optimizer_groups.zero_grad()
             loss = self.model.get_loss_and_backward(batch, self.criterion_target, i_epoch)
             loss_total += loss.get_sum()
             if self.save_model_state_every_epoch and (i_epoch == 0):
                 self.save_model('model_state_ini.pth')
-            self.optimizer.step()
-            if self.lr_scheduler is not None and self.lr_scheduler_interval == 'step':
-                self.lr_scheduler.step()
-
-        if self.lr_scheduler is not None and self.lr_scheduler_interval == 'epoch':
-            self.lr_scheduler.step()
+            self.optimizer_groups.step_optimizer()
+            self.optimizer_groups.step_lr_scheduler('step')
+        self.optimizer_groups.step_lr_scheduler('epoch')
 
         if self.save_model_state_every_epoch and (i_epoch > -1):
             self.save_model(f'model_state_{i_epoch}.pth')
@@ -461,12 +511,9 @@ class TrainTaskRunner(EvalTaskRunner):
         else:
             self.criterion_target = \
                 self.criterion_target_cls.create(self.device, **self.criterion_target_params)
+
         self.model = self.model_cls.create(self.device, **self.model_params)
-        self.optimizer = \
-            self.optimizer_cls(self.model.get_args_for_optimizer(self.optimizer_params))
-        self.lr_scheduler = None
-        if self.lr_scheduler_cls:
-            self.lr_scheduler = self.lr_scheduler_cls(self.optimizer, **self.lr_scheduler_params)
+        self.model.set_optimizers(self.optimizer_groups)
 
         loss_per_sample_eval_best = float('inf')
         early_stop_counter = 0
@@ -585,7 +632,8 @@ class OptunaTaskRunner(BaseTaskRunner):
         early_stop (bool = False): Whether to enable early stopping within each trial.
     """
     load_if_exists: bool = True
-    search_space: dict = None
+    search_space: dict = dataclasses.field(default_factory=dict)
+    search_space_optimizer_groups: dict = dataclasses.field(default_factory=dict)
     direction: str = 'minimize'
     n_trials: int = -1
     n_trials_to_add: int = -1
@@ -601,6 +649,9 @@ class OptunaTaskRunner(BaseTaskRunner):
     model: dict = None
 
     batch_sampler: dict = None
+
+    optimizer_groups: dict = None
+
     optimizer: dict = None
     lr_scheduler: dict = None
     lr_scheduler_interval: str = 'epoch'  # 'epoch' or 'step'
@@ -620,10 +671,25 @@ class OptunaTaskRunner(BaseTaskRunner):
 
     def __post_init__(self):
         super().__post_init__()
-        assert self.search_space, 'search_space is required'
+        assert self.search_space or self.search_space_optimizer_groups, \
+            'search_space is required'
         assert set(self.search_space) <= set(OptunaTaskRunner.search_targets) | {'seed'}
-        assert 'lr_scheduler' not in self.search_space or self.lr_scheduler, \
-            'lr_scheduler config is required when search_space contains "lr_scheduler"'
+        if 'optimizer_params' in self.search_space:
+            assert self.optimizer is not None
+        if 'lr_scheduler_params' in self.search_space:
+            assert self.lr_scheduler is not None
+        if self.search_space_optimizer_groups:
+            assert self.optimizer_groups is not None
+            assert set(self.search_space_optimizer_groups) <= set(self.optimizer_groups)
+            for group_name, space in self.search_space_optimizer_groups.items():
+                assert set(space) <= {'optimizer_params', 'lr_scheduler_params'}
+                group_config = self.optimizer_groups[group_name]
+                for target in ['optimizer', 'lr_scheduler']:
+                    if f'{target}_params' in space:
+                        assert target in group_config
+            assert 'optimizer_params' not in self.search_space
+            assert 'lr_scheduler_params' not in self.search_space
+
         for d in self.data_ranges_with_train_seeds:
             assert 'train' in d
             assert 'eval' in d
@@ -643,14 +709,22 @@ class OptunaTaskRunner(BaseTaskRunner):
         self.model_params = self.model['params']
         self.batch_sampler_cls_path = self.batch_sampler['cls_path']
         self.batch_sampler_params = self.batch_sampler['params']
-        self.optimizer_cls_path = self.optimizer['cls_path']
-        self.optimizer_params = self.optimizer['params']
-        self.lr_scheduler_cls_path = None
-        self.lr_scheduler_params = None
-        if self.lr_scheduler:
-            assert self.lr_scheduler_interval in {'epoch', 'step'}
-            self.lr_scheduler_cls_path = self.lr_scheduler['cls_path']
-            self.lr_scheduler_params = self.lr_scheduler['params']
+
+        assert (self.optimizer_groups is None) != (self.optimizer is None)
+        if self.optimizer is not None:
+            self.optimizer_cls_path = self.optimizer['cls_path']
+            self.optimizer_params = self.optimizer['params']
+            self.lr_scheduler_cls_path = None
+            self.lr_scheduler_params = None
+            if self.lr_scheduler:
+                assert self.lr_scheduler_interval in {'epoch', 'step'}
+                self.lr_scheduler_cls_path = self.lr_scheduler['cls_path']
+                self.lr_scheduler_params = self.lr_scheduler['params']
+        else:
+            load_class(self.model_cls_path).validate_optimizer_groups(
+                TrainTaskRunner._OptimizerGroups(self.optimizer_groups),
+            )
+
         self._best_model_state = None
         self._best_trial_number = None
 
@@ -687,46 +761,92 @@ class OptunaTaskRunner(BaseTaskRunner):
             raise ValueError(f'Unknown search space method: {method}')
 
     @classmethod
-    def resolve_params(cls, params, search_space):
+    def resolve_params(cls, params, search_space, search_space_optimizer_groups):
         resolved = dict(params)
-        for target_specs in search_space.values():
+        for target, target_specs in search_space.items():
             for name, spec in target_specs.items():
                 if spec['method'] != 'index':
                     continue
-                i = resolved.pop(f'{name}_index')
-                resolved[name] = cls._parse_choices(spec)[i]
+                name_reg = target + '__' + name
+                resolved[name_reg] = \
+                    cls._parse_choices(spec)[resolved.pop(f'{name_reg}_index')]
+        for group_name, group_space in search_space_optimizer_groups.items():
+            for target in ['optimizer', 'lr_scheduler']:
+                if f'{target}_params' not in group_space:
+                    continue
+                for name, spec in group_space[f'{target}_params'].items():
+                    if spec['method'] != 'index':
+                        continue
+                    name_reg = group_name + '__' + target + '__' + name
+                    resolved[name_reg] = \
+                        cls._parse_choices(spec)[resolved.pop(f'{name_reg}_index')]
         return resolved
 
     def get_suggested_params(self, trial, target):
         base_params = getattr(self, target)
         params = copy.deepcopy(base_params) if base_params else {}
         for name, spec in self.search_space.get(target, {}).items():
-            params[name] = OptunaTaskRunner.suggest_param(trial, name, spec)
+            name_reg = target + '__' + name
+            params[name] = type(self).suggest_param(trial, name_reg, spec)
         return params
+
+    def set_suggested_params_optimizer_group(self, trial, group_name, suggested):
+        group_space = self.search_space_optimizer_groups[group_name]
+        for target in ['optimizer', 'lr_scheduler']:
+            if f'{target}_params' not in group_space:
+                continue
+            base_params = self.optimizer_groups[group_name][target]['params']
+            params = copy.deepcopy(base_params) if base_params else {}
+            for name, spec in group_space[f'{target}_params'].items():
+                name_reg = group_name + '__' + target + '__' + name
+                params[name] = type(self).suggest_param(trial, name_reg, spec)
+            suggested[group_name][target]['params'] = params
 
     def _create_objective(self):
         def objective(trial):
-            params_all = {}
-            for target in OptunaTaskRunner.search_targets:
-                params_all[target] = self.get_suggested_params(trial, target)
             seed = None
-            for name, spec in self.search_space.get('seed', {}).items():
-                seed = OptunaTaskRunner.suggest_param(trial, name, spec)
+            params_suggested = {}
+            optimizer_groups_suggested = copy.deepcopy(self.optimizer_groups)
+            for target, target_specs in self.search_space.items():
+                if target == 'seed':
+                    seed = type(self).suggest_param(trial, 'seed', target_specs['seed'])
+                    continue
+                params_suggested[target] = self.get_suggested_params(trial, target)
+            for group_name in self.search_space_optimizer_groups:
+                self.set_suggested_params_optimizer_group(
+                    trial, group_name, optimizer_groups_suggested,
+                )
             try:
-                with measure_time(raise_if_elapsed_over_min=self.raise_if_trial_elapsed_over_min):
-                    value = self._run_trial(trial, seed=seed, **params_all)
+                with measure_time(None, self.raise_if_trial_elapsed_over_min):
+                    value = self._run_trial(
+                        trial, seed, params_suggested, optimizer_groups_suggested,
+                    )
                 return value
             except Exception as e:
                 print(f'[Optuna] Trial {trial.number} failed: {type(e).__name__}: {e}')
-                # print(traceback.format_exc())
+                print(traceback.format_exc())
                 trial.set_user_attr('exception', type(e).__name__)
                 return -1e9 if self.direction == 'maximize' else 1e9
         return objective
 
-    def _run_trial(
-        self, trial, model_params, batch_sampler_params, optimizer_params,
-        lr_scheduler_params, seed=None,
-    ):
+    def _run_trial(self, trial, seed, params_suggested, optimizer_groups_suggested):
+        optimizer_args = {}
+        if self.optimizer_groups is not None:
+            optimizer_args['optimizer_groups'] = optimizer_groups_suggested
+        else:
+            optimizer_args['optimizer'] = {
+                'cls_path': self.optimizer_cls_path,
+                'params': params_suggested.get('optimizer_params', self.optimizer_params),
+            }
+            if self.lr_scheduler_cls_path is not None:
+                optimizer_args['lr_scheduler'] = {
+                    'cls_path': self.lr_scheduler_cls_path,
+                    'params': params_suggested.get(
+                        'lr_scheduler_params', self.lr_scheduler_params,
+                    ),
+                }
+                optimizer_args['lr_scheduler_interval'] = self.lr_scheduler_interval
+
         i_trial = trial.number
         self._log(f'Trial {i_trial} started')
         losses = []
@@ -737,7 +857,8 @@ class OptunaTaskRunner(BaseTaskRunner):
             runner = TrainTaskRunner(
                 seed=(d.get('seed', 0) if seed is None else seed),
                 dm=self.dm, device=self.device, name=f'Trial {i_trial} Fold {i_fold}',
-                out_dir=(self.out_path / f'trial_{i_trial}' / f'fold_{i_fold}'), exist_ok=True,
+                out_dir=(self.out_path / f'trial_{i_trial}' / f'fold_{i_fold}'),
+                exist_ok=True,
                 data_range_train=d['train'], data_range_eval=d['eval'],
                 data_offset_train=self.data_offset_train,
                 data_rolling_window_train=self.data_rolling_window_train,
@@ -745,15 +866,19 @@ class OptunaTaskRunner(BaseTaskRunner):
                 data_rolling_window_eval=self.data_rolling_window_eval,
                 batch_size_eval=self.batch_size_eval,
                 criterion=self.criterion,
-                model={'cls_path': self.model_cls_path, 'params': model_params},
-                batch_sampler={'cls_path': self.batch_sampler_cls_path, 'params': batch_sampler_params},
-                optimizer={'cls_path': self.optimizer_cls_path, 'params': optimizer_params},
-                lr_scheduler=({
-                    'cls_path': self.lr_scheduler_cls_path, 'params': lr_scheduler_params,
-                } if self.lr_scheduler_cls_path else None),
-                lr_scheduler_interval=self.lr_scheduler_interval,
+                model={
+                    'cls_path': self.model_cls_path,
+                    'params': params_suggested.get('model_params', self.model_params),
+                },
+                batch_sampler={
+                    'cls_path': self.batch_sampler_cls_path,
+                    'params': params_suggested.get(
+                        'batch_sampler_params', self.batch_sampler_params,
+                    ),
+                },
                 n_epoch=self.n_epoch, early_stop=self.early_stop, patience=self.patience,
                 raise_if_epoch_elapsed_over_min=self.raise_if_epoch_elapsed_over_min,
+                **optimizer_args,
             )
             runner.out_path.mkdir(parents=True, exist_ok=True)
             runner._run()
@@ -766,7 +891,10 @@ class OptunaTaskRunner(BaseTaskRunner):
         trial.set_user_attr('fold_losses', losses)
         trial.set_user_attr('fold_i_epoch_bests', i_epoch_bests)
         mean_loss = sum(losses) / len(losses)
-        if self._best_model_state is None or mean_loss < self.result.get('best_value', float('inf')):
+        if (
+            self._best_model_state is None
+            or mean_loss < self.result.get('best_value', float('inf'))
+        ):
             self._best_model_state = best_model_state_this_trial
             self._best_trial_number = i_trial
         return mean_loss
@@ -832,7 +960,9 @@ class OptunaTaskRunner(BaseTaskRunner):
             self.result['best_value'] = study.best_value
             self.result['best_params'] = study.best_params
             self.result['best_params_resolved'] = \
-                self.resolve_params(study.best_params, self.search_space)
+                self.resolve_params(
+                    study.best_params, self.search_space, self.search_space_optimizer_groups,
+                )
         trials_history = []
         for t in study.trials:
             record = {'number': t.number, 'state': t.state.name, 'params': t.params}
