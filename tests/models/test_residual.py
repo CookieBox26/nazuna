@@ -1,7 +1,7 @@
 from nazuna.data_manager import TimeSeriesDataset
 from nazuna.models.residual import (
     ResidualModel, ResidualModel2, ResidualModel3, ResidualDeseasonModel,
-    ResidualRegularizedModel,
+    ResidualRegularizedModel, ResidualRegularizedModel2, ResidualGatedModel,
 )
 from nazuna.criteria import MSE
 import torch
@@ -155,6 +155,85 @@ def test_residual_regularized_get_loss_and_backward(device, dummy_data):
     # plain criterion loss, and the weight `a` takes part in the gradient.
     assert loss.grad_target.item() > loss.each_sample.mean().item()
     assert model.a.grad is not None
+
+
+def test_residual_regularized2_get_loss_and_backward(device, dummy_data):
+    n_channel = 3
+    model = ResidualRegularizedModel2.create(
+        device=device,
+        seq_len=16,
+        pred_len=4,
+        n_channel=n_channel,
+        naive_model_cls_path='nazuna.models.simple_average.SimpleAverage',
+        naive_model_params={'seq_len': 16, 'pred_len': 4, 'period_len': 4},
+        neural_model_cls_path='nazuna.models.dlinear.DLinear',
+        neural_model_params={
+            'seq_len': 16, 'pred_len': 4, 'kernel_size': 25, 'bias': True,
+        },
+        reg_pred=1.0,
+        reg_coef=1.0,
+        reg_worse=2.0,
+    )
+    assert list(model.w_naive.size()) == [n_channel]
+    batch = TimeSeriesDataset.TimeSeriesBatch(
+        tsta=None,
+        tste=None,
+        data=dummy_data((1, 16, 3)),
+        tsta_future=None,
+        tste_future=None,
+        data_future=dummy_data((1, 4, 3)),
+        stats={'qtile_full': torch.tensor([[
+            [0., 0., 0.],
+            [10., 10., 10.],
+            [20., 20., 20.],
+        ]], device=device)},
+    )
+    criterion = MSE.create(device, n_channel=n_channel, pred_len=4)
+    loss = model.get_loss_and_backward(batch, criterion)
+    assert loss.each_sample.mean().item() > 0.0
+    # The learnable mixing weight takes part in the gradient (mixing + penalties).
+    assert model.w_naive.grad is not None
+
+
+def test_residual_gated_get_loss_and_backward(device, dummy_data):
+    model = ResidualGatedModel.create(
+        device=device,
+        seq_len=16,
+        pred_len=4,
+        naive_model_cls_path='nazuna.models.simple_average.SimpleAverage',
+        naive_model_params={'seq_len': 16, 'pred_len': 4, 'period_len': 4},
+        neural_model_cls_path='nazuna.models.dlinear.DLinear',
+        neural_model_params={
+            'seq_len': 16, 'pred_len': 4, 'kernel_size': 25, 'bias': True,
+        },
+        reg_pred=1.0,
+        reg_coef=1.0,
+        reg_worse=2.0,
+    )
+    # The gate is per-sample, per-channel, in (0, 1).
+    x = dummy_data((1, 16, 3))
+    output, info = model(x)
+    assert list(output.size()) == [1, 4, 3]
+    assert list(info['gate'].size()) == [1, 1, 3]
+    assert (info['gate'] >= 0).all() and (info['gate'] <= 1).all()
+
+    batch = TimeSeriesDataset.TimeSeriesBatch(
+        tsta=None,
+        tste=None,
+        data=dummy_data((1, 16, 3)),
+        tsta_future=None,
+        tste_future=None,
+        data_future=dummy_data((1, 4, 3)),
+        stats={'qtile_full': torch.tensor([[
+            [0., 0., 0.],
+            [10., 10., 10.],
+            [20., 20., 20.],
+        ]], device=device)},
+    )
+    criterion = MSE.create(device, n_channel=3, pred_len=4)
+    loss = model.get_loss_and_backward(batch, criterion)
+    assert loss.each_sample.mean().item() > 0.0
+    assert model.gate.weight.grad is not None
 
 
 def test_residual_model2_forward(device, dummy_data):

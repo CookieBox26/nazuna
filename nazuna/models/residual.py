@@ -223,3 +223,138 @@ class ResidualRegularizedModel(ResidualModel):
         )
         loss.grad_target = loss.grad_target + penalty
         return loss
+
+
+class ResidualRegularizedModel2(ResidualModel2):
+    """
+    Like ResidualModel2, the naive and neural outputs are mixed with a learnable
+    per-channel weight (`w_naive`): w * naive + (1 - w) * neural. The training
+    loss combines two penalties: the per-channel "no worse than naive" penalty of
+    ResidualModel1/3 (weighted by `reg_worse`), and a small-correction penalty on
+    the magnitude of the neural contribution and on the neural weight (1 - w).
+    The mixing is thus learned while the neural part stays a small correction over
+    the naive forecast.
+    """
+    def _setup(
+        self,
+        seq_len: int,
+        pred_len: int,
+        naive_model_cls_path: str,
+        naive_model_params: dict,
+        neural_model_cls_path: str,
+        neural_model_params: dict,
+        n_channel: int,
+        reg_pred: float = 1e-3,
+        reg_coef: float = 1e-3,
+        reg_worse: float = 1.0,
+        scaler_cls: type | None = IqrScaler,
+        scaler_params: dict | None = {'stat_types': ('qtile_full', 'saved')},
+    ) -> None:
+        super()._setup(
+            seq_len, pred_len,
+            naive_model_cls_path, naive_model_params,
+            neural_model_cls_path, neural_model_params,
+            n_channel, scaler_cls, scaler_params,
+        )
+        self.reg_pred = reg_pred
+        self.reg_coef = reg_coef
+        self.reg_worse = reg_worse
+
+    def forward(self, x):
+        naive_out = self._forward_submodel(self.naive_model, x)
+        neural_out = self._forward_submodel(self.neural_model, x)
+        # w_naive: (n_channel,) -> (1, 1, n_channel)
+        w = self.w_naive.unsqueeze(0).unsqueeze(0)
+        corr = (1 - w) * neural_out
+        output = w * naive_out + corr
+        return output, {'naive': naive_out, 'corr': corr}
+
+    def get_loss(self, batch, criterion, i_epoch=None) -> TimeSeriesError:
+        output, info = self._get_output(batch, False)
+        target = self.extract_true(batch)
+        output = self.scaler.rescale(output, batch)
+        naive = self.scaler.rescale(info['naive'], batch)
+
+        loss_model = criterion(output, target)
+        loss_naive = criterion(naive, target)
+        loss_model_c = loss_model.each_channel  # batch_size, n_channel
+        loss_naive_c = loss_naive.each_channel  # batch_size, n_channel
+        penalty_c = torch.clamp(loss_model_c - loss_naive_c, min=0.0)
+
+        loss_c = loss_model_c + self.reg_worse * penalty_c
+        reg = (
+            self.reg_pred * info['corr'].pow(2).mean()
+            + self.reg_coef * (1 - self.w_naive).pow(2).mean()
+        )
+        loss_model.grad_target = loss_c.mean() + reg
+        return loss_model
+
+
+class ResidualGatedModel(ResidualModel):
+    """
+    Like ResidualRegularizedModel2 but the naive/neural mixing weight is an
+    input-dependent gate g(x) in (0, 1) instead of a static per-channel weight:
+    output = g * naive + (1 - g) * neural. The gate is per-sample and per-channel
+    (weights shared across channels). The loss uses the same three penalties:
+    the per-channel "no worse than naive" penalty (`reg_worse`), the neural
+    correction magnitude (`reg_pred`), and the neural gate (1 - g) (`reg_coef`).
+    """
+    def _setup(
+        self,
+        seq_len: int,
+        pred_len: int,
+        naive_model_cls_path: str,
+        naive_model_params: dict,
+        neural_model_cls_path: str,
+        neural_model_params: dict,
+        reg_pred: float = 1e-3,
+        reg_coef: float = 1e-3,
+        reg_worse: float = 1.0,
+        scaler_cls: type | None = IqrScaler,
+        scaler_params: dict | None = {'stat_types': ('qtile_full', 'saved')},
+    ) -> None:
+        super()._setup(
+            seq_len, pred_len,
+            naive_model_cls_path, naive_model_params,
+            neural_model_cls_path, neural_model_params,
+            scaler_cls, scaler_params,
+        )
+        self.reg_pred = reg_pred
+        self.reg_coef = reg_coef
+        self.reg_worse = reg_worse
+        self.gate = torch.nn.Linear(seq_len, 1)
+        torch.nn.init.zeros_(self.gate.weight)
+        torch.nn.init.zeros_(self.gate.bias)
+
+    def _gate(self, x):
+        # x: (B, L, C) -> per-sample per-channel gate (B, 1, C) in (0, 1)
+        logit = self.gate(x.transpose(1, 2))  # (B, C, 1)
+        return torch.sigmoid(logit).transpose(1, 2)
+
+    def forward(self, x):
+        naive_out = self._forward_submodel(self.naive_model, x)
+        neural_out = self._forward_submodel(self.neural_model, x)
+        g = self._gate(x)  # (B, 1, C)
+        corr = (1 - g) * neural_out
+        output = g * naive_out + corr
+        return output, {'naive': naive_out, 'corr': corr, 'gate': g}
+
+    def get_loss(self, batch, criterion, i_epoch=None) -> TimeSeriesError:
+        output, info = self._get_output(batch, False)
+        target = self.extract_true(batch)
+        output = self.scaler.rescale(output, batch)
+        naive = self.scaler.rescale(info['naive'], batch)
+
+        loss_model = criterion(output, target)
+        loss_naive = criterion(naive, target)
+        loss_model_c = loss_model.each_channel  # batch_size, n_channel
+        loss_naive_c = loss_naive.each_channel  # batch_size, n_channel
+        penalty_c = torch.clamp(loss_model_c - loss_naive_c, min=0.0)
+
+        loss_c = loss_model_c + self.reg_worse * penalty_c
+        reg = (
+            self.reg_pred * info['corr'].pow(2).mean()
+            + self.reg_coef * (1 - info['gate']).pow(2).mean()
+        )
+        loss_model.grad_target = loss_c.mean() + reg
+        return loss_model
