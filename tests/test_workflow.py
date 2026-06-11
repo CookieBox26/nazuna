@@ -232,6 +232,45 @@ def test_template_train_with_baseline_multiparams_pilot_reuse(tmp_path):
     i_train_3 = task_names.index('Train 3')
     assert wf.tasks[i_train_3]['n_epoch']['task_name'] == 'Pilot 2'
     assert wf.tasks[i_train_3]['seed'] == 3
+
+
+template_train_multiparams = '''
+# =============== template ===============
+[template]
+template_type = "train_multiparams"
+criterion_train_target = "MSE"
+criterion_eval = "MSE"
+criterion_imprate = "ImprovementRate"
+baseline_model = "SimpleAverage"
+model = "SimpleAverageVariableDecay"
+data_range_train = [ 0.0, 0.8,]
+data_range_eval = [ 0.8, 1.0,]
+data_range_train_pilot = [ 0.0, 0.6,]
+data_range_eval_pilot = [ 0.6, 0.8,]
+batch_sampler = "BS"
+optimizer = "Adam"
+lr_scheduler = "CosineAnnealingLR"
+n_epoch = 5
+patience = 5
+[[template.params]]
+seed = 0
+[[template.params]]
+seed = 1
+'''
+
+
+def test_template_train_multiparams(tmp_path):
+    out_dir = tmp_path / 'template_train_multiparams'
+    conf = f'out_dir = "{out_dir.as_posix()}"\n' + premise + template_train_multiparams
+    d = normalize_config(conf)
+    d = WorkflowTemplateResolver.resolve(d)
+    wf = Workflow(**d)
+    task_names = [t['name'] for t in wf.tasks]
+    # No "Eval Baseline" task is generated; the tasksets (incl. Eval ImpRate) remain.
+    assert task_names == [
+        'Pilot 0', 'Train 0', 'Eval 0', 'Eval ImpRate 0',
+        'Pilot 1', 'Train 1', 'Eval 1', 'Eval ImpRate 1',
+    ]
     # The original Pilot of taskset 0 still references its own training data
     i_pilot_0 = task_names.index('Pilot 0')
     assert wf.tasks[i_pilot_0]['name'] == 'Pilot 0'

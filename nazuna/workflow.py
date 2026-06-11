@@ -289,6 +289,7 @@ class WorkflowTemplateResolver:
     Type = Enum('Type', [
         'train_with_baseline',
         'train_with_baseline_multiparams',
+        'train_multiparams',
     ])
 
     @classmethod
@@ -412,8 +413,8 @@ class WorkflowTemplateResolver:
         return cls.get_tasks_baseline(d) + cls.get_taskset(d)
 
     @classmethod
-    def get_tasks_train_with_baseline_multiparams(cls, d):
-        tasks = cls.get_tasks_baseline(d)
+    def _get_tasksets_multiparams(cls, d):
+        tasks = []
         for i_taskset, params in enumerate(d['params']):
             params = dict(params)
             nopilot = params.pop('nopilot', False)
@@ -440,6 +441,14 @@ class WorkflowTemplateResolver:
         return tasks
 
     @classmethod
+    def get_tasks_train_with_baseline_multiparams(cls, d):
+        return cls.get_tasks_baseline(d) + cls._get_tasksets_multiparams(d)
+
+    @classmethod
+    def get_tasks_train_multiparams(cls, d):
+        return cls._get_tasksets_multiparams(d)
+
+    @classmethod
     def resolve(cls, d: dict) -> dict:
         if 'template' not in d:
             return d
@@ -451,6 +460,8 @@ class WorkflowTemplateResolver:
             d['tasks'] = cls.get_tasks_train_with_baseline(d_tmpl)
         if type_ == cls.Type.train_with_baseline_multiparams:
             d['tasks'] = cls.get_tasks_train_with_baseline_multiparams(d_tmpl)
+        if type_ == cls.Type.train_multiparams:
+            d['tasks'] = cls.get_tasks_train_multiparams(d_tmpl)
         return d
 
 
