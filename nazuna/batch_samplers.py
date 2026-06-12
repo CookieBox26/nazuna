@@ -1,4 +1,3 @@
-from abc import ABC
 import numpy as np
 import inspect
 
@@ -15,15 +14,17 @@ class BatchSampler:
         filtered = {k: v for k, v in kwargs.items() if k in cls.argnames}
         return cls(n_sample, batch_size, **filtered)
 
-    def __init__(self, n_sample: int, batch_size: int) -> None:
+    def __init__(self, n_sample: int, batch_size: int, seed: int = 0) -> None:
         """
         Args:
             n_sample: Total number of samples.
             batch_size: Batch size.
+            seed: Random seed (unused by deterministic samplers).
         """
         self.n_sample = n_sample
         self.batch_size = batch_size
         self.n_batch = int(np.ceil(self.n_sample / batch_size))
+        self.rng = np.random.default_rng(seed)
 
     def __len__(self):
         return self.n_batch
@@ -48,13 +49,7 @@ class BatchSampler:
         return self._get_i_batch(self.i_batch_actual)
 
 
-class BatchSamplerRandom(BatchSampler, ABC):
-    def __init__(self, n_sample, batch_size, seed=0):
-        super().__init__(n_sample, batch_size)
-        self.rng = np.random.default_rng(seed)
-
-
-class BatchSamplerShuffle(BatchSamplerRandom):
+class BatchSamplerShuffle(BatchSampler):
     """A sampler that shuffles samples and splits them into batches.
 
     - At the start of each iteration, sample indices are shuffled,
@@ -83,7 +78,7 @@ class BatchSamplerShuffle(BatchSamplerRandom):
         return [self.sample_ids_shuffled[i] for i in list_indices]
 
 
-class BatchSamplerBatchShuffle(BatchSamplerRandom):
+class BatchSamplerBatchShuffle(BatchSampler):
     # A batch sampler that shuffles only the batch order.
     # Samples within each batch remain consecutive.
     def __init__(self, n_sample, batch_size, seed=0):
@@ -104,7 +99,7 @@ class BatchSamplerBatchShuffle(BatchSamplerRandom):
         return self._get_i_batch(self.batch_ids_shuffled[self.i_batch_actual])
 
 
-class BatchSamplerPeriodic(BatchSamplerRandom):
+class BatchSamplerPeriodic(BatchSampler):
     # A batch sampler that allows only indices congruent modulo `period` to be grouped into the same batch.
     # For example, for daily data with period=7, each batch contains samples from the same day of the week.
     # Currently, consecutive samples of the same weekday are grouped together.

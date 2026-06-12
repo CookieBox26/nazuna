@@ -559,6 +559,7 @@ class TrainTaskRunner(EvalTaskRunner):
                 early_stop_counter = 0
                 self.result['i_epoch_best'] = i_epoch
                 self.result['loss_per_sample_eval_best'] = loss_per_sample_eval_best
+                self.result['loss_per_sample_train_end'] = loss_train['loss_per_sample']
                 self.save_model('model_state.pth')
             else:
                 early_stop_counter += 1
@@ -574,6 +575,7 @@ class TrainTaskRunner(EvalTaskRunner):
         )
 
         if self.data_range_eval is None:
+            self.result['loss_per_sample_train_end'] = loss_train['loss_per_sample']
             torch.save(self.model.state_dict(), self.out_path / 'model_state.pth')
 
 
