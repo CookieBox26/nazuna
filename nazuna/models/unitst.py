@@ -9,11 +9,17 @@ class _DispatcherAttention(torch.nn.Module):
         self.aggregate = MultiheadAttention(d_model, n_heads, dropout_aw=dropout_aw)
         self.distribute = MultiheadAttention(d_model, n_heads, dropout_aw=dropout_aw)
 
-    def forward(self, x, dispatcher):
+    def forward(self, x, dispatcher, prev_attn_scores=None):
         # x: (B, N, d_model), dispatcher: (B, k, d_model)
-        d, _ = self.aggregate(dispatcher, x, x)  # (B, k, d_model)
-        out, _ = self.distribute(x, d, d)  # (B, N, d_model)
-        return out
+        prev_agg, prev_dist = \
+            prev_attn_scores if prev_attn_scores is not None else (None, None)
+        d, agg_scores = self.aggregate(  # (B, k, d_model)
+            dispatcher, x, x, prev_attn_scores=prev_agg,
+        )
+        out, dist_scores = self.distribute(  # (B, N, d_model)
+            x, d, d, prev_attn_scores=prev_dist,
+        )
+        return out, (agg_scores, dist_scores)
 
 
 class _UniTSTBlock(torch.nn.Module):
@@ -38,12 +44,14 @@ class _UniTSTBlock(torch.nn.Module):
         )
         self.norm_1 = BatchSeriesNorm(d_model)
 
-    def forward(self, x, dispatcher):
+    def forward(self, x, dispatcher, prev_attn_scores=None):
         x_save = x
         if self.use_dispatcher:
-            x = self.attn(x, dispatcher)
+            x, attn_scores = self.attn(
+                x, dispatcher, prev_attn_scores=prev_attn_scores,
+            )
         else:
-            x, _ = self.attn(x, x, x)
+            x, attn_scores = self.attn(x, x, x, prev_attn_scores=prev_attn_scores)
         x = self.dropout_sa(x)
         x = x_save + x
         x = self.norm_0(x)
@@ -51,7 +59,7 @@ class _UniTSTBlock(torch.nn.Module):
         x = self.ff(x)
         x = x_save + x
         x = self.norm_1(x)
-        return x
+        return x, attn_scores
 
 
 class UniTSTLike(BasicBaseModel):
@@ -79,7 +87,7 @@ class UniTSTLike(BasicBaseModel):
         d_model: int = 128, n_heads: int = 8, d_ff: int = 256, e_layers: int = 2,
         use_dispatcher: bool = True, n_dispatchers: int = 8,
         dropout_emb: float = 0.1, dropout_aw: float = 0.1, dropout_sa: float = 0.1,
-        dropout_ff: tuple[float, float] = (0.0, 0.2),
+        dropout_ff: tuple[float, float] = (0.0, 0.2), res_attention: bool = False,
         scaler_cls: type | None = None, scaler_params: dict | None = None,
         prep_type: str = 'none',
         use_revin: bool = True, revin_affine: bool = False, revin_eps: float = 1e-5,
@@ -87,9 +95,8 @@ class UniTSTLike(BasicBaseModel):
         lc_end_epoch: int | None = None, lc_rate: float | None = None,
     ) -> None:
         assert seq_len >= patch_len >= stride, 'Expected seq_len >= patch_len >= stride'
-        assert d_model <= d_ff <= 4 * d_model, 'Expected d_model <= d_ff <= 4 * d_model'
         assert d_model % n_heads == 0, 'Expected d_model to be divisible by n_heads'
-        assert d_model // n_heads >= 8, 'Expected head_dim >= 8'
+        assert d_model // n_heads >= 4, 'Expected head_dim >= 4'
         super()._setup(
             seq_len, pred_len, scaler_cls, scaler_params, prep_type=prep_type,
             use_revin=use_revin, revin_eps=revin_eps,
@@ -123,6 +130,7 @@ class UniTSTLike(BasicBaseModel):
             )
             for _ in range(e_layers)
         ])
+        self.res_attention = res_attention
 
         self.out_proj = torch.nn.Linear(d_model * self.n_patches, self.pred_len)
 
@@ -139,8 +147,9 @@ class UniTSTLike(BasicBaseModel):
             dispatcher = self.dispatcher.unsqueeze(0).expand(B, -1, -1)
         else:
             dispatcher = None
+        scores = None
         for block in self.blocks:
-            z = block(z, dispatcher)
+            z, scores = block(z, dispatcher, (scores if self.res_attention else None))
 
         z = z.reshape(B, C, P, -1)  # (B, C, P, d_model)
         z = z.reshape(B, C, -1)  # (B, C, P * d_model)
