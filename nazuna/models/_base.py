@@ -81,12 +81,14 @@ class BaseModel(torch.nn.Module, ABC):
         """
         pass
 
-    def get_loss_and_backward(self, batch, criterion, i_epoch=None) -> TimeSeriesError:
+    def get_loss_and_backward(
+        self, batch, criterion, i_epoch=None, i_batch=None,
+    ) -> TimeSeriesError:
         """
         Compute loss, set gradients based on target (default: batch mean),
         and return the loss.
         """
-        loss = self.get_loss(batch, criterion, i_epoch)
+        loss = self.get_loss(batch, criterion, i_epoch, i_batch)
         loss.grad_target.backward()
         return loss
 
@@ -116,9 +118,6 @@ class BaseModel(torch.nn.Module, ABC):
     def set_optimizers(self, optimizer_groups):
         params = (p for p in self.parameters() if p.requires_grad)
         optimizer_groups.set_optimizer('model', params)
-
-    def on_epoch_start(self, i_epoch):
-        pass
 
     def count_trainable_parameters(self):
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
@@ -214,7 +213,7 @@ class BasicBaseModel(BaseModel):
     def predict(self, batch):
         return self._get_output(batch, (self.scaler is not None))
 
-    def get_loss(self, batch, criterion, i_epoch=None) -> TimeSeriesError:
+    def get_loss(self, batch, criterion, i_epoch=None, i_batch=None) -> TimeSeriesError:
         output, info = self._get_output(batch, False)
         target = self.extract_true(batch)
         if self.scaler:

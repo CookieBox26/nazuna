@@ -315,8 +315,8 @@ class NLinearStacked(BasicBaseModel):
             info['corr_cross'] = corr_cross
         return output, info
 
-    def get_loss(self, batch, criterion, i_epoch=None) -> TimeSeriesError:
-        loss = super().get_loss(batch, criterion, i_epoch)
+    def get_loss(self, batch, criterion, i_epoch=None, i_batch=None) -> TimeSeriesError:
+        loss = super().get_loss(batch, criterion, i_epoch, i_batch)
         corr_self = loss.info['corr_self']
         penalty = (
             self.reg_pred_self * corr_self.pow(2).mean()

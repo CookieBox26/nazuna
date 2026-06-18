@@ -357,7 +357,12 @@ class TrainTaskRunner(EvalTaskRunner):
             Must have 'cls_path' (str) and 'params' (dict) keys.
         lr_scheduler (dict = None): Learning rate scheduler configuration. Optional.
             Must have 'cls_path' (str) and 'params' (dict) keys.
-        n_epoch (int = 0): Number of training epochs **(required)**.
+        n_epoch (int = 0): Number of training epochs. Exactly one of `n_epoch` and
+            `n_batch` must be positive (unless `n_epoch_path` is used).
+        n_batch (int = 0): Total number of batches (optimizer steps) to train for.
+            The training loop stops once this many batches have run, truncating the
+            final epoch. Mutually exclusive with `n_epoch`; not usable together with
+            `n_epoch_path`.
         early_stop (bool = False): Whether to enable early stopping.
             Stops training if evaluation loss does not improve for 5 consecutive epochs.
     """
@@ -376,6 +381,7 @@ class TrainTaskRunner(EvalTaskRunner):
     lr_scheduler_interval: str = 'epoch'  # 'epoch' or 'step'
 
     n_epoch: int = 0
+    n_batch: int = 0
     n_epoch_path: str | Path = None
     n_epoch_path_defer: bool = False
     early_stop: bool = False
@@ -451,9 +457,9 @@ class TrainTaskRunner(EvalTaskRunner):
         self.model_cls.validate_optimizer_groups(self.optimizer_groups)
 
         if self.n_epoch_path is None:
-            assert self.n_epoch > 0
+            assert (self.n_epoch > 0) != (self.n_batch > 0)
         else:
-            assert self.n_epoch == 0
+            assert self.n_epoch == 0 and self.n_batch == 0
             if type(self.n_epoch_path) is str:
                 self.n_epoch_path = Path(self.n_epoch_path)
             if not self.n_epoch_path_defer:
@@ -472,30 +478,38 @@ class TrainTaskRunner(EvalTaskRunner):
     def save_model(self, filename):
         torch.save(self.model.state_dict(), self.out_path / filename)
 
-    def train(self, i_epoch=-1):
+    def train(self, i_epoch=-1, n_batch_done=0):
         data_loader = self.data_loader_train
         loss_total = 0.0
+        n_sample = 0
         self.model.train()
-        self.model.on_epoch_start(i_epoch)
 
-        for i_batch, batch in enumerate(data_loader):
+        for batch in data_loader:
             self.optimizer_groups.zero_grad()
-            loss = self.model.get_loss_and_backward(batch, self.criterion_target, i_epoch)
+            loss = self.model.get_loss_and_backward(
+                batch, self.criterion_target, i_epoch, n_batch_done,
+            )
             loss_total += loss.get_sum()
+            n_sample += batch.data.shape[0]
             if self.save_model_state_every_epoch and (i_epoch == 0):
                 self.save_model('model_state_ini.pth')
             self.optimizer_groups.step_optimizer()
             self.optimizer_groups.step_lr_scheduler('step')
+            n_batch_done += 1
+            if self.n_batch and (n_batch_done >= self.n_batch):
+                break
         self.optimizer_groups.step_lr_scheduler('epoch')
 
         if self.save_model_state_every_epoch and (i_epoch > -1):
             self.save_model(f'model_state_{i_epoch}.pth')
 
+        if not self.n_batch:
+            n_sample = data_loader.dataset.n_sample
         return {
-            'n_sample': data_loader.dataset.n_sample,
+            'n_sample': n_sample,
             'loss_total': loss_total,
-            'loss_per_sample': loss_total / data_loader.dataset.n_sample,
-        }
+            'loss_per_sample': loss_total / n_sample,
+        }, n_batch_done
 
     def _run(self):
         if self.n_epoch_path is not None:
@@ -527,13 +541,16 @@ class TrainTaskRunner(EvalTaskRunner):
             self.result['n_sample_eval'] = self.data_loader_eval.dataset.n_sample
 
         loss_history = []
-        for i_epoch in range(self.n_epoch):
+        n_batch_done = 0
+        n_epoch_max = self.n_batch if self.n_batch > 0 else self.n_epoch
+        for i_epoch in range(n_epoch_max):
+            if (self.n_batch > 0) and (n_batch_done >= self.n_batch):
+                break
             self._log(f'Epoch {i_epoch} started')
             print(f'----- Epoch {i_epoch} -----')
             epoch_record = {'i_epoch': i_epoch}
-
             with measure_time(raise_if_elapsed_over_min=self.raise_if_epoch_elapsed_over_min):
-                loss_train = self.train(i_epoch)
+                loss_train, n_batch_done = self.train(i_epoch, n_batch_done)
             epoch_record['train'] = loss_train
 
             if self.data_range_eval is None:
@@ -553,7 +570,6 @@ class TrainTaskRunner(EvalTaskRunner):
             epoch_record['eval'] = loss_eval
             loss_history.append(epoch_record)
             loss_per_sample_eval = loss_eval['loss_per_sample']
-
             if loss_per_sample_eval < loss_per_sample_eval_best:
                 loss_per_sample_eval_best = loss_per_sample_eval
                 early_stop_counter = 0
@@ -568,6 +584,7 @@ class TrainTaskRunner(EvalTaskRunner):
             if stop:
                 break
 
+        self.result['n_batch'] = n_batch_done
         history_path = self.out_path / 'train_loss_history.toml'
         history_path.write_text(
             toml.dumps({'epochs': loss_history}),

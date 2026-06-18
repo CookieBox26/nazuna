@@ -110,7 +110,7 @@ class ResidualDeseasonModel(ResidualModel):
 
 
 class ResidualModel1(ResidualModel):
-    def get_loss(self, batch, criterion, i_epoch=None) -> TimeSeriesError:
+    def get_loss(self, batch, criterion, i_epoch=None, i_batch=None) -> TimeSeriesError:
         output, info = self._get_output(batch, False)
         target = self.extract_true(batch)
         output = self.scaler.rescale(output, batch)
@@ -159,7 +159,7 @@ class ResidualModel2(ResidualModel):
 
 
 class ResidualModel3(ResidualModel2):
-    def get_loss(self, batch, criterion, i_epoch=None) -> TimeSeriesError:
+    def get_loss(self, batch, criterion, i_epoch=None, i_batch=None) -> TimeSeriesError:
         output, info = self._get_output(batch, False)
         target = self.extract_true(batch)
         output = self.scaler.rescale(output, batch)
@@ -214,8 +214,8 @@ class ResidualRegularizedModel(ResidualModel):
         corr = self.a * neural_out
         return naive_out + corr, {'naive': naive_out, 'corr': corr}
 
-    def get_loss(self, batch, criterion, i_epoch=None) -> TimeSeriesError:
-        loss = super().get_loss(batch, criterion, i_epoch)
+    def get_loss(self, batch, criterion, i_epoch=None, i_batch=None) -> TimeSeriesError:
+        loss = super().get_loss(batch, criterion, i_epoch, i_batch)
         corr = loss.info['corr']
         penalty = (
             self.reg_pred * corr.pow(2).mean()
@@ -269,7 +269,7 @@ class ResidualRegularizedModel2(ResidualModel2):
         output = w * naive_out + corr
         return output, {'naive': naive_out, 'corr': corr}
 
-    def get_loss(self, batch, criterion, i_epoch=None) -> TimeSeriesError:
+    def get_loss(self, batch, criterion, i_epoch=None, i_batch=None) -> TimeSeriesError:
         output, info = self._get_output(batch, False)
         target = self.extract_true(batch)
         output = self.scaler.rescale(output, batch)
@@ -339,7 +339,7 @@ class ResidualGatedModel(ResidualModel):
         output = g * naive_out + corr
         return output, {'naive': naive_out, 'corr': corr, 'gate': g}
 
-    def get_loss(self, batch, criterion, i_epoch=None) -> TimeSeriesError:
+    def get_loss(self, batch, criterion, i_epoch=None, i_batch=None) -> TimeSeriesError:
         output, info = self._get_output(batch, False)
         target = self.extract_true(batch)
         output = self.scaler.rescale(output, batch)
