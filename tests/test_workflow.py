@@ -328,7 +328,7 @@ def test_template_train_with_baseline_multiparams_nopilot(tmp_path):
     assert wf.tasks[i_train_2]['n_epoch'] == 3
 
 
-template_criterion_routing_base = '''
+template_train_with_baseline_criterion_routing_base = '''
 # =============== template ===============
 [template]
 template_type = "train_with_baseline"
@@ -347,8 +347,8 @@ patience = 5
 '''
 
 
-def _resolve_template_criterion_routing(extra):
-    d = normalize_config(template_criterion_routing_base + extra)
+def _resolve_template_train_with_baseline_criterion_routing(extra):
+    d = normalize_config(template_train_with_baseline_criterion_routing_base + extra)
     d = WorkflowTemplateResolver.resolve(d)
     return {t['name']: t for t in d['tasks']}
 
@@ -356,7 +356,7 @@ def _resolve_template_criterion_routing(extra):
 def test_template_criterion_routing():
     # Without criterion_train / criterion_train_target, the Pilot / Train
     # criterion falls back to criterion_eval and no criterion_target is set.
-    tasks = _resolve_template_criterion_routing('')
+    tasks = _resolve_template_train_with_baseline_criterion_routing('')
     for name in ['Pilot 0', 'Train 0']:
         assert tasks[name]['criterion'] == 'MSE'
         assert 'criterion_target' not in tasks[name]
@@ -364,7 +364,7 @@ def test_template_criterion_routing():
     # criterion_train overrides the Pilot / Train criterion and
     # criterion_train_target sets criterion_target, while Eval keeps
     # criterion_eval.
-    tasks = _resolve_template_criterion_routing(
+    tasks = _resolve_template_train_with_baseline_criterion_routing(
         'criterion_train = "MAE"\ncriterion_train_target = "MSE"\n'
     )
     for name in ['Pilot 0', 'Train 0']:
@@ -373,7 +373,7 @@ def test_template_criterion_routing():
     assert tasks['Eval 0']['criterion'] == 'MSE'
 
 
-template_multiparams_criterion_override = '''
+template_train_with_baseline_multiparams_criterion_override = '''
 # =============== template ===============
 [template]
 template_type = "train_with_baseline_multiparams"
@@ -396,8 +396,8 @@ criterion_train_target = "MSE"
 '''
 
 
-def test_template_multiparams_criterion_override():
-    d = normalize_config(template_multiparams_criterion_override)
+def test_template_train_with_baseline_multiparams_criterion_override():
+    d = normalize_config(template_train_with_baseline_multiparams_criterion_override)
     d = WorkflowTemplateResolver.resolve(d)
     tasks = {t['name']: t for t in d['tasks']}
     # Per-taskset criterion_train / criterion_train_target override the
@@ -410,7 +410,7 @@ def test_template_multiparams_criterion_override():
         assert 'criterion_target' not in tasks[name]
 
 
-template_optimizer_groups = '''
+template_train_with_baseline_optimizer_groups = '''
 # =============== template ===============
 [template]
 template_type = "train_with_baseline"
@@ -433,8 +433,8 @@ params = { T_max = 5 }
 '''
 
 
-def test_template_optimizer_groups():
-    d = normalize_config(template_optimizer_groups)
+def test_template_train_with_baseline_optimizer_groups():
+    d = normalize_config(template_train_with_baseline_optimizer_groups)
     d = WorkflowTemplateResolver.resolve(d)
     tasks = {t['name']: t for t in d['tasks']}
     # When the template defines optimizer_groups, the train tasks carry it
@@ -445,6 +445,47 @@ def test_template_optimizer_groups():
         assert set(tasks[name]['optimizer_groups']) == {'model'}
         group = tasks[name]['optimizer_groups']['model']
         assert group['optimizer']['cls_path'] == 'torch.optim.Adam'
+
+
+template_repeat = '''
+# =============== template ===============
+[template]
+template_type = "repeat"
+
+[[template.tasks]]
+task_type = "train"
+seed = 0
+[[template.tasks]]
+task_type = "train"
+seed = 2
+[[template.tasks]]
+task_type = "eval"
+seed = 0
+
+[[template.params]]
+seed = 0
+[[template.params]]
+seed = 1
+'''
+
+
+def test_template_repeat():
+    d = normalize_config(template_repeat)
+    d = WorkflowTemplateResolver.resolve(d)
+
+    assert d['tasks'][0]['name'] == 'Train 0 0'
+    assert d['tasks'][1]['name'] == 'Train 0 1'
+    assert d['tasks'][2]['name'] == 'Train 1 0'
+    assert d['tasks'][3]['name'] == 'Train 1 1'
+    assert d['tasks'][4]['name'] == 'Eval 0 0'
+    assert d['tasks'][5]['name'] == 'Eval 0 1'
+
+    assert d['tasks'][0]['seed'] == 0
+    assert d['tasks'][1]['seed'] == 1
+    assert d['tasks'][2]['seed'] == 0
+    assert d['tasks'][3]['seed'] == 1
+    assert d['tasks'][4]['seed'] == 0
+    assert d['tasks'][5]['seed'] == 1
 
 
 dummy_conf = '''

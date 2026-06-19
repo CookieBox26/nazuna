@@ -20,6 +20,26 @@ def test_as_path_if_length_safe(s, expected):
         assert p is None
 
 
+template_repeat = '''
+# =============== template ===============
+[template]
+template_type = "repeat"
+[[template.tasks]]
+task_type = "train"
+[[template.tasks]]
+task_type = "train"
+[[template.params]]
+seed = 0
+[[template.params]]
+seed = 1
+'''
+
+
+def test_as_path_if_length_safe_toml_str():
+    p = as_path_if_length_safe(template_repeat)
+    assert isinstance(p, Path)  # Review this spec.
+
+
 def test_get_env_info():
     info = get_env_info()
     assert 'hostname' in info

@@ -290,6 +290,7 @@ class WorkflowTemplateResolver:
         'train_with_baseline',
         'train_with_baseline_multiparams',
         'train_multiparams',
+        'repeat',
     ])
 
     @classmethod
@@ -415,16 +416,16 @@ class WorkflowTemplateResolver:
     @classmethod
     def _get_tasksets_multiparams(cls, d):
         tasks = []
-        for i_taskset, params in enumerate(d['params']):
-            params = dict(params)
-            nopilot = params.pop('nopilot', False)
-            i_taskset_pilot = params.pop('i_taskset_pilot', None)
+        for i_taskset, params_target in enumerate(d['params']):
+            params_target = dict(params_target)
+            nopilot = params_target.pop('nopilot', False)
+            i_taskset_pilot = params_target.pop('i_taskset_pilot', None)
             assert not (nopilot and i_taskset_pilot is not None), \
                 'i_taskset_pilot cannot be used when nopilot is set'
             tasks_ = cls.get_taskset(
                 d, i_taskset, i_taskset_pilot=i_taskset_pilot, nopilot=nopilot,
             )
-            for k, v in params.items():
+            for k, v in params_target.items():
                 if k == 'criterion_train':
                     for task in tasks_:
                         if task['task_type'] == 'train':
@@ -449,6 +450,24 @@ class WorkflowTemplateResolver:
         return cls._get_tasksets_multiparams(d)
 
     @classmethod
+    def get_tasks_repeat(cls, d):
+        assert set(d) == {'template_type', 'tasks', 'params'}
+        counter = {}
+        tasks = []
+        for i_task, task_raw in enumerate(d['tasks']):
+            assert 'task_type' in task_raw
+            task_type = task_raw['task_type']
+            if task_type not in counter:
+                counter[task_type] = 0
+            counter[task_type] += 1
+            task_name_base = task_type.capitalize() + ' ' + str(counter[task_type] - 1)
+            for i_param, param_raw in enumerate(d['params']):
+                task = copy.deepcopy(task_raw | param_raw)
+                task['name'] = f'{task_name_base} {i_param}'
+                tasks.append(task)
+        return tasks
+
+    @classmethod
     def resolve(cls, d: dict) -> dict:
         if 'template' not in d:
             return d
@@ -462,6 +481,8 @@ class WorkflowTemplateResolver:
             d['tasks'] = cls.get_tasks_train_with_baseline_multiparams(d_tmpl)
         if type_ == cls.Type.train_multiparams:
             d['tasks'] = cls.get_tasks_train_multiparams(d_tmpl)
+        if type_ == cls.Type.repeat:
+            d['tasks'] = cls.get_tasks_repeat(d_tmpl)
         return d
 
 
@@ -519,7 +540,7 @@ def normalize_config(source: dict | Path | str):
     elif isinstance(source, str):
         s = source.strip()
         path_or_none = as_path_if_length_safe(s)
-        if isinstance(path_or_none, Path):
+        if isinstance(path_or_none, Path) and path_or_none.is_file():
             d = load_config_from_path(path_or_none)
             p = path_or_none
         else:
