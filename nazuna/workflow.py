@@ -340,7 +340,7 @@ class WorkflowTemplateResolver:
     def get_task_train(cls, d, i_taskset=0, i_taskset_pilot=None, nopilot=False):
         task = {
             'task_type': 'train', 'name': f'Train {i_taskset}', 'early_stop': False,
-            'model_state_path': None, 'seed': 0,
+            'model_state_path': None, 'seed': 0, 'n_batch': 0,
         }
         keys = ['data_range_train', 'criterion_eval', 'model', 'batch_sampler'] + \
             cls._optimizer_keys(d)

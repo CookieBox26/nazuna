@@ -548,6 +548,7 @@ class TrainTaskRunner(EvalTaskRunner):
                 break
             self._log(f'Epoch {i_epoch} started')
             print(f'----- Epoch {i_epoch} -----')
+
             epoch_record = {'i_epoch': i_epoch}
             with measure_time(raise_if_elapsed_over_min=self.raise_if_epoch_elapsed_over_min):
                 loss_train, n_batch_done = self.train(i_epoch, n_batch_done)
@@ -569,11 +570,13 @@ class TrainTaskRunner(EvalTaskRunner):
 
             epoch_record['eval'] = loss_eval
             loss_history.append(epoch_record)
+
             loss_per_sample_eval = loss_eval['loss_per_sample']
             if loss_per_sample_eval < loss_per_sample_eval_best:
                 loss_per_sample_eval_best = loss_per_sample_eval
                 early_stop_counter = 0
                 self.result['i_epoch_best'] = i_epoch
+                self.result['n_batch_best'] = n_batch_done
                 self.result['loss_per_sample_eval_best'] = loss_per_sample_eval_best
                 self.result['loss_per_sample_train_end'] = loss_train['loss_per_sample']
                 self.save_model('model_state.pth')
@@ -584,7 +587,6 @@ class TrainTaskRunner(EvalTaskRunner):
             if stop:
                 break
 
-        self.result['n_batch'] = n_batch_done
         history_path = self.out_path / 'train_loss_history.toml'
         history_path.write_text(
             toml.dumps({'epochs': loss_history}),
@@ -870,6 +872,7 @@ class OptunaTaskRunner(BaseTaskRunner):
         self._log(f'Trial {i_trial} started')
         losses = []
         i_epoch_bests = []
+        n_batch_bests = []
         best_model_state_this_trial = None
         best_loss_this_trial = float('inf')
         for i_fold, d in enumerate(self.data_ranges_with_train_seeds):
@@ -904,11 +907,13 @@ class OptunaTaskRunner(BaseTaskRunner):
             fold_loss = runner.result.get('loss_per_sample_eval_best', float('inf'))
             losses.append(fold_loss)
             i_epoch_bests.append(runner.result.get('i_epoch_best', -1))
+            n_batch_bests.append(runner.result.get('n_batch_best', -1))
             if fold_loss < best_loss_this_trial:
                 best_loss_this_trial = fold_loss
                 best_model_state_this_trial = copy.deepcopy(runner.model.state_dict())
         trial.set_user_attr('fold_losses', losses)
         trial.set_user_attr('fold_i_epoch_bests', i_epoch_bests)
+        trial.set_user_attr('fold_n_batch_bests', n_batch_bests)
         mean_loss = sum(losses) / len(losses)
         if (
             self._best_model_state is None
@@ -990,6 +995,7 @@ class OptunaTaskRunner(BaseTaskRunner):
             if 'fold_losses' in t.user_attrs:
                 record['fold_losses'] = t.user_attrs['fold_losses']
                 record['fold_i_epoch_bests'] = t.user_attrs['fold_i_epoch_bests']
+                record['fold_n_batch_bests'] = t.user_attrs['fold_n_batch_bests']
             if 'exception' in t.user_attrs:
                 record['exception'] = t.user_attrs['exception']
             trials_history.append(record)
