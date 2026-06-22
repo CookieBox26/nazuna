@@ -1,0 +1,34 @@
+import torch
+
+
+class CoupledAdam(torch.optim.Optimizer):
+    def __init__(self, params, lr=0.1, betas=(0.9, 0.999), eps=1e-8):
+        defaults = {'lr': lr, 'betas': betas, 'eps': eps}
+        super().__init__(params, defaults)
+
+    @torch.no_grad()
+    def step(self):
+        for group in self.param_groups:
+            lr = group['lr']
+            beta1, beta2 = group['betas']
+            eps = group['eps']
+            for p in group['params']:
+                if p.grad is None:
+                    continue
+                grad = p.grad
+                state = self.state[p]
+                if len(state) == 0:
+                    state['step'] = 0
+                    state['exp_avg'] = torch.zeros_like(p)
+                    state['exp_avg_sq'] = torch.zeros_like(p)
+                state['step'] += 1
+                step = state['step']
+                exp_avg = state['exp_avg']
+                exp_avg_sq = state['exp_avg_sq']
+                exp_avg.mul_(beta1).add_(grad, alpha=1 - beta1)
+                exp_avg_sq.mul_(beta2).addcmul_(grad, grad, value=1 - beta2)
+                m_hat = exp_avg / (1 - beta1 ** step)
+                v_hat = exp_avg_sq / (1 - beta2 ** step)
+                if p.ndim == 2:
+                    v_hat = v_hat.mean(dim=0, keepdim=True).expand_as(p)
+                p.addcdiv_(m_hat, v_hat.sqrt().add(eps), value=-lr)
