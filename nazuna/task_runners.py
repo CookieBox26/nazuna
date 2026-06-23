@@ -389,6 +389,7 @@ class TrainTaskRunner(EvalTaskRunner):
 
     raise_if_epoch_elapsed_over_min: int = -1
     save_model_state_every_epoch: bool = False
+    save_model_state_ini: bool = False
     i_epoch_to_force_save_model: int = -1
 
     class _OptimizerGroups:
@@ -531,6 +532,8 @@ class TrainTaskRunner(EvalTaskRunner):
 
         self.model = self.model_cls.create(self.device, **self.model_params)
         self.model.set_optimizers(self.optimizer_groups)
+        if self.save_model_state_ini:
+            self.save_model('model_state_ini.pth')
 
         loss_per_sample_eval_best = float('inf')
         early_stop_counter = 0

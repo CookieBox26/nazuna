@@ -341,9 +341,12 @@ class WorkflowTemplateResolver:
         task = {
             'task_type': 'train', 'name': f'Train {i_taskset}', 'early_stop': False,
             'model_state_path': None, 'seed': 0, 'n_batch': 0,
+            'save_model_state_ini': False,
         }
         keys = ['data_range_train', 'criterion_eval', 'model', 'batch_sampler'] + \
             cls._optimizer_keys(d)
+        if 'save_model_state_ini' in d:
+            keys.append('save_model_state_ini')
         rename = {'criterion_eval': 'criterion'}
         if 'criterion_train' in d:
             keys.append('criterion_train')
