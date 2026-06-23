@@ -389,6 +389,7 @@ class TrainTaskRunner(EvalTaskRunner):
 
     raise_if_epoch_elapsed_over_min: int = -1
     save_model_state_every_epoch: bool = False
+    i_epoch_to_force_save_model: int = -1
 
     class _OptimizerGroups:
         class _OptimizerGroup:
@@ -455,6 +456,8 @@ class TrainTaskRunner(EvalTaskRunner):
                 'lr_scheduler_interval': self.lr_scheduler_interval,
             }})
         self.model_cls.validate_optimizer_groups(self.optimizer_groups)
+
+        assert not (self.early_stop and self.i_epoch_to_force_save_model >= 0)
 
         if self.n_epoch_path is None:
             assert (self.n_epoch > 0) != (self.n_batch > 0)
@@ -540,6 +543,7 @@ class TrainTaskRunner(EvalTaskRunner):
             self.result['data_range_eval'] = self.data_loader_eval.dataset.info
             self.result['n_sample_eval'] = self.data_loader_eval.dataset.n_sample
 
+        force_save = self.i_epoch_to_force_save_model >= 0
         loss_history = []
         n_batch_done = 0
         n_epoch_max = self.n_batch if self.n_batch > 0 else self.n_epoch
@@ -553,6 +557,10 @@ class TrainTaskRunner(EvalTaskRunner):
             with measure_time(raise_if_elapsed_over_min=self.raise_if_epoch_elapsed_over_min):
                 loss_train, n_batch_done = self.train(i_epoch, n_batch_done)
             epoch_record['train'] = loss_train
+
+            if force_save and i_epoch == self.i_epoch_to_force_save_model:
+                self.save_model('model_state.pth')
+                self.result['i_epoch_of_saved_model'] = i_epoch
 
             if self.data_range_eval is None:
                 loss_history.append(epoch_record)
@@ -579,7 +587,9 @@ class TrainTaskRunner(EvalTaskRunner):
                 self.result['n_batch_best'] = n_batch_done
                 self.result['loss_per_sample_eval_best'] = loss_per_sample_eval_best
                 self.result['loss_per_sample_train_end'] = loss_train['loss_per_sample']
-                self.save_model('model_state.pth')
+                if not force_save:
+                    self.result['i_epoch_of_saved_model'] = i_epoch
+                    self.save_model('model_state.pth')
             else:
                 early_stop_counter += 1
             if (self.early_stop) and (early_stop_counter >= self.patience):
@@ -587,6 +597,7 @@ class TrainTaskRunner(EvalTaskRunner):
             if stop:
                 break
 
+        self.result['n_epoch_executed'] = i_epoch + 1
         history_path = self.out_path / 'train_loss_history.toml'
         history_path.write_text(
             toml.dumps({'epochs': loss_history}),
@@ -595,7 +606,9 @@ class TrainTaskRunner(EvalTaskRunner):
 
         if self.data_range_eval is None:
             self.result['loss_per_sample_train_end'] = loss_train['loss_per_sample']
-            torch.save(self.model.state_dict(), self.out_path / 'model_state.pth')
+            if not force_save:
+                self.result['i_epoch_of_saved_model'] = i_epoch
+                torch.save(self.model.state_dict(), self.out_path / 'model_state.pth')
 
 
 @dataclasses.dataclass
