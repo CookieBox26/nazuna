@@ -1,7 +1,8 @@
 from nazuna.models._base import BasicBaseModel
 from nazuna.models.common import \
-    MultiheadAttention, TransformerEncoderLayer, Patchifier
+    MultiheadAttention, TransformerEncoderLayer, Patchifier, TimeFeatureEmbedding
 import math
+import numpy as np
 import torch
 
 
@@ -23,6 +24,7 @@ class Gateformer(BasicBaseModel):
         d_model: int = 512, n_heads: int = 8, d_ff: int = 2048, e_layers: int = 2,
         dropout_emb: float = 0.1, dropout_aw: float = 0.1, dropout_sa: float = 0.1,
         dropout_ff: tuple[float, float] = (0.0, 0.2), res_attention: bool = False,
+        use_time_features: bool = False, freq: str = 'hour',
         scaler_cls: type | None = None, scaler_params: dict | None = None,
         prep_type: str = 'none',
         use_revin: bool = True, revin_affine: bool = False, revin_eps: float = 1e-5,
@@ -38,6 +40,10 @@ class Gateformer(BasicBaseModel):
             revin_affine=revin_affine, c_in=c_in,
             use_lc=use_lc, lc_end_epoch=lc_end_epoch, lc_rate=lc_rate,
         )
+
+        self.use_time_features = use_time_features
+        if self.use_time_features:
+            self.tfe = TimeFeatureEmbedding(self.device, freq, d_model)
 
         self.patch_len = patch_len
         self.patchifier = Patchifier(patch_len, stride, padding_patch)
@@ -103,7 +109,16 @@ class Gateformer(BasicBaseModel):
             norm_first=True,
         )
 
-    def forward(self, x):
+    def _extract_input(self, batch):
+        x, prep_info = super()._extract_input(batch)
+        x_mark = None
+        if self.use_time_features:
+            tsta = np.asarray(batch.tsta[:, -self.seq_len:])
+            x_mark = self.tfe.get_feats(tsta)
+        return (x, x_mark), prep_info
+
+    def forward(self, input_):
+        x, x_mark = input_  # x: (B, L, C), x_mark: (B, L, n_feat) or None
         B, L, C = x.shape
 
         global_h = self.global_proj(x.transpose(1, 2))  # (B, C, d_model)
@@ -128,6 +143,11 @@ class Gateformer(BasicBaseModel):
         gate = torch.sigmoid(self.gate_w1(global_h) + self.gate_w2(temporal_h))
         h = gate * global_h + (1.0 - gate) * temporal_h
 
+        if x_mark is not None:
+            tf = self.global_proj(x_mark.transpose(1, 2))  # (B, n_feat, d_model)
+            tf = self.dropout_global(tf)
+            h = torch.cat([h, tf], dim=1)  # (B, C + n_feat, d_model)
+
         h_cross = h
         scores = None
         for layer in self.enc_variate:
@@ -136,6 +156,7 @@ class Gateformer(BasicBaseModel):
         gate = torch.sigmoid(self.gate_w3(h) + self.gate_w4(h_cross))
         h = gate * h + (1.0 - gate) * h_cross
 
-        y = self.out_proj(h)  # (B, C, pred_len)
+        y = self.out_proj(h)  # (B, C + n_feat, pred_len)
+        y = y[:, :C, :]  # (B, C, pred_len)
         y = y.transpose(1, 2)  # (B, pred_len, C)
         return y, {}
