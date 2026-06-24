@@ -22,7 +22,7 @@ class Gateformer(BasicBaseModel):
         patch_len: int = 8, stride: int = 8, padding_patch: str | None = 'end',
         d_model: int = 512, n_heads: int = 8, d_ff: int = 2048, e_layers: int = 2,
         dropout_emb: float = 0.1, dropout_aw: float = 0.1, dropout_sa: float = 0.1,
-        dropout_ff: tuple[float, float] = (0.0, 0.2),
+        dropout_ff: tuple[float, float] = (0.0, 0.2), res_attention: bool = False,
         scaler_cls: type | None = None, scaler_params: dict | None = None,
         prep_type: str = 'none',
         use_revin: bool = True, revin_affine: bool = False, revin_eps: float = 1e-5,
@@ -30,9 +30,8 @@ class Gateformer(BasicBaseModel):
         lc_end_epoch: int | None = None, lc_rate: float | None = None,
     ) -> None:
         assert seq_len >= patch_len >= stride, 'Expected seq_len >= patch_len >= stride'
-        assert d_model <= d_ff <= 4 * d_model, 'Expected d_model <= d_ff <= 4 * d_model'
         assert d_model % n_heads == 0, 'Expected d_model to be divisible by n_heads'
-        assert d_model // n_heads >= 8, 'Expected head_dim >= 8'
+        assert d_model // n_heads >= 4, 'Expected head_dim >= 4'
         super()._setup(
             seq_len, pred_len, scaler_cls, scaler_params, prep_type=prep_type,
             use_revin=use_revin, revin_eps=revin_eps,
@@ -64,6 +63,7 @@ class Gateformer(BasicBaseModel):
             )
             for _ in range(e_layers)
         ])
+        self.res_attention = res_attention
 
         head_nf = d_model * self.n_patches
         self.head_flatten = torch.nn.Flatten(start_dim=-2)
@@ -115,8 +115,9 @@ class Gateformer(BasicBaseModel):
         z = self.patch_proj(z) + self.pos_enc  # (B*C, P, d_model)
         z = self.dropout_emb(z)
 
+        scores = None
         for layer in self.enc_temporal:
-            z, _ = layer(z, None)
+            z, scores = layer(z, (scores if self.res_attention else None))
 
         z = z.reshape(B, C, P, -1)  # (B, C, P, d_model)
         z = z.transpose(2, 3)  # (B, C, d_model, P)
@@ -128,8 +129,9 @@ class Gateformer(BasicBaseModel):
         h = gate * global_h + (1.0 - gate) * temporal_h
 
         h_cross = h
+        scores = None
         for layer in self.enc_variate:
-            h_cross, _ = layer(h_cross, None)
+            h_cross, scores = layer(h_cross, (scores if self.res_attention else None))
 
         gate = torch.sigmoid(self.gate_w3(h) + self.gate_w4(h_cross))
         h = gate * h + (1.0 - gate) * h_cross
