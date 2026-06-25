@@ -24,6 +24,8 @@ class Gateformer(BasicBaseModel):
         d_model: int = 512, n_heads: int = 8, d_ff: int = 2048, e_layers: int = 2,
         dropout_emb: float = 0.1, dropout_aw: float = 0.1, dropout_sa: float = 0.1,
         dropout_ff: tuple[float, float] = (0.0, 0.2), res_attention: bool = False,
+        d_model_variate: int = -1, n_heads_variate: int = -1, d_ff_variate: int = -1,
+        e_layers_variate: int = -1, res_attention_variate: bool | None = None,
         use_time_features: bool = False, freq: str = 'hour',
         scaler_cls: type | None = None, scaler_params: dict | None = None,
         prep_type: str = 'none',
@@ -34,6 +36,17 @@ class Gateformer(BasicBaseModel):
         assert seq_len >= patch_len >= stride, 'Expected seq_len >= patch_len >= stride'
         assert d_model % n_heads == 0, 'Expected d_model to be divisible by n_heads'
         assert d_model // n_heads >= 4, 'Expected head_dim >= 4'
+        d_model_variate = d_model if d_model_variate == -1 else d_model_variate
+        n_heads_variate = n_heads if n_heads_variate == -1 else n_heads_variate
+        d_ff_variate = d_ff if d_ff_variate == -1 else d_ff_variate
+        e_layers_variate = e_layers if e_layers_variate == -1 else e_layers_variate
+        res_attention_variate = (
+            res_attention if res_attention_variate is None else res_attention_variate
+        )
+        assert d_model_variate % n_heads_variate == 0, \
+            'Expected d_model_variate to be divisible by n_heads_variate'
+        assert d_model_variate // n_heads_variate >= 4, \
+            'Expected variate head_dim >= 4'
         super()._setup(
             seq_len, pred_len, scaler_cls, scaler_params, prep_type=prep_type,
             use_revin=use_revin, revin_eps=revin_eps,
@@ -54,7 +67,7 @@ class Gateformer(BasicBaseModel):
         self.register_buffer('pos_enc', pe)
         self.dropout_emb = torch.nn.Dropout(dropout_emb)
 
-        self.global_proj = torch.nn.Linear(seq_len, d_model)
+        self.global_proj = torch.nn.Linear(seq_len, d_model_variate)
         self.dropout_global = torch.nn.Dropout(dropout_emb)
 
         self.enc_temporal = torch.nn.ModuleList([
@@ -65,23 +78,25 @@ class Gateformer(BasicBaseModel):
         ])
         self.enc_variate = torch.nn.ModuleList([
             self._build_encoder_layer(
-                d_model, n_heads, d_ff, dropout_aw, dropout_sa, dropout_ff,
+                d_model_variate, n_heads_variate, d_ff_variate,
+                dropout_aw, dropout_sa, dropout_ff,
             )
-            for _ in range(e_layers)
+            for _ in range(e_layers_variate)
         ])
         self.res_attention = res_attention
+        self.res_attention_variate = res_attention_variate
 
         head_nf = d_model * self.n_patches
         self.head_flatten = torch.nn.Flatten(start_dim=-2)
-        self.head_linear = torch.nn.Linear(head_nf, d_model)
+        self.head_linear = torch.nn.Linear(head_nf, d_model_variate)
         self.head_dropout = torch.nn.Dropout(dropout_emb)
 
-        self.gate_w1 = torch.nn.Linear(d_model, d_model)
-        self.gate_w2 = torch.nn.Linear(d_model, d_model)
-        self.gate_w3 = torch.nn.Linear(d_model, d_model)
-        self.gate_w4 = torch.nn.Linear(d_model, d_model)
+        self.gate_w1 = torch.nn.Linear(d_model_variate, d_model_variate)
+        self.gate_w2 = torch.nn.Linear(d_model_variate, d_model_variate)
+        self.gate_w3 = torch.nn.Linear(d_model_variate, d_model_variate)
+        self.gate_w4 = torch.nn.Linear(d_model_variate, d_model_variate)
 
-        self.out_proj = torch.nn.Linear(d_model, pred_len, bias=True)
+        self.out_proj = torch.nn.Linear(d_model_variate, pred_len, bias=True)
 
     @staticmethod
     def _build_sinusoidal_pe(max_len: int, d_model: int) -> torch.Tensor:
@@ -121,7 +136,7 @@ class Gateformer(BasicBaseModel):
         x, x_mark = input_  # x: (B, L, C), x_mark: (B, L, n_feat) or None
         B, L, C = x.shape
 
-        global_h = self.global_proj(x.transpose(1, 2))  # (B, C, d_model)
+        global_h = self.global_proj(x.transpose(1, 2))  # (B, C, d_model_variate)
         global_h = self.dropout_global(global_h)
 
         patches = self.patchifier(x)  # (B, C, P, patch_len)
@@ -137,21 +152,23 @@ class Gateformer(BasicBaseModel):
         z = z.reshape(B, C, P, -1)  # (B, C, P, d_model)
         z = z.transpose(2, 3)  # (B, C, d_model, P)
         temporal_h = self.head_flatten(z)  # (B, C, d_model * P)
-        temporal_h = self.head_linear(temporal_h)  # (B, C, d_model)
+        temporal_h = self.head_linear(temporal_h)  # (B, C, d_model_variate)
         temporal_h = self.head_dropout(temporal_h)
 
         gate = torch.sigmoid(self.gate_w1(global_h) + self.gate_w2(temporal_h))
         h = gate * global_h + (1.0 - gate) * temporal_h
 
         if x_mark is not None:
-            tf = self.global_proj(x_mark.transpose(1, 2))  # (B, n_feat, d_model)
+            tf = self.global_proj(x_mark.transpose(1, 2))  # (B, n_feat, d_model_variate)
             tf = self.dropout_global(tf)
-            h = torch.cat([h, tf], dim=1)  # (B, C + n_feat, d_model)
+            h = torch.cat([h, tf], dim=1)  # (B, C + n_feat, d_model_variate)
 
         h_cross = h
         scores = None
         for layer in self.enc_variate:
-            h_cross, scores = layer(h_cross, (scores if self.res_attention else None))
+            h_cross, scores = layer(
+                h_cross, (scores if self.res_attention_variate else None),
+            )
 
         gate = torch.sigmoid(self.gate_w3(h) + self.gate_w4(h_cross))
         h = gate * h + (1.0 - gate) * h_cross
