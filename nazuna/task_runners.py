@@ -433,6 +433,17 @@ class TrainTaskRunner(EvalTaskRunner):
                 if group.lr_scheduler_interval != interval:
                     continue
                 group.lr_scheduler.step()
+        def save_grad_records(self, out_path):
+            for name, group in self.groups.items():
+                optimizer = group.optimizer
+                if not getattr(optimizer, 'record_norms', False):
+                    continue
+                np.savez(
+                    out_path / f'grad_records_{name}.npz',
+                    class_name=np.array(type(optimizer).__name__),
+                    grad_norms=optimizer.grad_norms,
+                    update_norms=optimizer.update_norms,
+                )
 
     def __post_init__(self):
         super().__post_init__()
@@ -606,6 +617,7 @@ class TrainTaskRunner(EvalTaskRunner):
             toml.dumps({'epochs': loss_history}),
             newline='\n', encoding='utf8',
         )
+        self.optimizer_groups.save_grad_records(self.out_path)
 
         if self.data_range_eval is None:
             self.result['loss_per_sample_train_end'] = loss_train['loss_per_sample']

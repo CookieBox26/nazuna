@@ -1,6 +1,41 @@
 import torch
 
 
+class Adam(torch.optim.Adam):
+    def __init__(self, *args, record_norms=False, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.record_norms = record_norms
+        self._grad_sq_norms = []
+        self._update_sq_norms = []
+
+    @property
+    def grad_norms(self):
+        return torch.stack(self._grad_sq_norms).sqrt().cpu().numpy()
+
+    @property
+    def update_norms(self):
+        return torch.stack(self._update_sq_norms).sqrt().cpu().numpy()
+
+    @torch.no_grad()
+    def step(self, closure=None):
+        if self.record_norms:
+            params = [p for group in self.param_groups for p in group['params']]
+            device = params[0].device
+            grad_sq_norm = torch.zeros((), device=device)
+            for p in params:
+                if p.grad is not None:
+                    grad_sq_norm += p.grad.pow(2).sum()
+            prev = [p.detach().clone() for p in params]
+        loss = super().step(closure)
+        if self.record_norms:
+            update_sq_norm = torch.zeros((), device=device)
+            for p, q in zip(params, prev):
+                update_sq_norm += (p - q).pow(2).sum()
+            self._grad_sq_norms.append(grad_sq_norm)
+            self._update_sq_norms.append(update_sq_norm)
+        return loss
+
+
 class CoupledAdam(torch.optim.Optimizer):
     def __init__(self, params, lr=0.1, betas=(0.9, 0.999), eps=1e-8):
         defaults = {'lr': lr, 'betas': betas, 'eps': eps}
