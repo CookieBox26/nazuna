@@ -56,19 +56,39 @@ def test_set_optimizers(device):
         d_model=32, n_heads=4, d_ff=64, e_layers=2, n_dispatchers=4,
     )
     trainable = {id(p) for p in model.parameters() if p.requires_grad}
-    emb_expected = {id(p) for p in model.patch_proj.parameters()} | {id(model.pos_enc)}
+    expected = {
+        'emb': {id(p) for p in model.patch_proj.parameters()},
+        'pos': {id(model.pos_enc)},
+        'dispatcher': {id(model.dispatcher)},
+        'out': {id(p) for p in model.out_proj.parameters()},
+    }
 
     adam = {'cls_path': 'torch.optim.Adam', 'params': {'lr': 0.01}}
-    groups = TrainTaskRunner._OptimizerGroups({
-        'emb': {'optimizer': adam},
-        'body': {'optimizer': adam},
-    })
+    config = {name: {'optimizer': adam} for name in
+              ['emb', 'pos', 'dispatcher', 'out', 'body']}
+    groups = TrainTaskRunner._OptimizerGroups(config)
     model.set_optimizers(groups)
-    emb_ids = _optimized_param_ids(groups.groups['emb'].optimizer)
-    body_ids = _optimized_param_ids(groups.groups['body'].optimizer)
-    assert emb_ids == emb_expected
-    assert emb_ids.isdisjoint(body_ids)
-    assert emb_ids | body_ids == trainable
+    ids = {name: _optimized_param_ids(g.optimizer) for name, g in groups.groups.items()}
+    for name, expected_ids in expected.items():
+        assert ids[name] == expected_ids
+    assert set.union(*ids.values()) == trainable
+    for a in ids:
+        for b in ids:
+            if a != b:
+                assert ids[a].isdisjoint(ids[b])
+
+    # Without a dispatcher, the dispatcher group is dropped instead of created.
+    model = UniTSTLike.create(
+        device=device, seq_len=16, pred_len=4, c_in=3,
+        patch_len=8, stride=8,
+        d_model=32, n_heads=4, d_ff=64, e_layers=2, use_dispatcher=False,
+    )
+    trainable = {id(p) for p in model.parameters() if p.requires_grad}
+    groups = TrainTaskRunner._OptimizerGroups(config)
+    model.set_optimizers(groups)
+    assert 'dispatcher' not in groups.groups
+    ids = {name: _optimized_param_ids(g.optimizer) for name, g in groups.groups.items()}
+    assert set.union(*ids.values()) == trainable
 
     # A single 'model' group falls back to optimizing all parameters together.
     groups = TrainTaskRunner._OptimizerGroups({'model': {'optimizer': adam}})
