@@ -54,7 +54,7 @@ For details on how to write the TOML config file, see [How to Run](how_to_run.md
 
 ## Reference
 
-These are the reference documents. Supplementary notes in Japanese are available [here](notes_ja.md).
+These are the reference documents. Supplementary notes in Japanese are available [here](notes_ja.md). Update information in Japanese is available [here](updates_ja.md).
 
 - [Workflow](reference_workflow.md) &ndash; Workflow definition (the main entry point for running a nazuna pipeline).
 - [Task Runners](reference_task_runners.md) &ndash; Individual tasks executed within a workflow.
