@@ -178,39 +178,55 @@ class UniTSTLike(BasicBaseModel):
                 name, (p for p in params if p.requires_grad),
             )
 
+    # Part boundaries are hardcoded; 'other' is the catch-all.
+    @staticmethod
+    def _part_of(key):
+        if key.startswith('patch_proj.'):
+            return 'emb'
+        if key == 'pos_enc':
+            return 'pos'
+        if key == 'dispatcher':
+            return 'dispatcher'
+        if key.startswith('out_proj.'):
+            return 'out'
+        if key.startswith('revin.'):
+            return 'revin'
+        if key.startswith('blocks.'):
+            _, i, sub, *rest = key.split('.')
+            if sub == 'attn' and rest and rest[0] in ('aggregate', 'distribute'):
+                return f'block{i}.attn.{rest[0]}'
+            return f'block{i}.{sub}'
+        return 'other'
+
     @classmethod
     def calc_dists(cls, state_path_0, state_path_1):
         state_0 = torch.load(state_path_0, map_location='cpu')
         state_1 = torch.load(state_path_1, map_location='cpu')
 
-        # Part boundaries are hardcoded; 'body' is the catch-all.
-        part_names = ['emb', 'pos', 'dispatcher', 'out', 'body']
-
-        def part_of(key):
-            if key.startswith('patch_proj.'):
-                return 'emb'
-            if key == 'pos_enc':
-                return 'pos'
-            if key == 'dispatcher':
-                return 'dispatcher'
-            if key.startswith('out_proj.'):
-                return 'out'
-            return 'body'
-
         # BatchNorm running stats are buffers and are excluded.
         buffer_suffixes = ('.running_mean', '.running_var', '.num_batches_tracked')
-        diffs = {name: [] for name in part_names}
+        diffs = {}
         for key, tensor_0 in state_0.items():
             if key.endswith(buffer_suffixes):
                 continue
             diff = (tensor_0 - state_1[key]).reshape(-1)
-            diffs[part_of(key)].append(diff)
+            diffs.setdefault(cls._part_of(key), []).append(diff)
 
         result = {}
         for name, parts in diffs.items():
-            flat = torch.cat(parts) if parts else torch.empty(0)
+            flat = torch.cat(parts)
             result[name] = {
                 'num_params': flat.numel(),
                 'dist_l2': flat.norm().item(),
             }
         return result
+
+    @classmethod
+    def get_part_params(cls, state_path, part_name):
+        state = torch.load(state_path, map_location='cpu')
+        buffer_suffixes = ('.running_mean', '.running_var', '.num_batches_tracked')
+        return {
+            key: tensor
+            for key, tensor in state.items()
+            if not key.endswith(buffer_suffixes) and cls._part_of(key) == part_name
+        }

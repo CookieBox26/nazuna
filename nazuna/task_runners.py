@@ -435,15 +435,10 @@ class TrainTaskRunner(EvalTaskRunner):
                 group.lr_scheduler.step()
         def save_grad_records(self, out_path):
             for name, group in self.groups.items():
-                optimizer = group.optimizer
-                if not getattr(optimizer, 'record_norms', False):
+                save_records = getattr(group.optimizer, 'save_records', None)
+                if save_records is None:
                     continue
-                np.savez(
-                    out_path / f'grad_records_{name}.npz',
-                    class_name=np.array(type(optimizer).__name__),
-                    grad_norms=optimizer.grad_norms,
-                    update_norms=optimizer.update_norms,
-                )
+                save_records(out_path / f'grad_records_{name}.npz')
 
     def __post_init__(self):
         super().__post_init__()

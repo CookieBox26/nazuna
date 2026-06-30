@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 
 
@@ -7,6 +8,10 @@ class Adam(torch.optim.Adam):
         self.record_norms = record_norms
         self._grad_sq_norms = []
         self._update_sq_norms = []
+        self._exp_avg_sq_norms = []
+        self._exp_avg_sq_sq_norms = []
+        self._displacement_sq_norms = []
+        self._init_params = None
 
     @property
     def grad_norms(self):
@@ -15,6 +20,31 @@ class Adam(torch.optim.Adam):
     @property
     def update_norms(self):
         return torch.stack(self._update_sq_norms).sqrt().cpu().numpy()
+
+    @property
+    def exp_avg_norms(self):
+        return torch.stack(self._exp_avg_sq_norms).sqrt().cpu().numpy()
+
+    @property
+    def exp_avg_sq_norms(self):
+        return torch.stack(self._exp_avg_sq_sq_norms).sqrt().cpu().numpy()
+
+    @property
+    def displacement_norms(self):
+        return torch.stack(self._displacement_sq_norms).sqrt().cpu().numpy()
+
+    def save_records(self, out_path):
+        if not self.record_norms:
+            return
+        np.savez(
+            out_path,
+            class_name=np.array(type(self).__name__),
+            grad_norms=self.grad_norms,
+            update_norms=self.update_norms,
+            exp_avg_norms=self.exp_avg_norms,
+            exp_avg_sq_norms=self.exp_avg_sq_norms,
+            displacement_norms=self.displacement_norms,
+        )
 
     @torch.no_grad()
     def step(self, closure=None):
@@ -26,14 +56,37 @@ class Adam(torch.optim.Adam):
                 if p.grad is not None:
                     grad_sq_norm += p.grad.pow(2).sum()
             prev = [p.detach().clone() for p in params]
+            if self._init_params is None:
+                self._init_params = [p.detach().clone() for p in params]
         loss = super().step(closure)
         if self.record_norms:
             update_sq_norm = torch.zeros((), device=device)
-            for p, q in zip(params, prev):
+            displacement_sq_norm = torch.zeros((), device=device)
+            for p, q, p0 in zip(params, prev, self._init_params):
                 update_sq_norm += (p - q).pow(2).sum()
+                displacement_sq_norm += (p - p0).pow(2).sum()
+            exp_avg_sq_norm = torch.zeros((), device=device)
+            exp_avg_sq_sq_norm = torch.zeros((), device=device)
+            for p in params:
+                state = self.state[p]
+                if 'exp_avg' in state:
+                    exp_avg_sq_norm += state['exp_avg'].pow(2).sum()
+                    exp_avg_sq_sq_norm += state['exp_avg_sq'].pow(2).sum()
             self._grad_sq_norms.append(grad_sq_norm)
             self._update_sq_norms.append(update_sq_norm)
+            self._exp_avg_sq_norms.append(exp_avg_sq_norm)
+            self._exp_avg_sq_sq_norms.append(exp_avg_sq_sq_norm)
+            self._displacement_sq_norms.append(displacement_sq_norm)
         return loss
+
+
+class FrozenOptimizer(torch.optim.Optimizer):
+    def __init__(self, params, **kwargs):
+        super().__init__(params, defaults={})
+
+    @torch.no_grad()
+    def step(self, closure=None):
+        return None
 
 
 class CoupledAdam(torch.optim.Optimizer):
