@@ -536,7 +536,9 @@ class TrainTaskRunner(EvalTaskRunner):
             self.criterion_target = \
                 self.criterion_target_cls.create(self.device, **self.criterion_target_params)
 
-        self.model = self.model_cls.create(self.device, **self.model_params)
+        self.model = self.model_cls.create(
+            self.device, self.model_state_path, **self.model_params,
+        )
         self.model.set_optimizers(self.optimizer_groups)
         if self.save_model_state_ini:
             self.save_model('model_state_ini.pth')
