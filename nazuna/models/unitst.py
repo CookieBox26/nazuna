@@ -25,10 +25,11 @@ class _DispatcherAttention(torch.nn.Module):
 class _UniTSTBlock(torch.nn.Module):
     def __init__(
         self, d_model, n_heads, d_ff, dropout_aw=0.1, dropout_sa=0.1,
-        dropout_ff=(0.0, 0.1), use_dispatcher=True,
+        dropout_ff=(0.0, 0.1), use_dispatcher=True, norm_first=False,
     ):
         super().__init__()
         self.use_dispatcher = use_dispatcher
+        self.norm_first = norm_first
         if use_dispatcher:
             self.attn = _DispatcherAttention(d_model, n_heads, dropout_aw=dropout_aw)
         else:
@@ -45,20 +46,36 @@ class _UniTSTBlock(torch.nn.Module):
         self.norm_1 = BatchSeriesNorm(d_model)
 
     def forward(self, x, dispatcher, prev_attn_scores=None):
-        x_save = x
-        if self.use_dispatcher:
-            x, attn_scores = self.attn(
-                x, dispatcher, prev_attn_scores=prev_attn_scores,
-            )
+        if not self.norm_first:
+            x_save = x
+            if self.use_dispatcher:
+                x, attn_scores = self.attn(
+                    x, dispatcher, prev_attn_scores=prev_attn_scores,
+                )
+            else:
+                x, attn_scores = self.attn(x, x, x, prev_attn_scores=prev_attn_scores)
+            x = self.dropout_sa(x)
+            x = x_save + x
+            x = self.norm_0(x)
+            x_save = x
+            x = self.ff(x)
+            x = x_save + x
+            x = self.norm_1(x)
         else:
-            x, attn_scores = self.attn(x, x, x, prev_attn_scores=prev_attn_scores)
-        x = self.dropout_sa(x)
-        x = x_save + x
-        x = self.norm_0(x)
-        x_save = x
-        x = self.ff(x)
-        x = x_save + x
-        x = self.norm_1(x)
+            x_save = x
+            x = self.norm_0(x)
+            if self.use_dispatcher:
+                x, attn_scores = self.attn(
+                    x, dispatcher, prev_attn_scores=prev_attn_scores,
+                )
+            else:
+                x, attn_scores = self.attn(x, x, x, prev_attn_scores=prev_attn_scores)
+            x = self.dropout_sa(x)
+            x = x_save + x
+            x_save = x
+            x = self.norm_1(x)
+            x = self.ff(x)
+            x = x_save + x
         return x, attn_scores
 
 
@@ -88,6 +105,7 @@ class UniTSTLike(BasicBaseModel):
         use_dispatcher: bool = True, n_dispatchers: int = 8,
         dropout_emb: float = 0.1, dropout_aw: float = 0.1, dropout_sa: float = 0.1,
         dropout_ff: tuple[float, float] = (0.0, 0.2), res_attention: bool = False,
+        norm_first: bool = False,
         scaler_cls: type | None = None, scaler_params: dict | None = None,
         prep_type: str = 'none',
         use_revin: bool = True, revin_affine: bool = False, revin_eps: float = 1e-5,
@@ -126,7 +144,7 @@ class UniTSTLike(BasicBaseModel):
             _UniTSTBlock(
                 d_model=d_model, n_heads=n_heads, d_ff=d_ff,
                 dropout_aw=dropout_aw, dropout_sa=dropout_sa, dropout_ff=dropout_ff,
-                use_dispatcher=use_dispatcher,
+                use_dispatcher=use_dispatcher, norm_first=norm_first,
             )
             for _ in range(e_layers)
         ])
