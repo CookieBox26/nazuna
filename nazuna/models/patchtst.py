@@ -21,6 +21,7 @@ class PatchTST(BasicBaseModel):
         d_model: int = 128, n_heads: int = 16, d_ff: int = 256, e_layers: int = 2,
         dropout_emb: float = 0.1, dropout_aw: float = 0.1, dropout_sa: float = 0.1,
         dropout_ff: tuple[float, float] = (0.0, 0.2), res_attention: bool = True,
+        norm_first: bool = False,
         scaler_cls: type | None = None, scaler_params: dict | None = None,
         prep_type: str = 'none',
         use_revin: bool = True, revin_affine: bool = False, revin_eps: float = 1e-5,
@@ -53,6 +54,7 @@ class PatchTST(BasicBaseModel):
                 norm_1=BatchSeriesNorm(d_model),
                 activation=torch.nn.GELU(),
                 dropout_sa=dropout_sa, dropout_ff=dropout_ff,
+                norm_first=norm_first,
             )
             for _ in range(e_layers)
         ])
