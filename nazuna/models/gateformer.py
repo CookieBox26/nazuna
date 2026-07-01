@@ -24,8 +24,10 @@ class Gateformer(BasicBaseModel):
         d_model: int = 512, n_heads: int = 8, d_ff: int = 2048, e_layers: int = 2,
         dropout_emb: float = 0.1, dropout_aw: float = 0.1, dropout_sa: float = 0.1,
         dropout_ff: tuple[float, float] = (0.0, 0.2), res_attention: bool = False,
+        norm_first: bool = True,
         d_model_variate: int = -1, n_heads_variate: int = -1, d_ff_variate: int = -1,
         e_layers_variate: int = -1, res_attention_variate: bool | None = None,
+        norm_first_variate: bool | None = None,
         use_time_features: bool = False, freq: str = 'hour',
         scaler_cls: type | None = None, scaler_params: dict | None = None,
         prep_type: str = 'none',
@@ -42,6 +44,9 @@ class Gateformer(BasicBaseModel):
         e_layers_variate = e_layers if e_layers_variate == -1 else e_layers_variate
         res_attention_variate = (
             res_attention if res_attention_variate is None else res_attention_variate
+        )
+        norm_first_variate = (
+            norm_first if norm_first_variate is None else norm_first_variate
         )
         assert d_model_variate % n_heads_variate == 0, \
             'Expected d_model_variate to be divisible by n_heads_variate'
@@ -73,13 +78,14 @@ class Gateformer(BasicBaseModel):
         self.enc_temporal = torch.nn.ModuleList([
             self._build_encoder_layer(
                 d_model, n_heads, d_ff, dropout_aw, dropout_sa, dropout_ff,
+                norm_first,
             )
             for _ in range(e_layers)
         ])
         self.enc_variate = torch.nn.ModuleList([
             self._build_encoder_layer(
                 d_model_variate, n_heads_variate, d_ff_variate,
-                dropout_aw, dropout_sa, dropout_ff,
+                dropout_aw, dropout_sa, dropout_ff, norm_first_variate,
             )
             for _ in range(e_layers_variate)
         ])
@@ -112,7 +118,7 @@ class Gateformer(BasicBaseModel):
 
     @staticmethod
     def _build_encoder_layer(
-        d_model, n_heads, d_ff, dropout_aw, dropout_sa, dropout_ff,
+        d_model, n_heads, d_ff, dropout_aw, dropout_sa, dropout_ff, norm_first,
     ):
         return TransformerEncoderLayer(
             MultiheadAttention(d_model, n_heads, dropout_aw=dropout_aw),
@@ -121,7 +127,7 @@ class Gateformer(BasicBaseModel):
             norm_1=torch.nn.LayerNorm(d_model, eps=1e-5),
             activation=torch.nn.ReLU(),
             dropout_sa=dropout_sa, dropout_ff=dropout_ff,
-            norm_first=True,
+            norm_first=norm_first,
         )
 
     def _extract_input(self, batch):
