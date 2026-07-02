@@ -103,6 +103,7 @@ class UniTSTLike(BasicBaseModel):
         patch_len: int = 16, stride: int = 8, padding_patch: str | None = 'end',
         d_model: int = 128, n_heads: int = 8, d_ff: int = 256, e_layers: int = 2,
         use_dispatcher: bool = True, n_dispatchers: int = 8,
+        dispatcher_per_block: bool = False, dispatcher_init_normal: bool = False,
         dropout_emb: float = 0.1, dropout_aw: float = 0.1, dropout_sa: float = 0.1,
         dropout_ff: tuple[float, float] = (0.0, 0.2), res_attention: bool = False,
         norm_first: bool = False,
@@ -135,10 +136,22 @@ class UniTSTLike(BasicBaseModel):
         self.dropout_emb = torch.nn.Dropout(dropout_emb)
 
         self.use_dispatcher = use_dispatcher
+        self.dispatcher_per_block = dispatcher_per_block
         if use_dispatcher:
-            # Learnable dispatcher embeddings shared across the batch.
-            self.dispatcher = torch.nn.Parameter(torch.empty(n_dispatchers, d_model))
-            torch.nn.init.uniform_(self.dispatcher, -0.02, 0.02)
+            # Learnable dispatcher embeddings shared across the batch. A leading
+            # block axis is added when each block keeps its own dispatcher.
+            if dispatcher_per_block:
+                self.dispatcher = torch.nn.Parameter(
+                    torch.empty(e_layers, n_dispatchers, d_model)
+                )
+            else:
+                self.dispatcher = torch.nn.Parameter(
+                    torch.empty(n_dispatchers, d_model)
+                )
+            if dispatcher_init_normal:
+                torch.nn.init.normal_(self.dispatcher)
+            else:
+                torch.nn.init.uniform_(self.dispatcher, -0.02, 0.02)
 
         self.blocks = torch.nn.ModuleList([
             _UniTSTBlock(
@@ -161,12 +174,14 @@ class UniTSTLike(BasicBaseModel):
         z = self.dropout_emb(z)
         z = z.reshape(B, C * P, -1)  # (B, C*P, d_model)
 
-        if self.use_dispatcher:
-            dispatcher = self.dispatcher.unsqueeze(0).expand(B, -1, -1)
-        else:
-            dispatcher = None
         scores = None
-        for block in self.blocks:
+        for i, block in enumerate(self.blocks):
+            if not self.use_dispatcher:
+                dispatcher = None
+            elif self.dispatcher_per_block:
+                dispatcher = self.dispatcher[i].unsqueeze(0).expand(B, -1, -1)
+            else:
+                dispatcher = self.dispatcher.unsqueeze(0).expand(B, -1, -1)
             z, scores = block(z, dispatcher, (scores if self.res_attention else None))
 
         z = z.reshape(B, C, P, -1)  # (B, C, P, d_model)
