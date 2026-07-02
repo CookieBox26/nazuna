@@ -24,7 +24,7 @@ class iTransformer(BasicBaseModel):
         d_model: int = 512, n_heads: int = 8, d_ff: int = 512, e_layers: int = 2,
         dropout_emb: float = 0.1, dropout_aw: float = 0.1, dropout_sa: float = 0.1,
         dropout_ff: tuple[float, float] = (0.0, 0.2), res_attention: bool = False,
-        norm_first: bool = False,
+        norm_first: bool = False, use_pos_enc: bool = False,
         use_time_features: bool = True, freq: str = 'hour',
         scaler_cls: type | None = None, scaler_params: dict | None = None,
         prep_type: str = 'none',
@@ -46,6 +46,11 @@ class iTransformer(BasicBaseModel):
             self.tfe = TimeFeatureEmbedding(self.device, freq, d_model)
         self.embed = torch.nn.Linear(seq_len, d_model)
         self.dropout_emb = torch.nn.Dropout(dropout_emb)
+        self.use_pos_enc = use_pos_enc
+        if use_pos_enc:
+            # Learnable per-channel (variate) identity embedding.
+            self.pos_enc = torch.nn.Parameter(torch.empty(c_in, d_model))
+            torch.nn.init.uniform_(self.pos_enc, -0.02, 0.02)
 
         self.encoder_layers = torch.nn.ModuleList([
             TransformerEncoderLayer(
@@ -79,6 +84,9 @@ class iTransformer(BasicBaseModel):
         if x_mark is not None:
             h = torch.cat([h, x_mark.transpose(1, 2)], dim=1)  # (B, C + n_feat, L)
         h = self.embed(h)  # (B, C + n_feat, d_model)
+        if self.use_pos_enc:
+            # Add per-channel embedding to the data-channel tokens only.
+            h = torch.cat([h[:, :C] + self.pos_enc.unsqueeze(0), h[:, C:]], dim=1)
         h = self.dropout_emb(h)
 
         scores = None
