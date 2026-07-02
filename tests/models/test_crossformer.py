@@ -4,12 +4,14 @@ from nazuna.criteria import MSE
 import pytest
 
 
+@pytest.mark.parametrize('norm_first', [True, False])
 @pytest.mark.parametrize('prep_type', ['none', 'diff'])
 @pytest.mark.parametrize('revin_affine', [True, False])
-def test_forward(device, dummy_data, prep_type, revin_affine):
+def test_forward(device, dummy_data, prep_type, revin_affine, norm_first):
     model = Crossformer.create(
         device=device, seq_len=16, pred_len=4, c_in=3,
-        seg_len=6, d_model=32, n_heads=4, d_ff=64, e_layers=3,
+        patch_len=6, d_model=32, n_heads=4, d_ff=64, e_layers=3,
+        norm_first=norm_first,
         revin_affine=revin_affine,
         prep_type=prep_type,
     )
@@ -24,7 +26,7 @@ def test_get_loss(device, dummy_data, prep_type, revin_affine):
     seq_len_input = 16 + (0 if (prep_type == 'none') else 1)
     model = Crossformer.create(
         device=device, seq_len=16, pred_len=4, c_in=3,
-        seg_len=6, d_model=32, n_heads=4, d_ff=64, e_layers=3,
+        patch_len=6, d_model=32, n_heads=4, d_ff=64, e_layers=3,
         revin_affine=revin_affine,
         prep_type=prep_type,
     )
