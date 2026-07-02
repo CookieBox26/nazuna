@@ -33,6 +33,11 @@
 ::: nazuna.models.itransformer.iTransformer
 
 
+## Crossformer
+
+::: nazuna.models.crossformer.Crossformer
+
+
 ## Gateformer
 
 ::: nazuna.models.gateformer.Gateformer

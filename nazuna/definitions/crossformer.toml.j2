@@ -1,0 +1,27 @@
+[definitions.Crossformer]
+cls_path = "nazuna.models.crossformer.Crossformer"
+[definitions.Crossformer.params]
+seq_len_raw = {{ seq_len_raw }}
+seq_len = {{ seq_len }}
+pred_len = {{ pred_len }}
+c_in = {{ n_channel }}
+seg_len = 12
+win_size = 4
+factor = 10
+d_model = 256
+n_heads = 4
+d_ff = 512
+e_layers = 3
+dropout_emb = 0.1
+dropout_aw = 0.1
+dropout_sa = 0.1
+dropout_ff = [ 0.0, 0.2,]
+scaler_cls_path = ""
+scaler_params = {}
+prep_type = "none"
+use_revin = true
+revin_affine = false
+revin_eps = 1e-5
+use_lc = false
+lc_end_epoch = 20
+lc_rate = 0.9
