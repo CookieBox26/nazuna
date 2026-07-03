@@ -466,7 +466,8 @@ class WorkflowTemplateResolver:
             task_name_base = task_type.capitalize() + ' ' + str(counter[task_type] - 1)
             for i_param, param_raw in enumerate(d['params']):
                 task = copy.deepcopy(task_raw | param_raw)
-                task['name'] = f'{task_name_base} {i_param}'
+                param_name = task.pop('param_name', i_param)
+                task['name'] = f'{task_name_base} {param_name}'
                 tasks.append(task)
         return tasks
 
