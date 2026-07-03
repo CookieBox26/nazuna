@@ -622,6 +622,14 @@ class TrainTaskRunner(EvalTaskRunner):
                 self.result['i_epoch_of_saved_model'] = i_epoch
                 torch.save(self.model.state_dict(), self.out_path / 'model_state.pth')
 
+        # Skip when stopped by n_batch, where the last epoch is partial and does
+        # not give a full one-epoch train-loss decrease.
+        i_saved = self.result.get('i_epoch_of_saved_model')
+        if (not self.n_batch) and (i_saved is not None) and (i_saved >= 1):
+            loss_prev = loss_history[i_saved - 1]['train']['loss_per_sample']
+            loss_saved = loss_history[i_saved]['train']['loss_per_sample']
+            self.result['loss_decrease_last_epoch'] = loss_prev - loss_saved
+
 
 @dataclasses.dataclass
 class DiagnosticsTaskRunner(BaseTaskRunner):
