@@ -365,6 +365,11 @@ class TrainTaskRunner(EvalTaskRunner):
             `n_epoch_path`.
         early_stop (bool = False): Whether to enable early stopping.
             Stops training if evaluation loss does not improve for 5 consecutive epochs.
+        early_stop_loss_decrease (bool = False): Whether to stop training when the
+            per-sample train loss decrease from the previous epoch stays below
+            `loss_decrease_threshold` for `patience_loss_decrease` consecutive epochs.
+        loss_decrease_threshold (float = 0): Threshold for `early_stop_loss_decrease`.
+        patience_loss_decrease (int = 3): Patience for `early_stop_loss_decrease`.
     """
     data_range_train: tuple[int, int] = None
     data_offset_train: int = 0
@@ -386,6 +391,9 @@ class TrainTaskRunner(EvalTaskRunner):
     n_epoch_path_defer: bool = False
     early_stop: bool = False
     patience: int = 5
+    early_stop_loss_decrease: bool = False
+    loss_decrease_threshold: float = 0
+    patience_loss_decrease: int = 3
 
     raise_if_epoch_elapsed_over_min: int = -1
     save_model_state_every_epoch: bool = False
@@ -545,6 +553,8 @@ class TrainTaskRunner(EvalTaskRunner):
 
         loss_per_sample_eval_best = float('inf')
         early_stop_counter = 0
+        loss_decrease_counter = 0
+        prev_loss_per_sample_train = None
         stop = False
 
         self.result['cols_org'] = dict(zip(self.dm.cols, self.dm.cols_org))
@@ -569,12 +579,24 @@ class TrainTaskRunner(EvalTaskRunner):
                 loss_train, n_batch_done = self.train(i_epoch, n_batch_done)
             epoch_record['train'] = loss_train
 
+            if self.early_stop_loss_decrease and prev_loss_per_sample_train is not None:
+                decrease = prev_loss_per_sample_train - loss_train['loss_per_sample']
+                if decrease < self.loss_decrease_threshold:
+                    loss_decrease_counter += 1
+                else:
+                    loss_decrease_counter = 0
+                if loss_decrease_counter >= self.patience_loss_decrease:
+                    stop = True
+            prev_loss_per_sample_train = loss_train['loss_per_sample']
+
             if force_save and i_epoch == self.i_epoch_to_force_save_model:
                 self.save_model('model_state.pth')
                 self.result['i_epoch_of_saved_model'] = i_epoch
 
             if self.data_range_eval is None:
                 loss_history.append(epoch_record)
+                if stop:
+                    break
                 continue
 
             loss_eval = self.eval(output_loss_per_channel=False, output_scaled_loss=False)
