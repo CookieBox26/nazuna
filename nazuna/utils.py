@@ -16,7 +16,7 @@ def fix_seed(seed=0):
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     torch.backends.cudnn.deterministic = True
-    torch.use_deterministic_algorithms = True
+    torch.use_deterministic_algorithms(True, warn_only=True)
 
 
 def load_class(path):
