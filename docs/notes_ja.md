@@ -24,6 +24,7 @@ Nazuna では `Workflow` インスタンスを生成して実行することを�
 - `suppress_plot` &mdash; `True` ならグラフを出力しない。
 - `force_replot` &mdash; `True` ならデータに基づくグラフが既に存在しても、強制的にグラフを再出力する。このフラグは `skip_task_ids` または `report_only` によって全てのタスクがスキップされたときにのみ発動する。プロット関数の変更時に強制再出力するケース向けである。
 - `report_only` &mdash; `True` ならタスクを実行せずレポート出力のみ行う (`--skip_task_ids_` で全タスクをスキップするのと等価)。
+- `dryrun` &mdash; `True` ならドライランする。
 
 !!! Tip
 
@@ -67,7 +68,7 @@ Nazuna では `Workflow` インスタンスを生成して実行することを�
     - コンストラクタ &ndash; モデルを構築し、実行デバイスに移動する。
     - `create(device, state_path, **setup_args)` (クラスメソッド) &ndash; `state_path` が渡された場合にはインスタンス初期化後に訓練済パラメータをロードする。
         - `scaler` をもつモデルの場合、スケール係数テンソルのロード直前に、予め訓練済パラメータ内のスケール係数と同じ形のゼロテンソルをセットする (便利のためスケーラにはチャネル数の遅延セットを許容しており、最初のバッチが流れてくるまでチャネル数をもたないための措置である)。
-    - `get_loss_and_backward(batch, criterion)` &ndash; 勾配を取るべき損失 (`TimeSeriesError` インスタンス) を取得して、バックワードする (＝損失の勾配を各パラメータの `grad` にセットする)。このとき、`TimeSeriesError.grad_target` の勾配を計算する (このデータメンバが未セットの場合はデフォルトで `TimeSeriesError.batch_mean` の勾配を計算する)。
+    - `get_loss_and_backward(batch, criterion)` &ndash; 勾配を取るべき損失 (`TimeSeriesError` インスタンス) を取得して、バックワードする (＝損失の勾配を各パラメータの `grad` にセットする)。このとき、`TimeSeriesError.grad_target` の勾配を計算する (このデータメンバが未セットの場合はデフォルトで `TimeSeriesError.each_sample` の平均の勾配を計算する)。
 
 `BaseModel` クラスのメソッドのうち、以下は派生クラスで実装される必要がある (ただし、後述の `BasicBaseModel` を継承すれば **A2, A4, A5, A6** が実装済みである)。
 
@@ -95,7 +96,7 @@ Nazuna では `Workflow` インスタンスを生成して実行することを�
 
 `BasicBaseModel(BaseModel)` クラスは、ハイパーパラメータ `seq_len`, `pred_len` をもち、現時点までの `seq_len` ステップの観測値から未来の `pred_len` ステップを予測する基本的なモデルの規定クラスとして用意したものである。
 
-このクラスでは **A2, A4, A5, A6** が以下のように実装済みなので、最低限 **A1, A3** を実装すれば済む。ただし、タイムスタンプを要するクラスの場合は **A2** をオーバーライドしてさらに `bath.tsta[:, -self.seq_len:]` を抽出するなどする必要がある。
+このクラスでは **A2, A4, A5, A6** が以下のように実装済みなので、最低限 **A1, A3** を実装すれば済む。ただし、タイムスタンプを要するクラスの場合は **A2** をオーバーライドしてさらに `batch.tsta[:, -self.seq_len:]` を抽出するなどする必要がある。
 
 !!! info "`BasicBaseModel` クラスでオーバーライド済の抽象メソッド"
 
@@ -148,8 +149,6 @@ Nazuna では `Workflow` インスタンスを生成して実行することを�
 - 以下の相違点は、公式実装と異なる。
     - top-k の計算式が、公式実装は int(factor * math.log(length)) であるところを、max(1, topk_factor * math.log(l+1)) にしている。
 
-- AutoCorrelation 層
-
 ### `PatchTST` クラス
 
 公式実装 [204c21e](https://github.com/yuqinie98/PatchTST/tree/204c21efe0b39603ad6e2ca640ef5896646ab1a9) に倣っている。
@@ -169,6 +168,18 @@ Nazuna では `Workflow` インスタンスを生成して実行することを�
 公式実装の詳細は[こちら](https://cookiebox26.github.io/cookipedia/articles/yong_liu_et_al_2024.html)を参照。
 
 - 位置エンコーディングや時間特徴エンコーディングはない (転置によって各ステップが各チャネルになったため、これらのようなエンコーディングは意味をなさなくなる)。
+
+#### Nazuna 版の相違点
+
+### `Gateformer` クラス
+
+#### モデル構造の詳細
+
+#### Nazuna 版の相違点
+
+### `UniTSTLike` クラス
+
+#### モデル構造の詳細
 
 #### Nazuna 版の相違点
 

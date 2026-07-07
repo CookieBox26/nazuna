@@ -95,7 +95,7 @@ class BatchSamplerBatchShuffle(BatchSampler):
         self.i_batch_actual += 1
         if self.i_batch_actual == self.n_batch:
             raise StopIteration()
-         # Map the current batch index to the shuffled batch order.
+        # Map the current batch index to the shuffled batch order.
         return self._get_i_batch(self.batch_ids_shuffled[self.i_batch_actual])
 
 
