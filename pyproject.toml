@@ -61,7 +61,8 @@ artifacts = [ "nazuna/datasets/**/*.csv",]
 addopts = "-q -m 'not slow'"
 markers = [ "slow: time-consuming tests",]
 filterwarnings = [
-  "ignore:.*The NVIDIA driver on your system is too old.*:UserWarning",
+    "ignore:.*The NVIDIA driver on your system is too old.*:UserWarning",
+    "ignore:.*median CUDA with indices output.*:UserWarning",
 ]
 
 [tool.ruff.lint]

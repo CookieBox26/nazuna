@@ -1,3 +1,7 @@
+import os
+os.environ.setdefault('CUBLAS_WORKSPACE_CONFIG', ':4096:8')
+import warnings
+warnings.filterwarnings('ignore', message='.*median CUDA with indices output.*')
 from nazuna.workflow import run
 import nazuna.examples
 import argparse

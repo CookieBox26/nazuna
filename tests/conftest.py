@@ -1,3 +1,5 @@
+import os
+os.environ.setdefault('CUBLAS_WORKSPACE_CONFIG', ':4096:8')
 from nazuna.data_manager import TimeSeriesDataManager
 from nazuna.datasets import get_dataset_path
 import pytest
