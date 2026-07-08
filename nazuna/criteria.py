@@ -3,6 +3,21 @@ import dataclasses
 import torch
 
 
+def _make_w_channel(n_channel, device):
+    w = torch.ones(n_channel, dtype=torch.float, device=device)
+    return w / w.sum()
+
+
+def _make_w_seq(pred_len, decay_rate, device):
+    if decay_rate is None or decay_rate == 1:
+        w = torch.ones(pred_len, dtype=torch.float, device=device)
+    else:
+        idx = torch.arange(pred_len, dtype=torch.float, device=device)
+        base = torch.tensor(decay_rate, dtype=torch.float, device=device)
+        w = torch.pow(base, idx)  # [1, r, r^2, ...]
+    return w / w.sum()
+
+
 @dataclasses.dataclass
 class TimeSeriesError:
     each_sample: torch.Tensor  # (B,)
@@ -68,21 +83,8 @@ class MSE(BaseError):
         self.pred_len = pred_len
         self.decay_rate = decay_rate
         self.tolerance = tolerance
-        self._set_w_channel()
-        self._set_w_seq()
-
-    def _set_w_channel(self):
-        self.w_channel = torch.ones(self.n_channel, dtype=torch.float, device=self.device)
-        self.w_channel /= self.w_channel.sum()
-
-    def _set_w_seq(self):
-        r = self.decay_rate
-        if r is None or r == 1:
-            w = torch.ones(self.pred_len, dtype=torch.float, device=self.device)
-        else:
-            idx = torch.arange(self.pred_len, dtype=torch.float, device=self.device)
-            w = torch.pow(torch.tensor(r, dtype=torch.float, device=self.device), idx)  # [1, r, r^2, ...]
-        self.w_seq = w / w.sum()
+        self.w_channel = _make_w_channel(self.n_channel, self.device)
+        self.w_seq = _make_w_seq(self.pred_len, self.decay_rate, self.device)
 
     def get_error(self, pred, true):
         error = pred[:, :self.pred_len, :] - true[:, :self.pred_len, :]
@@ -144,21 +146,8 @@ class ImprovementRate(BaseImprovement):
         self.tolerance = tolerance
         self.epsilon = epsilon
         self.error_type = error_type
-        self._set_w_channel()
-        self._set_w_seq()
-
-    def _set_w_channel(self):
-        self.w_channel = torch.ones(self.n_channel, dtype=torch.float, device=self.device)
-        self.w_channel /= self.w_channel.sum()
-
-    def _set_w_seq(self):
-        r = self.decay_rate
-        if r is None or r == 1:
-            w = torch.ones(self.pred_len, dtype=torch.float, device=self.device)
-        else:
-            idx = torch.arange(self.pred_len, dtype=torch.float, device=self.device)
-            w = torch.pow(torch.tensor(r, dtype=torch.float, device=self.device), idx)
-        self.w_seq = w / w.sum()
+        self.w_channel = _make_w_channel(self.n_channel, self.device)
+        self.w_seq = _make_w_seq(self.pred_len, self.decay_rate, self.device)
 
     def get_raw_error(self, pred, true):
         error = pred[:, :self.pred_len, :] - true[:, :self.pred_len, :]
