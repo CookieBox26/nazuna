@@ -165,6 +165,10 @@ class UniTSTLike(BasicBaseModel):
 
         self.out_proj = torch.nn.Linear(d_model * self.n_patches, self.pred_len)
 
+        # Final normalization for the pre-norm variant, added last to keep the
+        # random initialization of the other layers independent of norm_first.
+        self.norm_out = BatchSeriesNorm(d_model) if norm_first else None
+
     def forward(self, x):
         B, L, C = x.shape
         patches = self.patchifier(x)  # (B, C, P, patch_len)
@@ -183,6 +187,8 @@ class UniTSTLike(BasicBaseModel):
             else:
                 dispatcher = self.dispatcher.unsqueeze(0).expand(B, -1, -1)
             z, scores = block(z, dispatcher, (scores if self.res_attention else None))
+        if self.norm_out is not None:
+            z = self.norm_out(z)
 
         z = z.reshape(B, C, P, -1)  # (B, C, P, d_model)
         z = z.reshape(B, C, -1)  # (B, C, P * d_model)
