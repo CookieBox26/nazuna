@@ -397,6 +397,7 @@ class TrainTaskRunner(EvalTaskRunner):
 
     raise_if_epoch_elapsed_over_min: int = -1
     save_model_state_every_epoch: bool = False
+    save_model_state_epochs: list[int] | None = None
     save_model_state_ini: bool = False
     i_epoch_to_force_save_model: int = -1
 
@@ -519,6 +520,9 @@ class TrainTaskRunner(EvalTaskRunner):
         self.optimizer_groups.step_lr_scheduler('epoch')
 
         if self.save_model_state_every_epoch and (i_epoch > -1):
+            self.save_model(f'model_state_{i_epoch}.pth')
+        elif (self.save_model_state_epochs is not None
+                and i_epoch in self.save_model_state_epochs):
             self.save_model(f'model_state_{i_epoch}.pth')
 
         if not self.n_batch:
