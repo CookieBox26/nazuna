@@ -106,7 +106,7 @@ class UniTSTLike(BasicBaseModel):
         dispatcher_per_block: bool = False, dispatcher_init_normal: bool = False,
         dropout_emb: float = 0.1, dropout_aw: float = 0.1, dropout_sa: float = 0.1,
         dropout_ff: tuple[float, float] = (0.0, 0.2), res_attention: bool = False,
-        norm_first: bool = False,
+        norm_first: bool = False, norm_out: bool = True,
         scaler_cls: type | None = None, scaler_params: dict | None = None,
         prep_type: str = 'none',
         use_revin: bool = True, revin_affine: bool = False, revin_eps: float = 1e-5,
@@ -167,7 +167,8 @@ class UniTSTLike(BasicBaseModel):
 
         # Final normalization for the pre-norm variant, added last to keep the
         # random initialization of the other layers independent of norm_first.
-        self.norm_out = BatchSeriesNorm(d_model) if norm_first else None
+        self.norm_out = \
+            BatchSeriesNorm(d_model) if norm_first and norm_out else None
 
     def forward(self, x):
         B, L, C = x.shape
