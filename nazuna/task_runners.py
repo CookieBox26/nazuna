@@ -510,8 +510,6 @@ class TrainTaskRunner(EvalTaskRunner):
             )
             loss_total += loss.get_sum()
             n_sample += batch.data.shape[0]
-            if self.save_model_state_every_epoch and (i_epoch == 0):
-                self.save_model('model_state_ini.pth')
             self.optimizer_groups.step_optimizer()
             self.optimizer_groups.step_lr_scheduler('step')
             n_batch_done += 1
