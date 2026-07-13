@@ -644,7 +644,7 @@ class TrainTaskRunner(EvalTaskRunner):
             self.result['loss_per_sample_train_end'] = loss_train['loss_per_sample']
             if not force_save:
                 self.result['i_epoch_of_saved_model'] = i_epoch
-                torch.save(self.model.state_dict(), self.out_path / 'model_state.pth')
+                self.save_model('model_state.pth')
 
         # Skip when stopped by n_batch, where the last epoch is partial and does
         # not give a full one-epoch train-loss decrease.

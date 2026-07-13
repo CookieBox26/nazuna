@@ -149,7 +149,7 @@ class Workflow:
             base_name = definition_raw['base']
             definition_base = self.get_definition(base_name, _depth=_depth + 1)
             for k, v in definition_base.items():
-                 definition[k] = copy.deepcopy(v)
+                definition[k] = copy.deepcopy(v)
         for k, v in definition_raw.items():
             if k == 'base':
                 continue
@@ -259,7 +259,7 @@ class Workflow:
             if not report_only:
                 for i_task, task_runner in enumerate(task_runners):
                     if len(target_tasks) > 0:
-                        if not task_runner.name in target_tasks:
+                        if task_runner.name not in target_tasks:
                             continue
                     if i_task in skip_task_ids:
                         continue
