@@ -25,8 +25,10 @@ The following options are also available:
   and is intended for cases such as updating the plotting function.
 - `--report_only` &mdash; Do not run any task; only generate the report
   (equivalent to skipping all tasks via `--skip_task_ids`).
+- `--dryrun` &mdash; Do not run any task; only print which tasks would run.
+  No report is generated. Useful for checking a workflow before running it.
 - `--example` &mdash; Run a bundled example config (including data).
-  Specify a TOML file under [nazuna/examples/](https://github.com/CookieBox26/nazuna/tree/main/nazuna/examples), e.g., `jma_train_dlinear`
+  Specify a TOML file under [nazuna/examples/](https://github.com/CookieBox26/nazuna/tree/main/nazuna/examples), e.g., `_example_train_dlinear`
   (extension optional). No config path is required in this case.
 
 

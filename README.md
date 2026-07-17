@@ -60,7 +60,7 @@ uv run nazuna --example jma11_linears
 uv run nazuna config.toml
 
 # Skip all tasks and regenerate the report only (force replot graphs)
-uv run nazuna config.toml -s 0-99 -f
+uv run nazuna config.toml --report_only --force_replot
 ```
 
 ### Development Guide (for Developers)
