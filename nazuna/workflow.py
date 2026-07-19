@@ -454,21 +454,37 @@ class WorkflowTemplateResolver:
 
     @classmethod
     def get_tasks_repeat(cls, d):
-        assert set(d) == {'template_type', 'tasks', 'params'}
+        assert {'template_type', 'tasks', 'params'}.issubset(d)
+        assert set(d).issubset({'template_type', 'tasks', 'params', 'params_outer'})
+        params_outer = d.get('params_outer', False)
         counter = {}
-        tasks = []
-        for i_task, task_raw in enumerate(d['tasks']):
+        name_bases = []
+        for task_raw in d['tasks']:
             assert 'task_type' in task_raw
             task_type = task_raw['task_type']
-            if task_type not in counter:
-                counter[task_type] = 0
-            counter[task_type] += 1
-            task_name_base = task_type.capitalize() + ' ' + str(counter[task_type] - 1)
-            for i_param, param_raw in enumerate(d['params']):
-                task = copy.deepcopy(task_raw | param_raw)
-                param_name = task.pop('param_name', i_param)
-                task['name'] = f'{task_name_base} {param_name}'
-                tasks.append(task)
+            counter[task_type] = counter.get(task_type, 0) + 1
+            name_bases.append(task_type.capitalize() + ' ' + str(counter[task_type] - 1))
+
+        if params_outer:
+            pairs = [
+                (i_task, i_param)
+                for i_param in range(len(d['params']))
+                for i_task in range(len(d['tasks']))
+            ]
+        else:
+            pairs = [
+                (i_task, i_param)
+                for i_task in range(len(d['tasks']))
+                for i_param in range(len(d['params']))
+            ]
+
+        tasks = []
+        for i_task, i_param in pairs:
+            task = copy.deepcopy(d['tasks'][i_task] | d['params'][i_param])
+            task_name_base = task.pop('task_name_base', name_bases[i_task])
+            param_name = task.pop('param_name', i_param)
+            task['name'] = f'{task_name_base} {param_name}'
+            tasks.append(task)
         return tasks
 
     @classmethod
