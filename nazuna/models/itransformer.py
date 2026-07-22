@@ -24,7 +24,7 @@ class iTransformer(BasicBaseModel):
         d_model: int = 512, n_heads: int = 8, d_ff: int = 512, e_layers: int = 2,
         dropout_emb: float = 0.1, dropout_aw: float = 0.1, dropout_sa: float = 0.1,
         dropout_ff: tuple[float, float] = (0.0, 0.2), res_attention: bool = False,
-        norm_first: bool = False, use_pos_enc: bool = False,
+        norm_first: bool = False, norm_out: bool = False, use_pos_enc: bool = False,
         use_time_features: bool = True, freq: str = 'hour',
         scaler_cls: type | None = None, scaler_params: dict | None = None,
         prep_type: str = 'none',
@@ -68,6 +68,10 @@ class iTransformer(BasicBaseModel):
 
         self.out_proj = torch.nn.Linear(d_model, pred_len)
 
+        # Final normalization after the encoder stack, added last to keep the
+        # random initialization of the other layers independent of norm_out.
+        self.norm_out = torch.nn.LayerNorm(d_model) if norm_out else None
+
     def _extract_input(self, batch):
         x, prep_info = super()._extract_input(batch)
         x_mark = None
@@ -92,6 +96,8 @@ class iTransformer(BasicBaseModel):
         scores = None
         for layer in self.encoder_layers:
             h, scores = layer(h, (scores if self.res_attention else None))
+        if self.norm_out is not None:
+            h = self.norm_out(h)
 
         y = self.out_proj(h)  # (B, C + n_feat, pred_len)
         y = y[:, :C, :]  # (B, C, pred_len)
