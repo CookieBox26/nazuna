@@ -14,15 +14,15 @@ class Adam(torch.optim.Adam):
         self._displacement_sq_norms = []
         self._init_params = None
         # Resolved (name, param) pairs to record per-parameter grad norms for.
-        self._recorded_params = []
-        self._recorded_grad_norms = {name: [] for name in self.record_grads}
+        self._individual_params = []
+        self._individual_grad_sq_norms = {name: [] for name in self.record_grads}
 
     def bind_record_grads(self, named_params):
         managed = {id(p) for group in self.param_groups for p in group['params']}
         for name in self.record_grads:
             param = named_params.get(name)
             if param is not None and id(param) in managed:
-                self._recorded_params.append((name, param))
+                self._individual_params.append((name, param))
 
     @property
     def grad_norms(self):
@@ -45,7 +45,7 @@ class Adam(torch.optim.Adam):
         return torch.stack(self._displacement_sq_norms).sqrt().cpu().numpy()
 
     def save_records(self, out_path):
-        if not self.record_norms and not self._recorded_params:
+        if not self.record_norms and not self._individual_params:
             return
         records = {'class_name': np.array(type(self).__name__)}
         if self.record_norms:
@@ -56,10 +56,10 @@ class Adam(torch.optim.Adam):
                 exp_avg_sq_norms=self.exp_avg_sq_norms,
                 displacement_norms=self.displacement_norms,
             )
-        for name, norms in self._recorded_grad_norms.items():
-            if norms:
+        for name, sq_norms in self._individual_grad_sq_norms.items():
+            if sq_norms:
                 records[f'grad_norms/{name}'] = \
-                    torch.stack(norms).sqrt().cpu().numpy()
+                    torch.stack(sq_norms).sqrt().cpu().numpy()
         np.savez(out_path, **records)
 
     @torch.no_grad()
@@ -74,12 +74,12 @@ class Adam(torch.optim.Adam):
             prev = [p.detach().clone() for p in params]
             if self._init_params is None:
                 self._init_params = [p.detach().clone() for p in params]
-        for name, p in self._recorded_params:
+        for name, p in self._individual_params:
             grad_sq = (
                 p.grad.pow(2).sum() if p.grad is not None
                 else torch.zeros((), device=p.device)
             )
-            self._recorded_grad_norms[name].append(grad_sq)
+            self._individual_grad_sq_norms[name].append(grad_sq)
         loss = super().step(closure)
         if self.record_norms:
             update_sq_norm = torch.zeros((), device=device)
