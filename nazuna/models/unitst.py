@@ -107,7 +107,7 @@ class UniTSTLike(BasicBaseModel):
         dropout_emb: float = 0.1, dropout_aw: float = 0.1, dropout_sa: float = 0.1,
         dropout_ff: tuple[float, float] = (0.0, 0.2), res_attention: bool = False,
         norm_first: bool = False, norm_out: bool = True, z_scale: float = -1.0,
-        w_scale: bool = False,
+        w_scale: bool = False, w_scale_coef: float = 1.0,
         scaler_cls: type | None = None, scaler_params: dict | None = None,
         prep_type: str = 'none',
         use_revin: bool = True, revin_affine: bool = False, revin_eps: float = 1e-5,
@@ -163,7 +163,7 @@ class UniTSTLike(BasicBaseModel):
             for _ in range(e_layers)
         ])
         if w_scale:
-            scale = 6 ** 0.5
+            scale = 6 ** 0.5 * w_scale_coef
             with torch.no_grad():
                 for block in self.blocks:
                     block.ff[0].weight.mul_(scale)
