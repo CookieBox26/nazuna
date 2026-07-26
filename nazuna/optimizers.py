@@ -3,23 +3,25 @@ import torch
 
 
 class Adam(torch.optim.Adam):
-    def __init__(self, *args, record_norms=False, record_grads=None, **kwargs):
+    def __init__(self, *args, record_norms=False, record_params=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.record_norms = record_norms
-        self.record_grads = list(record_grads) if record_grads else []
+        self.record_params = list(record_params) if record_params else []
         self._grad_sq_norms = []
         self._update_sq_norms = []
         self._exp_avg_sq_norms = []
         self._exp_avg_sq_sq_norms = []
         self._displacement_sq_norms = []
         self._init_params = None
-        # Resolved (name, param) pairs to record per-parameter grad norms for.
+        # Resolved (name, param) pairs to record per-parameter grad and
+        # parameter norms for.
         self._individual_params = []
-        self._individual_grad_sq_norms = {name: [] for name in self.record_grads}
+        self._individual_grad_sq_norms = {name: [] for name in self.record_params}
+        self._individual_param_sq_norms = {name: [] for name in self.record_params}
 
-    def bind_record_grads(self, named_params):
+    def bind_record_params(self, named_params):
         managed = {id(p) for group in self.param_groups for p in group['params']}
-        for name in self.record_grads:
+        for name in self.record_params:
             param = named_params.get(name)
             if param is not None and id(param) in managed:
                 self._individual_params.append((name, param))
@@ -44,9 +46,7 @@ class Adam(torch.optim.Adam):
     def displacement_norms(self):
         return torch.stack(self._displacement_sq_norms).sqrt().cpu().numpy()
 
-    def save_records(self, out_path):
-        if not self.record_norms and not self._individual_params:
-            return
+    def make_records(self):
         records = {'class_name': np.array(type(self).__name__)}
         if self.record_norms:
             records.update(
@@ -60,7 +60,18 @@ class Adam(torch.optim.Adam):
             if sq_norms:
                 records[f'grad_norms/{name}'] = \
                     torch.stack(sq_norms).sqrt().cpu().numpy()
-        np.savez(out_path, **records)
+        for name, sq_norms in self._individual_param_sq_norms.items():
+            if sq_norms:
+                records[f'param_norms/{name}'] = \
+                    torch.stack(sq_norms).sqrt().cpu().numpy()
+        for name, param in self._individual_params:
+            records[f'num_params/{name}'] = np.array(param.numel())
+        return records
+
+    def save_records(self, out_path):
+        if not self.record_norms and not self._individual_params:
+            return
+        np.savez(out_path, **self.make_records())
 
     @torch.no_grad()
     def step(self, closure=None):
@@ -80,6 +91,7 @@ class Adam(torch.optim.Adam):
                 else torch.zeros((), device=p.device)
             )
             self._individual_grad_sq_norms[name].append(grad_sq)
+            self._individual_param_sq_norms[name].append(p.pow(2).sum())
         loss = super().step(closure)
         if self.record_norms:
             update_sq_norm = torch.zeros((), device=device)

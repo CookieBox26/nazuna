@@ -442,9 +442,9 @@ class TrainTaskRunner(EvalTaskRunner):
                 if group.lr_scheduler_interval != interval:
                     continue
                 group.lr_scheduler.step()
-        def bind_record_grads(self, named_params):
+        def bind_record_params(self, named_params):
             for group in self.groups.values():
-                bind = getattr(group.optimizer, 'bind_record_grads', None)
+                bind = getattr(group.optimizer, 'bind_record_params', None)
                 if bind is not None:
                     bind(named_params)
         def save_grad_records(self, out_path):
@@ -555,7 +555,7 @@ class TrainTaskRunner(EvalTaskRunner):
             self.device, self.model_state_path, **self.model_params,
         )
         self.model.set_optimizers(self.optimizer_groups)
-        self.optimizer_groups.bind_record_grads(dict(self.model.named_parameters()))
+        self.optimizer_groups.bind_record_params(dict(self.model.named_parameters()))
         if self.save_model_state_ini:
             self.save_model('model_state_ini.pth')
 
