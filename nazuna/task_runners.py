@@ -447,7 +447,7 @@ class TrainTaskRunner(EvalTaskRunner):
                 bind = getattr(group.optimizer, 'bind_record_params', None)
                 if bind is not None:
                     bind(named_params)
-        def save_grad_records(self, out_path):
+        def save_records(self, out_path):
             for name, group in self.groups.items():
                 save_records = getattr(group.optimizer, 'save_records', None)
                 if save_records is None:
@@ -644,7 +644,7 @@ class TrainTaskRunner(EvalTaskRunner):
             toml.dumps({'epochs': loss_history}),
             newline='\n', encoding='utf8',
         )
-        self.optimizer_groups.save_grad_records(self.out_path)
+        self.optimizer_groups.save_records(self.out_path)
 
         if self.data_range_eval is None:
             self.result['loss_per_sample_train_end'] = loss_train['loss_per_sample']

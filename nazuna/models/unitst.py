@@ -106,7 +106,7 @@ class UniTSTLike(BasicBaseModel):
         dispatcher_per_block: bool = False, dispatcher_init_normal: bool = False,
         dropout_emb: float = 0.1, dropout_aw: float = 0.1, dropout_sa: float = 0.1,
         dropout_ff: tuple[float, float] = (0.0, 0.2), res_attention: bool = False,
-        norm_first: bool = False, norm_out: bool = True,
+        norm_first: bool = False, norm_out: bool = True, z_scale: float = -1.0,
         scaler_cls: type | None = None, scaler_params: dict | None = None,
         prep_type: str = 'none',
         use_revin: bool = True, revin_affine: bool = False, revin_eps: float = 1e-5,
@@ -162,6 +162,7 @@ class UniTSTLike(BasicBaseModel):
             for _ in range(e_layers)
         ])
         self.res_attention = res_attention
+        self.z_scale = z_scale
 
         self.out_proj = torch.nn.Linear(d_model * self.n_patches, self.pred_len)
 
@@ -190,6 +191,9 @@ class UniTSTLike(BasicBaseModel):
             z, scores = block(z, dispatcher, (scores if self.res_attention else None))
         if self.norm_out is not None:
             z = self.norm_out(z)
+
+        if self.z_scale > 0:
+            z = z * self.z_scale
 
         z = z.reshape(B, C, P, -1)  # (B, C, P, d_model)
         z = z.reshape(B, C, -1)  # (B, C, P * d_model)
