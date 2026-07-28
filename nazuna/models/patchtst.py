@@ -21,7 +21,7 @@ class PatchTST(BasicBaseModel):
         d_model: int = 128, n_heads: int = 16, d_ff: int = 256, e_layers: int = 2,
         dropout_emb: float = 0.1, dropout_aw: float = 0.1, dropout_sa: float = 0.1,
         dropout_ff: tuple[float, float] = (0.0, 0.2), res_attention: bool = True,
-        norm_first: bool = False,
+        norm_first: bool = False, norm_out: bool = False,
         scaler_cls: type | None = None, scaler_params: dict | None = None,
         prep_type: str = 'none',
         use_revin: bool = True, revin_affine: bool = False, revin_eps: float = 1e-5,
@@ -62,6 +62,9 @@ class PatchTST(BasicBaseModel):
 
         self.out_proj = torch.nn.Linear(d_model * self.n_patches, self.pred_len)
 
+        self.norm_out = \
+            BatchSeriesNorm(d_model) if norm_first and norm_out else None
+
     def forward(self, x):
         B, L, C = x.shape
         patches = self.patchifier(x)  # (B, C, P, patch_len)
@@ -74,6 +77,8 @@ class PatchTST(BasicBaseModel):
         scores = None
         for layer in self.encoder_layers:
             z, scores = layer(z, (scores if self.res_attention else None))
+        if self.norm_out is not None:
+            z = self.norm_out(z)
 
         z = z.reshape(B, C, P, -1)  # (B, C, P, d_model)
         z = z.transpose(2, 3)  # (B, C, d_model, P)
