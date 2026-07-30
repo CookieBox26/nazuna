@@ -19,6 +19,9 @@ class BaseModel(torch.nn.Module, ABC):
         self._setup(**setup_args)
         self.to(device)
 
+        self.debug_log = None
+        self.is_initial_debug_stage = True
+
     @abstractmethod
     def _setup(self, **setup_args) -> None:
         """
@@ -121,6 +124,17 @@ class BaseModel(torch.nn.Module, ABC):
 
     def count_trainable_parameters(self):
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
+
+    def _debug(self, s):
+        if self.debug_log is not None:
+            self.debug_log.append(s)
+
+    def _debug_if_initial_stage(self, s):
+        if self.is_initial_debug_stage and self.debug_log is not None:
+            self.debug_log.append(s)
+
+    def _finish_initial_debug_stage(self):
+        self.is_initial_debug_stage = False
 
 
 class BasicBaseModel(BaseModel):

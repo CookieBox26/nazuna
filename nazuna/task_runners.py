@@ -401,6 +401,8 @@ class TrainTaskRunner(EvalTaskRunner):
     save_model_state_ini: bool = False
     i_epoch_to_force_save_model: int = -1
 
+    debug_model: bool = False
+
     class _OptimizerGroups:
         class _OptimizerGroup:
             def __init__(self, config):
@@ -554,6 +556,8 @@ class TrainTaskRunner(EvalTaskRunner):
         self.model = self.model_cls.create(
             self.device, self.model_state_path, **self.model_params,
         )
+        if self.debug_model:
+            self.model.debug_log = []
         self.model.set_optimizers(self.optimizer_groups)
         self.optimizer_groups.bind_record_params(dict(self.model.named_parameters()))
         if self.save_model_state_ini:
@@ -659,6 +663,14 @@ class TrainTaskRunner(EvalTaskRunner):
             loss_prev = loss_history[i_saved - 1]['train']['loss_per_sample']
             loss_saved = loss_history[i_saved]['train']['loss_per_sample']
             self.result['loss_decrease_last_epoch'] = loss_prev - loss_saved
+
+        if self.debug_model and self.model.debug_log:
+            try:
+                (self.out_path / 'model_debug_log.txt').write_text(
+                    '\n'.join(self.model.debug_log) + '\n', encoding='utf8',
+                )
+            except (OSError, TypeError):
+                pass
 
 
 @dataclasses.dataclass

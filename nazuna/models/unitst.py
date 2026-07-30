@@ -198,9 +198,12 @@ class UniTSTLike(BasicBaseModel):
             z, scores = block(z, dispatcher, (scores if self.res_attention else None))
         if self.norm_out is not None:
             z = self.norm_out(z)
-
         if self.z_scale > 0:
             z = z * self.z_scale
+
+        self._debug_if_initial_stage(f'x_out_shape = {z[0].numel()}')
+        self._debug(f'x_out_norm = {torch.linalg.vector_norm(z, dim=(1, 2)).mean().item()}')
+        self._finish_initial_debug_stage()
 
         z = z.reshape(B, C, P, -1)  # (B, C, P, d_model)
         z = z.reshape(B, C, -1)  # (B, C, P * d_model)
