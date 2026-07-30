@@ -153,7 +153,7 @@ class Gateformer(BasicBaseModel):
 
         scores = None
         for layer in self.enc_temporal:
-            z, scores = layer(z, (scores if self.res_attention else None))
+            z, scores, _ = layer(z, (scores if self.res_attention else None))
 
         z = z.reshape(B, C, P, -1)  # (B, C, P, d_model)
         z = z.transpose(2, 3)  # (B, C, d_model, P)
@@ -172,7 +172,7 @@ class Gateformer(BasicBaseModel):
         h_cross = h
         scores = None
         for layer in self.enc_variate:
-            h_cross, scores = layer(
+            h_cross, scores, _ = layer(
                 h_cross, (scores if self.res_attention_variate else None),
             )
 

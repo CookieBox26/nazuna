@@ -39,7 +39,7 @@ class _TwoStageAttentionLayer(torch.nn.Module):
         B, C, S, d = x.shape  # (B, C, seg_num, d_model)
         factor = self.router.size(1)
         time_in = x.reshape(B * C, S, d)
-        dim_in, _ = self.time_layer(time_in)  # (B*C, S, d_model)
+        dim_in, _, _ = self.time_layer(time_in)  # (B*C, S, d_model)
 
         dim_send = dim_in.reshape(B, C, S, d).permute(0, 2, 1, 3)
         dim_send = dim_send.reshape(B * S, C, d)  # (B*S, C, d_model)

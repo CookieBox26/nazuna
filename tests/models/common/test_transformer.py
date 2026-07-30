@@ -46,7 +46,7 @@ def test_transformerencoderlayer(device, self_attn_cls, norm_cls, norm_first):
     )
     enc_layer.to(device)
     x = torch.ones(8, 5, 16, device=device)
-    x, attn_scores = enc_layer(x)
+    x, attn_scores, _ = enc_layer(x)
     assert x.shape == (8, 5, 16)
     if self_attn_cls is AutoCorrelation:
         assert attn_scores.shape == (8, 5)

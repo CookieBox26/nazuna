@@ -43,16 +43,25 @@ class TransformerEncoderLayer(torch.nn.Module):
         super().__init__()
         self.self_attn = self_attn
         self.dropout_sa = torch.nn.Dropout(dropout_sa)
-        self.ff = torch.nn.Sequential(
+        self.ff = torch.nn.ModuleList([
             torch.nn.Linear(d_model, d_ff, bias=bias),
             activation,
             torch.nn.Dropout(dropout_ff[0]),
             torch.nn.Linear(d_ff, d_model, bias=bias),
             torch.nn.Dropout(dropout_ff[1]),
-        )
+        ])
         self.norm_0 = norm_0
         self.norm_1 = norm_1
         self.norm_first = norm_first
+
+    def _forward_ff(self, x):
+        x = self.ff[0](x)  # (..., d_ff)
+        x = self.ff[1](x)
+        x = self.ff[2](x)
+        x_f1_debug = x.detach().clone()
+        x = self.ff[3](x)  # (..., d_model)
+        x = self.ff[4](x)
+        return x, x_f1_debug
 
     def forward(self, x, prev_attn_scores=None):
         if not self.norm_first:
@@ -62,7 +71,7 @@ class TransformerEncoderLayer(torch.nn.Module):
             x = x_save + x
             x = self.norm_0(x)
             x_save = x
-            x = self.ff(x)
+            x, x_f1_debug = self._forward_ff(x)
             x = x_save + x
             x = self.norm_1(x)
         else:
@@ -73,6 +82,6 @@ class TransformerEncoderLayer(torch.nn.Module):
             x = x_save + x
             x_save = x
             x = self.norm_1(x)
-            x = self.ff(x)
+            x, x_f1_debug = self._forward_ff(x)
             x = x_save + x
-        return x, attn_scores
+        return x, attn_scores, x_f1_debug

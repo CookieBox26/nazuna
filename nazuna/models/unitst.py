@@ -36,14 +36,23 @@ class _UniTSTBlock(torch.nn.Module):
             self.attn = MultiheadAttention(d_model, n_heads, dropout_aw=dropout_aw)
         self.dropout_sa = torch.nn.Dropout(dropout_sa)
         self.norm_0 = BatchSeriesNorm(d_model)
-        self.ff = torch.nn.Sequential(
+        self.ff = torch.nn.ModuleList([
             torch.nn.Linear(d_model, d_ff),
             torch.nn.GELU(),
             torch.nn.Dropout(dropout_ff[0]),
             torch.nn.Linear(d_ff, d_model),
             torch.nn.Dropout(dropout_ff[1]),
-        )
+        ])
         self.norm_1 = BatchSeriesNorm(d_model)
+
+    def _forward_ff(self, x):
+        x = self.ff[0](x)  # (..., d_ff)
+        x = self.ff[1](x)
+        x = self.ff[2](x)
+        x_f1_debug = x.detach().clone()
+        x = self.ff[3](x)  # (..., d_model)
+        x = self.ff[4](x)
+        return x, x_f1_debug
 
     def forward(self, x, dispatcher, prev_attn_scores=None):
         if not self.norm_first:
@@ -58,7 +67,7 @@ class _UniTSTBlock(torch.nn.Module):
             x = x_save + x
             x = self.norm_0(x)
             x_save = x
-            x = self.ff(x)
+            x, x_f1_debug = self._forward_ff(x)
             x = x_save + x
             x = self.norm_1(x)
         else:
@@ -74,9 +83,9 @@ class _UniTSTBlock(torch.nn.Module):
             x = x_save + x
             x_save = x
             x = self.norm_1(x)
-            x = self.ff(x)
+            x, x_f1_debug = self._forward_ff(x)
             x = x_save + x
-        return x, attn_scores
+        return x, attn_scores, x_f1_debug
 
 
 class UniTSTLike(BasicBaseModel):
@@ -195,13 +204,17 @@ class UniTSTLike(BasicBaseModel):
                 dispatcher = self.dispatcher[i].unsqueeze(0).expand(B, -1, -1)
             else:
                 dispatcher = self.dispatcher.unsqueeze(0).expand(B, -1, -1)
-            z, scores = block(z, dispatcher, (scores if self.res_attention else None))
+            z, scores, x_f1_debug = block(z, dispatcher, (scores if self.res_attention else None))
+            if i == len(self.blocks) - 1:
+                self._debug_if_initial_stage(f'x_f1_shape = {tuple(x_f1_debug.shape)}')
+                self._debug(f'x_f1_norm = {torch.linalg.vector_norm(x_f1_debug, dim=(1, 2)).mean().item()}')
+
         if self.norm_out is not None:
             z = self.norm_out(z)
         if self.z_scale > 0:
             z = z * self.z_scale
 
-        self._debug_if_initial_stage(f'x_out_shape = {z[0].numel()}')
+        self._debug_if_initial_stage(f'x_out_shape = {tuple(z.shape)}')
         self._debug(f'x_out_norm = {torch.linalg.vector_norm(z, dim=(1, 2)).mean().item()}')
         self._finish_initial_debug_stage()
 
