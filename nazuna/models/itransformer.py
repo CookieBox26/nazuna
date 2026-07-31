@@ -96,19 +96,22 @@ class iTransformer(BasicBaseModel):
         scores = None
         for i, layer in enumerate(self.encoder_layers):
             h, scores, x_f1_debug = layer(h, (scores if self.res_attention else None))
-            if i == len(self.encoder_layers) - 1:
+
+            if self.training and i == len(self.encoder_layers) - 1:
                 h_f1 = x_f1_debug[:, :C]  # (B, C, d_ff)
                 f1_norm = torch.linalg.vector_norm(h_f1, dim=(1, 2)).mean().item()
                 self._debug_if_initial_stage(f'x_f1_shape = {tuple(h_f1.shape)}')
                 self._debug(f'x_f1_norm = {f1_norm}')
+
         if self.norm_out is not None:
             h = self.norm_out(h)
 
-        h_out = h[:, :C]  # (B, C, d_model)
-        out_norm = torch.linalg.vector_norm(h_out, dim=(1, 2)).mean().item()
-        self._debug_if_initial_stage(f'x_out_shape = {tuple(h_out.shape)}')
-        self._debug(f'x_out_norm = {out_norm}')
-        self._finish_initial_debug_stage()
+        if self.training:
+            h_out = h[:, :C]  # (B, C, d_model)
+            out_norm = torch.linalg.vector_norm(h_out, dim=(1, 2)).mean().item()
+            self._debug_if_initial_stage(f'x_out_shape = {tuple(h_out.shape)}')
+            self._debug(f'x_out_norm = {out_norm}')
+            self._finish_initial_debug_stage()
 
         y = self.out_proj(h)  # (B, C + n_feat, pred_len)
         y = y[:, :C, :]  # (B, C, pred_len)

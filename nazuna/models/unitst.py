@@ -205,18 +205,23 @@ class UniTSTLike(BasicBaseModel):
             else:
                 dispatcher = self.dispatcher.unsqueeze(0).expand(B, -1, -1)
             z, scores, x_f1_debug = block(z, dispatcher, (scores if self.res_attention else None))
-            if i == len(self.blocks) - 1:
+
+            if self.training and i == len(self.blocks) - 1:
+                f1_norm = \
+                    torch.linalg.vector_norm(x_f1_debug, dim=(1, 2)).mean().item()
                 self._debug_if_initial_stage(f'x_f1_shape = {tuple(x_f1_debug.shape)}')
-                self._debug(f'x_f1_norm = {torch.linalg.vector_norm(x_f1_debug, dim=(1, 2)).mean().item()}')
+                self._debug(f'x_f1_norm = {f1_norm}')
 
         if self.norm_out is not None:
             z = self.norm_out(z)
         if self.z_scale > 0:
             z = z * self.z_scale
 
-        self._debug_if_initial_stage(f'x_out_shape = {tuple(z.shape)}')
-        self._debug(f'x_out_norm = {torch.linalg.vector_norm(z, dim=(1, 2)).mean().item()}')
-        self._finish_initial_debug_stage()
+        if self.training:
+            out_norm = torch.linalg.vector_norm(z, dim=(1, 2)).mean().item()
+            self._debug_if_initial_stage(f'x_out_shape = {tuple(z.shape)}')
+            self._debug(f'x_out_norm = {out_norm}')
+            self._finish_initial_debug_stage()
 
         z = z.reshape(B, C, P, -1)  # (B, C, P, d_model)
         z = z.reshape(B, C, -1)  # (B, C, P * d_model)

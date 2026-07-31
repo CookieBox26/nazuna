@@ -77,19 +77,22 @@ class PatchTST(BasicBaseModel):
         scores = None
         for i, layer in enumerate(self.encoder_layers):
             z, scores, x_f1_debug = layer(z, (scores if self.res_attention else None))
-            if i == len(self.encoder_layers) - 1:
+
+            if self.training and i == len(self.encoder_layers) - 1:
                 z_f1 = x_f1_debug.reshape(B, C * P, -1)  # (B, C*P, d_ff)
                 f1_norm = torch.linalg.vector_norm(z_f1, dim=(1, 2)).mean().item()
                 self._debug_if_initial_stage(f'x_f1_shape = {tuple(z_f1.shape)}')
                 self._debug(f'x_f1_norm = {f1_norm}')
+
         if self.norm_out is not None:
             z = self.norm_out(z)
 
-        z_out = z.reshape(B, C * P, -1)  # (B, C*P, d_model)
-        out_norm = torch.linalg.vector_norm(z_out, dim=(1, 2)).mean().item()
-        self._debug_if_initial_stage(f'x_out_shape = {tuple(z_out.shape)}')
-        self._debug(f'x_out_norm = {out_norm}')
-        self._finish_initial_debug_stage()
+        if self.training:
+            z_out = z.reshape(B, C * P, -1)  # (B, C*P, d_model)
+            out_norm = torch.linalg.vector_norm(z_out, dim=(1, 2)).mean().item()
+            self._debug_if_initial_stage(f'x_out_shape = {tuple(z_out.shape)}')
+            self._debug(f'x_out_norm = {out_norm}')
+            self._finish_initial_debug_stage()
 
         z = z.reshape(B, C, P, -1)  # (B, C, P, d_model)
         z = z.transpose(2, 3)  # (B, C, d_model, P)
