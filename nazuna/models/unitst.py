@@ -172,11 +172,17 @@ class UniTSTLike(BasicBaseModel):
             for _ in range(e_layers)
         ])
         if w_scale:
-            scale = 6 ** 0.5 * w_scale_coef
+            scaled_layers = [self.patch_proj]
+            for block in self.blocks:
+                scaled_layers += [
+                    m.out_proj
+                    for m in block.modules() if isinstance(m, MultiheadAttention)
+                ]
+                scaled_layers.append(block.ff[3])
             with torch.no_grad():
-                for block in self.blocks:
-                    block.ff[0].weight.mul_(scale)
-                    block.ff[3].weight.mul_(scale)
+                for layer in scaled_layers:
+                    layer.weight.mul_(w_scale_coef)
+                    layer.bias.mul_(w_scale_coef)
         self.res_attention = res_attention
         self.z_scale = z_scale
 
