@@ -22,6 +22,7 @@ class PatchTST(BasicBaseModel):
         dropout_emb: float = 0.1, dropout_aw: float = 0.1, dropout_sa: float = 0.1,
         dropout_ff: tuple[float, float] = (0.0, 0.2), res_attention: bool = True,
         norm_first: bool = False, norm_out: bool = False,
+        w_scale: bool = False, w_scale_coef: float = 1.0,
         scaler_cls: type | None = None, scaler_params: dict | None = None,
         prep_type: str = 'none',
         use_revin: bool = True, revin_affine: bool = False, revin_eps: float = 1e-5,
@@ -58,6 +59,14 @@ class PatchTST(BasicBaseModel):
             )
             for _ in range(e_layers)
         ])
+        if w_scale:
+            scaled_layers = [self.patch_proj]
+            for enc_layer in self.encoder_layers:
+                scaled_layers += [enc_layer.self_attn.out_proj, enc_layer.ff[3]]
+            with torch.no_grad():
+                for layer in scaled_layers:
+                    layer.weight.mul_(w_scale_coef)
+                    layer.bias.mul_(w_scale_coef)
         self.res_attention = res_attention
 
         self.out_proj = torch.nn.Linear(d_model * self.n_patches, self.pred_len)
