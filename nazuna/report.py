@@ -18,6 +18,11 @@ class BasePlotter(ABC):
         with plt.rc_context({
             'svg.fonttype': 'path',  # convert text to paths for consistent rendering
             'svg.hashsalt': '',  # to make the IDs deterministic
+            # 'font.family': 'Roboto',
+            # 'mathtext.fontset': 'dejavuserif',
+            # 'font.weight': 'medium',
+            # 'axes.labelweight': 'medium',
+            # 'axes.titleweight': 'medium',
             'font.size': 15,
             'lines.linewidth': 1.5,
         }):
@@ -202,8 +207,8 @@ def _write_plot_section(f, report_path, task_runner, force_replot) -> None:
         cache = load_toml(cache_path)
 
     SamplePlotter(
-        graph_path=(task_runner.out_path / 'sample.npz'),
-        sample_path=(task_runner.out_path / 'sample.svg'),
+        graph_path=(task_runner.out_path / 'sample.svg'),
+        sample_path=(task_runner.out_path / 'sample.npz'),
     ).write_plot_section(f, report_path, 'sample', force_replot, cache)
 
     TrainLossPlotter(
