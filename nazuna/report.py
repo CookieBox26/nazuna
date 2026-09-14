@@ -18,11 +18,11 @@ class BasePlotter(ABC):
         with plt.rc_context({
             'svg.fonttype': 'path',  # convert text to paths for consistent rendering
             'svg.hashsalt': '',  # to make the IDs deterministic
-            # 'font.family': 'Roboto',
-            # 'mathtext.fontset': 'dejavuserif',
-            # 'font.weight': 'medium',
-            # 'axes.labelweight': 'medium',
-            # 'axes.titleweight': 'medium',
+            'font.sans-serif': ['Roboto'] + plt.rcParams['font.sans-serif'],
+            'mathtext.fontset': 'dejavuserif',
+            'font.weight': 'medium',
+            'axes.labelweight': 'medium',
+            'axes.titleweight': 'medium',
             'font.size': 15,
             'lines.linewidth': 1.5,
         }):
