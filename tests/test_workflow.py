@@ -500,11 +500,14 @@ task_type = "train"
 [[template.tasks]]
 task_type = "eval"
 model_state = { task_index = 1 }
+params_exclude = ["batch_sampler"]
 
 [[template.params]]
 param_name = "p0"
+batch_sampler = "BSS0"
 [[template.params]]
 param_name = "p1"
+batch_sampler = "BSS1"
 '''
 
 
@@ -517,6 +520,10 @@ def test_template_repeat_model_state():
         assert tasks['Eval 0 p0']['model_state'] == {'task_name': 'Train 1 p0'}
         assert tasks['Eval 0 p1']['model_state'] == {'task_name': 'Train 1 p1'}
         assert 'model_state' not in tasks['Train 1 p0']
+        assert tasks['Train 1 p0']['batch_sampler'] == 'BSS0'
+        assert tasks['Train 1 p1']['batch_sampler'] == 'BSS1'
+        assert 'batch_sampler' not in tasks['Eval 0 p0']
+        assert 'params_exclude' not in tasks['Eval 0 p0']
 
 
 dummy_conf = '''
