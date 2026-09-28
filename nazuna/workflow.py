@@ -479,11 +479,17 @@ class WorkflowTemplateResolver:
             ]
 
         tasks = []
+        names = {}
         for i_task, i_param in pairs:
             task = copy.deepcopy(d['tasks'][i_task] | d['params'][i_param])
             task_name_base = task.pop('task_name_base', name_bases[i_task])
             param_name = task.pop('param_name', i_param)
             task['name'] = f'{task_name_base} {param_name}'
+            names[(i_task, i_param)] = task['name']
+            if 'task_index' in task.get('model_state', {}):
+                i_task_ref = task['model_state']['task_index']
+                assert i_task_ref < i_task, 'model_state must refer to a preceding task'
+                task['model_state'] = {'task_name': names[(i_task_ref, i_param)]}
             tasks.append(task)
         return tasks
 

@@ -488,6 +488,37 @@ def test_template_repeat():
     assert d['tasks'][5]['seed'] == 1
 
 
+template_repeat_model_state = '''
+# =============== template ===============
+[template]
+template_type = "repeat"
+
+[[template.tasks]]
+task_type = "train"
+[[template.tasks]]
+task_type = "train"
+[[template.tasks]]
+task_type = "eval"
+model_state = { task_index = 1 }
+
+[[template.params]]
+param_name = "p0"
+[[template.params]]
+param_name = "p1"
+'''
+
+
+def test_template_repeat_model_state():
+    for params_outer in [False, True]:
+        d = normalize_config(template_repeat_model_state)
+        d['template']['params_outer'] = params_outer
+        d = WorkflowTemplateResolver.resolve(d)
+        tasks = {t['name']: t for t in d['tasks']}
+        assert tasks['Eval 0 p0']['model_state'] == {'task_name': 'Train 1 p0'}
+        assert tasks['Eval 0 p1']['model_state'] == {'task_name': 'Train 1 p1'}
+        assert 'model_state' not in tasks['Train 1 p0']
+
+
 dummy_conf = '''
 definition_includes = [
 { bundled = "common" },
